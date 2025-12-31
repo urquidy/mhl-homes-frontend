@@ -5,6 +5,9 @@ import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { HeaderActionContext } from './_layout';
 import i18n from '../../constants/i18n';
 import { useEvents, CalendarEvent } from '../../contexts/EventsContext';
+import api from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
+import { useNotifications } from '../../contexts/NotificationsContext';
 
 // --- Utilidades de Fecha ---
 const daysOfWeek = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -19,6 +22,12 @@ export default function AgendaScreen() {
   const { date } = useLocalSearchParams<{ date: string }>(); // Recibir parámetro de fecha
   const { events, addEvent, updateEvent, deleteEvent } = useEvents(); // Usamos el contexto global
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const { token } = useAuth();
+  const [availableUsers, setAvailableUsers] = useState<any[]>([]);
+  const [invitedUserIds, setInvitedUserIds] = useState<string[]>([]);
+  const [userSearch, setUserSearch] = useState('');
+  const [showUserSuggestions, setShowUserSuggestions] = useState(false);
+  const { addNotification } = useNotifications();
   
   // Estado para nuevo evento
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -40,6 +49,9 @@ export default function AgendaScreen() {
         setNewEventType('Meeting');
         setNewEventTime('09:00');
         setIsModalVisible(true);
+        setInvitedUserIds([]);
+        setUserSearch('');
+        setShowUserSuggestions(false);
       });
       return () => setCustomAddAction(null);
     }, [])
@@ -55,6 +67,19 @@ export default function AgendaScreen() {
       setSelectedDate(targetDate); // Seleccionar el día
     }
   }, [date]);
+
+  // Cargar usuarios disponibles
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await api.get('/api/users');
+        setAvailableUsers(response.data);
+      } catch (error) {
+        console.error('Error fetching users:', error);
+      }
+    };
+    if (token) fetchUsers();
+  }, [token]);
 
   // --- Lógica del Calendario ---
   const year = currentDate.getFullYear();
@@ -91,6 +116,19 @@ export default function AgendaScreen() {
     setSelectedDate(date);
   };
 
+  // Función simulada para enviar Push Notification
+  const sendPushNotification = async (userId: string, title: string, body: string) => {
+    // Aquí iría la lógica real con Expo Notifications o Firebase
+    // Ejemplo:
+    // await fetch('https://exp.host/--/api/v2/push/send', {
+    //   body: JSON.stringify({ to: userPushToken, title, body })
+    // });
+    
+    // Por ahora, simulamos con un log
+    const user = availableUsers.find(u => u.id === userId);
+    console.log(`[PUSH SIMULADO] Para: ${user?.username} | Título: ${title} | Mensaje: ${body}`);
+  };
+
   const handleSaveEvent = async () => {
     if (!newEventTitle) {
       Alert.alert('Error', 'El título es obligatorio');
@@ -102,13 +140,23 @@ export default function AgendaScreen() {
       date: formatDateKey(selectedDate),
       time: newEventTime || '00:00',
       type: newEventType,
+      invitedUserIds, // Enviamos la lista de usuarios invitados
     };
     
     try {
       if (editingEventId) {
-        await updateEvent({ ...eventData, id: editingEventId });
+        await updateEvent({ ...eventData, id: editingEventId } as CalendarEvent);
       } else {
         await addEvent(eventData);
+      }
+
+      // --- Lógica de Notificaciones ---
+      if (invitedUserIds.length > 0) {
+        // 1. Agregar notificación al Dashboard (Historial)
+        addNotification(`Has invitado a ${invitedUserIds.length} usuario(s) al evento "${newEventTitle}".`, 'user-plus');
+
+        // 2. Enviar Push Notification a cada usuario invitado
+        invitedUserIds.forEach(uid => sendPushNotification(uid, 'Nueva Invitación', `Has sido invitado a: ${newEventTitle}`));
       }
     } catch (error) {
       Alert.alert('Error', 'No se pudo guardar el evento.');
@@ -124,6 +172,9 @@ export default function AgendaScreen() {
     setNewEventTime('');
     setEditingEventId(null);
     setNewEventType('Meeting');
+    setInvitedUserIds([]);
+    setUserSearch('');
+    setShowUserSuggestions(false);
   };
 
   const handleEditEvent = (event: CalendarEvent) => {
@@ -131,6 +182,8 @@ export default function AgendaScreen() {
     setNewEventDesc(event.description);
     setNewEventTime(event.time);
     setNewEventType(event.type);
+    // Asumimos que el evento tiene la propiedad invitedUserIds, si no, array vacío
+    setInvitedUserIds((event as any).invitedUserIds || []);
     setEditingEventId(event.id);
     setIsModalVisible(true);
   };
@@ -293,6 +346,65 @@ export default function AgendaScreen() {
               onChangeText={setNewEventDesc}
             />
 
+            <Text style={styles.label}>Invitar Usuarios (Opcional)</Text>
+            
+            {/* Chips de usuarios seleccionados */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+              {invitedUserIds.map(id => {
+                const user = availableUsers.find(u => u.id === id);
+                if (!user) return null;
+                return (
+                  <View key={id} style={styles.userChip}>
+                    <Text style={styles.userChipText}>{user.username}</Text>
+                    <Pressable onPress={() => setInvitedUserIds(prev => prev.filter(uid => uid !== id))}>
+                      <Feather name="x" size={14} color="#FFF" />
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </View>
+
+            {/* Input de Búsqueda */}
+            <View style={{ zIndex: 10 }}>
+              <TextInput
+                style={styles.input}
+                placeholder="Buscar usuario..."
+                value={userSearch}
+                onChangeText={(text) => {
+                  setUserSearch(text);
+                  setShowUserSuggestions(text.length > 0);
+                }}
+                onFocus={() => setShowUserSuggestions(userSearch.length > 0)}
+              />
+              {showUserSuggestions && (
+                <View style={styles.suggestionsContainer}>
+                  <ScrollView style={{ maxHeight: 150 }} keyboardShouldPersistTaps="handled">
+                    {availableUsers
+                      .filter(u => !invitedUserIds.includes(u.id) && (u.username || '').toLowerCase().includes(userSearch.toLowerCase()))
+                      .map(user => (
+                        <Pressable
+                          key={user.id}
+                          style={styles.suggestionItem}
+                          onPress={() => {
+                            setInvitedUserIds(prev => [...prev, user.id]);
+                            setUserSearch('');
+                            setShowUserSuggestions(false);
+                          }}
+                        >
+                          <Text style={styles.suggestionText}>{user.username}</Text>
+                          <Text style={styles.suggestionRole}>{user.role}</Text>
+                        </Pressable>
+                      ))}
+                    {availableUsers.filter(u => !invitedUserIds.includes(u.id) && (u.username || '').toLowerCase().includes(userSearch.toLowerCase())).length === 0 && (
+                      <View style={styles.suggestionItem}>
+                        <Text style={{ color: '#A0AEC0', fontStyle: 'italic' }}>No se encontraron usuarios</Text>
+                      </View>
+                    )}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
+
             <Pressable style={styles.saveButton} onPress={handleSaveEvent}>
               <Text style={styles.saveButtonText}>{editingEventId ? 'Actualizar Evento' : 'Guardar Evento'}</Text>
             </Pressable>
@@ -361,4 +473,12 @@ const styles = StyleSheet.create({
 
   saveButton: { backgroundColor: '#3182CE', paddingVertical: 14, borderRadius: 8, alignItems: 'center', marginTop: 8 },
   saveButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
+
+  // Estilos lista de usuarios
+  userChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#3182CE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+  userChipText: { color: '#FFF', fontSize: 12, marginRight: 4 },
+  suggestionsContainer: { position: 'absolute', top: 50, left: 0, right: 0, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, elevation: 5, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, maxHeight: 150, zIndex: 20 },
+  suggestionItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: '#EDF2F7' },
+  suggestionText: { fontSize: 14, color: '#2D3748' },
+  suggestionRole: { fontSize: 12, color: '#718096' },
 });

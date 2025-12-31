@@ -1,9 +1,11 @@
-import React, { useState, useLayoutEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, LayoutAnimation, Platform, UIManager } from 'react-native';
+import React, { useState, useLayoutEffect, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, LayoutAnimation, Platform, UIManager, ActivityIndicator } from 'react-native';
 import { useProjects } from '../../contexts/ProjectsContext';
 import { Feather } from '@expo/vector-icons';
-import { Link, useNavigation } from 'expo-router';
+import { Link, useNavigation, useFocusEffect } from 'expo-router';
 import i18n from '../../constants/i18n';
+import api from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Habilitar animaciones de layout en Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -34,8 +36,12 @@ const ProjectGroup = ({ project, items }: { project: any, items: any[] }) => {
           {items.map((item: any) => (
             <Link key={item.id} href={{ pathname: '/(tabs)/[id]' as any, params: { id: project.id } }} asChild>
               <Pressable style={styles.checklistItem}>
-                <Feather name="square" size={18} color="#A0AEC0" />
-                <Text style={styles.checklistItemText}>{item.text}</Text>
+                <Feather 
+                  name={item.completed ? "check-square" : "square"} 
+                  size={18} 
+                  color={item.completed ? "#38A169" : "#A0AEC0"} 
+                />
+                <Text style={[styles.checklistItemText, item.completed && styles.checklistItemTextCompleted]}>{item.text}</Text>
               </Pressable>
             </Link>
           ))}
@@ -47,7 +53,10 @@ const ProjectGroup = ({ project, items }: { project: any, items: any[] }) => {
 
 export default function ChecklistScreen() {
   const navigation = useNavigation();
-  const { projects, getChecklistByProjectId } = useProjects();
+  const { projects } = useProjects();
+  const { token } = useAuth();
+  const [myTasks, setMyTasks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -59,25 +68,60 @@ export default function ChecklistScreen() {
     });
   }, [navigation]);
 
-  // Filtramos solo los proyectos que están "En Progreso" o "Retrasado"
-  const activeProjects = projects.filter(p => p.status !== 'Completed');
+  // Consumir endpoint GET /api/checklist/my-tasks al entrar a la pantalla
+  useFocusEffect(
+    useCallback(() => {
+      const fetchMyTasks = async () => {
+        if (!token) return;
+        setLoading(true);
+        try {
+          const response = await api.get('/api/checklist/my-tasks');
+          setMyTasks(response.data || []);
+        } catch (error) {
+          console.error('Error fetching my tasks:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchMyTasks();
+    }, [token])
+  );
+
+  // Agrupar tareas por Proyecto
+  const tasksByProject = useMemo(() => {
+    const grouped: Record<string, any[]> = {};
+    myTasks.forEach(task => {
+      const pId = task.projectId;
+      if (!grouped[pId]) grouped[pId] = [];
+      grouped[pId].push(task);
+    });
+    return grouped;
+  }, [myTasks]);
 
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.title}>{i18n.t('checklist.title')}</Text>
       <Text style={styles.subtitle}>{i18n.t('checklist.subtitle')}</Text>
 
-      {activeProjects.map(project => {
-        const projectChecklist = getChecklistByProjectId(project.id);
-        const pendingItems = projectChecklist.filter(item => !item.completed);
-
-        // Si no hay tareas pendientes para este proyecto, no lo mostramos.
-        if (pendingItems.length === 0) {
-          return null;
-        }
-
-        return <ProjectGroup key={project.id} project={project} items={pendingItems} />;
-      })}
+      {loading ? (
+        <ActivityIndicator size="large" color="#3182CE" style={{ marginTop: 20 }} />
+      ) : (
+        Object.keys(tasksByProject).map(projectId => {
+          // Buscamos la info del proyecto en el contexto para obtener el nombre
+          const project = projects.find(p => p.id === projectId);
+          // Si no encontramos el proyecto (quizás archivado o sin acceso), usamos un placeholder o saltamos
+          if (!project) return null;
+          
+          return <ProjectGroup key={projectId} project={project} items={tasksByProject[projectId]} />;
+        })
+      )}
+      
+      {!loading && myTasks.length === 0 && (
+        <Text style={{ textAlign: 'center', color: '#718096', marginTop: 20, fontStyle: 'italic' }}>
+          No tienes tareas asignadas pendientes.
+        </Text>
+      )}
     </ScrollView>
   );
 }
@@ -133,4 +177,8 @@ const styles = StyleSheet.create({
     marginLeft: 16, // Indentación para efecto de árbol
   },
   checklistItemText: { fontSize: 16, color: '#4A5568', marginLeft: 12, flex: 1 },
+  checklistItemTextCompleted: {
+    textDecorationLine: 'line-through',
+    color: '#A0AEC0',
+  },
 });

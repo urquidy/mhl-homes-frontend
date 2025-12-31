@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, Pressable, useColorScheme, Modal } from 'react-native';
+import { View, Text, StyleSheet, Image, Pressable, useColorScheme, Modal, ActivityIndicator, Alert, Platform } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { Colors } from '@/constants/theme';
+import { FontAwesome5 } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import api from '../../services/api';
 
 export default function ProfileScreen() {
-  const { user, logout, token } = useAuth();
+  const { user, logout, token, updateUserImage } = useAuth();
   const [modalVisible, setModalVisible] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const colorScheme = useColorScheme() ?? 'light';
   
   // Definimos colores locales si el tema no carga correctamente, o usamos los del tema
@@ -22,19 +26,94 @@ export default function ProfileScreen() {
     await logout();
   };
 
+  const handlePickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      uploadImage(result.assets[0].uri);
+    }
+  };
+
+  const uploadImage = async (uri: string) => {
+    if (!user?.id) return;
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      const filename = uri.split('/').pop() || 'profile.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+      if (Platform.OS === 'web') {
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        formData.append('file', blob, filename);
+      } else {
+        formData.append('file', { uri, name: filename, type } as any);
+      }
+
+      const response = await api.post(`/api/users/${user.id}/profile-image`, formData, {
+        headers: { 'Content-Type': Platform.OS === 'web' ? undefined : 'multipart/form-data' },
+      });
+
+      const newUri = response.data?.imageUri || uri;
+      await updateUserImage(newUri);
+      Alert.alert('Éxito', 'Foto de perfil actualizada.');
+    } catch (error) {
+      console.error('Error uploading profile image:', error);
+      Alert.alert('Error', 'No se pudo actualizar la foto de perfil.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const getProfileImageSource = () => {
+    const uri = user?.imageUri;
+    if (!uri) return { uri: 'https://i.pravatar.cc/150' };
+
+    // Si es una URL completa o local, usarla tal cual
+    if (uri.startsWith('http') || uri.startsWith('file') || uri.startsWith('content') || uri.startsWith('blob')) {
+      return { 
+        uri, 
+        headers: (uri.startsWith('http') && token) ? { Authorization: `Bearer ${token}` } : undefined 
+      };
+    }
+
+    // Construir URL para ID de archivo o ruta relativa
+    const defaultBaseURL = process.env.EXPO_PUBLIC_API_URL || (Platform.OS === 'web' ? 'http://localhost:8080' : 'http://192.168.100.59:8080');
+    const baseURL = api.defaults.baseURL || defaultBaseURL;
+    
+    const finalUri = uri.includes('/') 
+      ? `${baseURL}${uri.startsWith('/') ? '' : '/'}${uri}` 
+      : `${baseURL}/api/files/${uri}`;
+
+    return { uri: finalUri, headers: token ? { Authorization: `Bearer ${token}` } : undefined };
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: bgColor }]}>
       <View style={styles.header}>
-        <Image
-          source={{ 
-            uri: user?.imageUri || 'https://i.pravatar.cc/150',
-            headers: token ? { Authorization: `Bearer ${token}` } : undefined
-          }}
-          style={styles.avatar}
-        />
-        <Text style={[styles.username, { color: textColor }]}>
-          {user?.username || 'Usuario'}
-        </Text>
+        <Pressable onPress={handlePickImage} style={styles.avatarContainer}>
+          <Image
+            source={getProfileImageSource()}
+            style={styles.avatar}
+          />
+          <View style={styles.editIconBadge}>
+            {isUploading ? <ActivityIndicator size="small" color="#FFF" /> : <FontAwesome5 name="camera" size={16} color="#FFF" />}
+          </View>
+        </Pressable>
+        <View style={styles.nameContainer}>
+          <Text style={[styles.username, { color: textColor, marginBottom: 0 }]}>
+            {user?.username || 'Usuario'}
+          </Text>
+          {(user?.role as string) === 'ADMIN' && (
+            <FontAwesome5 name="crown" size={18} color="#D4AF37" style={{ marginLeft: 8 }} />
+          )}
+        </View>
         <Text style={[styles.email, { color: subTextColor }]}>
           {user?.email || 'email@example.com'}
         </Text>
@@ -92,16 +171,36 @@ const styles = StyleSheet.create({
     marginTop: 40,
     marginBottom: 60,
   },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
   avatar: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    marginBottom: 16,
     backgroundColor: '#ccc',
+  },
+  editIconBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#3182CE',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#FFF',
   },
   username: {
     fontSize: 24,
     fontWeight: 'bold',
+  },
+  nameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 4,
   },
   email: {

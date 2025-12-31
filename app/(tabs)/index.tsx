@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, ScrollView, useWindowDimensions, Image } from 'react-native';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, FlatList, Pressable, ScrollView, useWindowDimensions, Image, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons'; // Assuming Feather is correctly imported
@@ -7,24 +7,12 @@ import { useProjects } from '../../contexts/ProjectsContext'; // Assuming usePro
 import { useEvents, CalendarEvent } from '../../contexts/EventsContext';
 import { Project } from '../../types'; // Adjusted path to types.ts
 import i18n from '../../constants/i18n';
+import { useNotifications, AppNotification } from '../../contexts/NotificationsContext';
 
 type ProjectStatus = Project['status'];
 
 const FILTERS = ['All', 'In Progress', 'Delayed'] as const;
 type FilterType = typeof FILTERS[number];
-
-// --- Tipos y Datos Simulados para Notificaciones ---
-interface Notification {
-  id: string;
-  icon: keyof typeof Feather.glyphMap;
-  text: string;
-}
-
-const mockNotifications: Notification[] = [
-  { id: '1', icon: 'file-plus', text: 'New budget approved for "Horizon Tower".' },
-  { id: '2', icon: 'alert-circle', text: 'Checklist for "Zenith" has 2 delayed items.' },
-  { id: '3', icon: 'message-square', text: 'You have a new message from "Garcia Family".' },
-];
 
 // --- Componente para un solo ítem de la lista ---
 const ProjectListItem: React.FC<{ item: Project }> = ({ item }) => {
@@ -86,18 +74,90 @@ const ProjectListItem: React.FC<{ item: Project }> = ({ item }) => {
   );
 };
 
+// --- Componente Animado para Ítem de Notificación ---
+const AnimatedNotificationItem: React.FC<{ 
+  notif: AppNotification; 
+  onPress: (n: AppNotification) => void 
+}> = ({ notif, onPress }) => {
+  // Valores iniciales: Opacidad 0 y desplazado -20px hacia arriba
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(-20)).current;
+
+  useEffect(() => {
+    // Ejecutar animación paralela al montar el componente
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true })
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      <Pressable style={styles.notificationItem} onPress={() => onPress(notif)}>
+        <Feather 
+          name={notif.icon} 
+          size={20} 
+          color={notif.read ? "#A0AEC0" : "#3182CE"} 
+          style={styles.sidebarIcon} 
+        />
+        <View style={{ flex: 1 }}>
+          {notif.title ? <Text style={[styles.sidebarText, { fontWeight: 'bold', marginBottom: 2, flex: 0 }]}>{notif.title}</Text> : null}
+          <Text style={[styles.sidebarText, !notif.read && { fontWeight: '600', color: '#2D3748' }, { flex: 0 }]}>{notif.text}</Text>
+        </View>
+      </Pressable>
+    </Animated.View>
+  );
+};
+
 // --- Componente para la sección de Notificaciones ---
-const Notifications: React.FC<{ notifications: Notification[] }> = ({ notifications }) => (
-  <View style={styles.sidebarSection}>
-    <Text style={styles.sectionTitle}>{i18n.t('dashboard.notifications')}</Text>
-    {notifications.map(notif => (
-      <View key={notif.id} style={styles.notificationItem}>
-        <Feather name={notif.icon} size={20} color="#4A5568" style={styles.sidebarIcon} />
-        <Text style={styles.sidebarText}>{notif.text}</Text>
+const Notifications: React.FC<{ notifications: AppNotification[], onMarkAsRead: (id: string) => void, onMarkAllRead: () => void }> = ({ notifications, onMarkAsRead, onMarkAllRead }) => {
+  const router = useRouter();
+
+  const handlePress = (notif: AppNotification) => {
+    if (!notif.read) onMarkAsRead(notif.id);
+
+    if (notif.category && notif.referenceId) {
+      switch (notif.category) {
+        case 'PROJECT':
+        case 'CHECKLIST': // Asumimos que referenceId es el ID del proyecto para checklist también
+          router.push({ pathname: '/(tabs)/[id]', params: { id: notif.referenceId } });
+          break;
+        case 'AGENDA':
+          // Si referenceId es una fecha YYYY-MM-DD, la pasamos como parámetro
+          if (/^\d{4}-\d{2}-\d{2}$/.test(notif.referenceId)) {
+            router.push({ pathname: '/(tabs)/agenda', params: { date: notif.referenceId } });
+          } else {
+            router.push('/(tabs)/agenda');
+          }
+          break;
+        case 'BUDGET':
+          router.push('/(tabs)/budgets');
+          break;
+        default:
+          break;
+      }
+    }
+  };
+
+  return (
+    <View style={styles.sidebarSection}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>{i18n.t('dashboard.notifications')}</Text>
+        {notifications.some(n => !n.read) && (
+          <Pressable onPress={onMarkAllRead}>
+            <Text style={{ fontSize: 12, color: '#3182CE', fontWeight: '600' }}>Marcar leídas</Text>
+          </Pressable>
+        )}
       </View>
-    ))}
-  </View>
-);
+      {notifications.map(notif => (
+        <AnimatedNotificationItem key={notif.id} notif={notif} onPress={handlePress} />
+      ))}
+      {notifications.length === 0 && (
+        <Text style={{ color: '#A0AEC0', fontStyle: 'italic', fontSize: 14 }}>No hay notificaciones.</Text>
+      )}
+    </View>
+  );
+};
 
 // --- Componente para la sección de Próximos Hitos ---
 const UpcomingMilestones: React.FC<{ milestones: CalendarEvent[] }> = ({ milestones }) => {
@@ -136,6 +196,7 @@ const UpcomingMilestones: React.FC<{ milestones: CalendarEvent[] }> = ({ milesto
 export default function DashboardScreen() {
   const { projects, getChecklistByProjectId } = useProjects(); // Usamos los proyectos del contexto
   const { events } = useEvents(); // Usamos los eventos del contexto
+  const { notifications, markAsRead, markAllAsRead } = useNotifications(); // Usamos las notificaciones del contexto
   const [activeFilter, setActiveFilter] = useState<FilterType>('All');
   const { width } = useWindowDimensions();
   const isLargeScreen = width > 1024; // Breakpoint para mostrar columnas
@@ -172,16 +233,19 @@ export default function DashboardScreen() {
 
   // Combinar notificaciones estáticas con la alerta dinámica
   const displayNotifications = useMemo(() => {
-    const notifs = [...mockNotifications];
+    // Clonamos las notificaciones del contexto
+    const notifs = [...notifications];
     if (overdueTasksCount > 0) {
       notifs.unshift({
         id: 'alert-overdue',
         icon: 'alert-triangle',
-        text: `¡Atención! Tienes ${overdueTasksCount} tarea(s) vencida(s).`
+        text: `¡Atención! Tienes ${overdueTasksCount} tarea(s) vencida(s).`,
+        date: new Date().toISOString(),
+        read: false
       });
     }
     return notifs;
-  }, [overdueTasksCount]);
+  }, [overdueTasksCount, notifications]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['right', 'bottom', 'left']}>
@@ -235,7 +299,11 @@ export default function DashboardScreen() {
 
           {/* --- Barra Lateral (Notificaciones y Hitos) --- */}
           <View style={isLargeScreen ? styles.sidebar : styles.fullWidthContent}>
-            <Notifications notifications={displayNotifications} />
+            <Notifications 
+              notifications={displayNotifications} 
+              onMarkAsRead={markAsRead}
+              onMarkAllRead={markAllAsRead}
+            />
             <UpcomingMilestones milestones={upcomingMilestones} />
           </View>
         </View>

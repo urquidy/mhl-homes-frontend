@@ -9,5 +9,8 @@ services:
         # Aquí pones la URL real de tu backend en AWS
         - EXPO_PUBLIC_API_URL=http://ec2-18-223-118-197.us-east-2.compute.amazonaws.com:8080
     ports:
-      - "8081:80"
+      - "80:80"   # Puerto estándar HTTP
+      - "443:443" # Puerto estándar HTTPS
+    volumes:
+      - ./certs:/etc/nginx/certs # Conectar certificados al contenedor
     restart: always

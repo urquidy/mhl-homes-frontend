@@ -15,12 +15,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/theme'; // Ajusta la ruta si es necesario
 import { useAuth } from '../../contexts/AuthContext';
-
-// CONFIGURACIÓN DE API:
-// Si estás en Web, localhost funciona.
-// Si estás en Móvil (Expo Go), necesitas tu IP local (ej. 192.168.1.15).
-// Priorizamos la variable de entorno (definida en .env.development, .env.production, etc.)
-const API_URL = process.env.EXPO_PUBLIC_API_URL || (Platform.OS === 'web' ? 'http://localhost:8080' : 'http://192.168.100.59:8080');
+import api from '../../services/api';
 
 export default function LoginScreen() {
   const [username, setUsername] = useState('');
@@ -37,33 +32,35 @@ export default function LoginScreen() {
       return;
     }
 
+    // Validación simple de email (opcional, si el usuario ingresó un correo)
+    if (username.includes('@') && !/\S+@\S+\.\S+/.test(username)) {
+      Alert.alert('Error', 'El formato del correo electrónico no es válido');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_URL}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
+      // Usamos api.post en lugar de fetch para usar la configuración centralizada
+      const response = await api.post('/auth/login', { username, password });
+      const data = response.data;
 
-      const data = await response.json();
+      // Estructura actualizada: { token, refreshToken, id, username, email, role, imageUri }
+      // Renombramos username a resUsername para evitar conflicto con el estado local
+      const { token, refreshToken, id, username: resUsername, email, role, imageUri } = data;
+      
+      await login({
+        id,
+        username: resUsername,
+        email,
+        role,
+        imageUri
+      }, token, refreshToken);
+      router.replace('/(tabs)');
 
-      if (response.ok) {
-        // Asumiendo que el backend devuelve role y email, o usamos defaults
-        // Estructura actualizada: { email, imageUri, refreshToken, role, token }
-        const { token, refreshToken, role, email } = data;
-        
-        const userRole = role || 'Viewer';
-        const userEmail = email || `${username}@mhlhomes.com`;
-        
-        // Pasamos el refreshToken al contexto para que lo guarde en Storage
-        login(userEmail, userRole, token, refreshToken);
-        router.replace('/(tabs)');
-      } else {
-        Alert.alert('Login Fallido', data.message || 'Credenciales inválidas');
-      }
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      Alert.alert('Error', 'No se pudo conectar con el servidor');
+      const message = error.response?.data?.message || 'Credenciales inválidas';
+      Alert.alert('Login Fallido', message);
     } finally {
       setIsLoading(false);
     }

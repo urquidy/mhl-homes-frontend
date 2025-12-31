@@ -97,10 +97,13 @@ api.interceptors.response.use(
           refreshToken: refreshToken,
         });
 
-        const { token: newToken } = response.data;
+        const { token: newToken, refreshToken: newRefreshToken } = response.data;
 
         if (newToken) {
             await setStorageItem('token', newToken);
+            if (newRefreshToken) {
+              await setStorageItem('refreshToken', newRefreshToken);
+            }
             
             // Actualizar el header de la petición original y reintentarla
             originalRequest.headers.Authorization = `Bearer ${newToken}`;

@@ -82,7 +82,7 @@ export default function ProjectsScreen() {
                   <Feather name="play-circle" size={20} color="#38A169" />
                 </Pressable>
               )}
-              {user?.role === 'Admin' && (
+              {(user?.role as string) === 'ADMIN' && (
                 <Pressable onPress={() => handleDelete(item.id)} style={styles.deleteButton} hitSlop={10}>
                   <Feather name="trash-2" size={20} color="#E53E3E" />
                 </Pressable>

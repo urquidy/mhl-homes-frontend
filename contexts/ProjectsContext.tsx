@@ -204,6 +204,9 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
       });
     };
 
+    // 1.1 Carga Inicial Inmediata (Persistencia primero)
+    fetchAllData();
+
     // 2. Inicializar Socket
     const socket = initSocket(token);
 
@@ -212,7 +215,7 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
     socket.on('connect', () => {
       console.log('✅ Socket Conectado Exitosamente!');
       console.log('🆔 Session ID:', socket.id);
-      fetchAllData(); // Sincronizar al conectar
+      fetchAllData(); // Re-sincronizar al conectar por si hubo cambios offline
     });
 
     socket.on('connect_error', (err: { message: any; }) => {

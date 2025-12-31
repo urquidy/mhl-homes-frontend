@@ -1406,7 +1406,7 @@ export default function ProjectDetailScreen() {
             <Pressable onPress={() => setViewingImageSource(planImageSource)}>
               <Text style={{ color: '#3182CE', fontSize: 14 }}>{i18n.t('projectDetail.viewFullImage')}</Text>
             </Pressable>
-            {user?.role === 'Admin' && (
+            {(user?.role as string) === 'ADMIN' && (
               <Pressable onPress={handleUploadPlan} style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Feather name="refresh-cw" size={14} color="#718096" style={{ marginRight: 4 }} />
                 <Text style={{ color: '#718096', fontSize: 14 }}>Reemplazar Plano</Text>
@@ -1418,7 +1418,7 @@ export default function ProjectDetailScreen() {
           <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#EDF2F7' }]}>
             <Feather name="image" size={48} color="#CBD5E0" />
             <Text style={{ marginTop: 16, color: '#718096', marginBottom: 16 }}>{i18n.t('projectDetail.noPlan')}</Text>
-            {user?.role === 'Admin' && (
+            {(user?.role as string) === 'ADMIN' && (
               <Pressable style={styles.uploadPlanButton} onPress={handleUploadPlan}>
                 <Feather name="upload" size={16} color="#3182CE" />
                 <Text style={styles.uploadPlanText}>{i18n.t('projectDetail.uploadPlan')}</Text>
@@ -1700,7 +1700,7 @@ export default function ProjectDetailScreen() {
               ))}
 
               {/* Botón de Eliminar (Solo Admin) */}
-              {user?.role === 'Admin' && (
+              {(user?.role as string) === 'ADMIN' && (
                 <Pressable onPress={handleDeleteItem} style={styles.deleteButton}>
                   <Feather name="trash-2" size={20} color="#FFF" />
                   <Text style={styles.deleteButtonText}>{i18n.t('projectDetail.deleteTask')}</Text>

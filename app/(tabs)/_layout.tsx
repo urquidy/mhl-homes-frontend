@@ -9,6 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import i18n from '../../constants/i18n';
 import NewProjectModal from '@/components/projects/NewProjectModal';
 import { EventsProvider } from '../../contexts/EventsContext';
+import { NotificationsProvider } from '../../contexts/NotificationsContext';
 
 // --- Datos y tipos movidos desde SideMenu.tsx ---
 interface MenuItem {
@@ -21,11 +22,11 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
   { href: '/(tabs)/', name: 'nav.dashboard', icon: 'grid' },
   { href: '/(tabs)/projects', name: 'nav.projects', icon: 'briefcase' },
-  { href: '/(tabs)/budgets', name: 'nav.budgets', icon: 'clipboard', roles: ['Admin', 'Project Manager'] },
-  { href: '/(tabs)/checklist', name: 'nav.checklist', icon: 'check-square', roles: ['Admin', 'Project Manager'] },
+  { href: '/(tabs)/budgets', name: 'nav.budgets', icon: 'clipboard', roles: ['ADMIN', 'Project Manager'] },
+  { href: '/(tabs)/checklist', name: 'nav.checklist', icon: 'check-square', roles: ['ADMIN', 'Project Manager'] },
   { href: '/(tabs)/agenda', name: 'nav.agenda', icon: 'calendar' },
-  { href: '/(tabs)/reports', name: 'nav.reports', icon: 'bar-chart-2', roles: ['Admin', 'Viewer'] },
-  { href: '/(tabs)/admin', name: 'nav.administrator', icon: 'settings', roles: ['Admin'] },
+  { href: '/(tabs)/reports', name: 'nav.reports', icon: 'bar-chart-2', roles: ['ADMIN', 'Viewer'] },
+  { href: '/(tabs)/admin', name: 'nav.administrator', icon: 'settings', roles: ['ADMIN'] },
 ];
 
 // Contexto para permitir que las pantallas cambien la acción del botón "Agregar" del Header
@@ -49,13 +50,14 @@ export default function AppLayout() {
   const [customAddAction, setCustomAddAction] = useState<(() => void) | null>(null);
   const [isNewProjectModalVisible, setIsNewProjectModalVisible] = useState(false);
 
-  const visibleMenuItems = menuItems.filter(item => !item.roles || (user && item.roles.includes(user.role)));
+  const visibleMenuItems = menuItems.filter(item => !item.roles || (user && item.roles.includes(user.role as string)));
 
   const handleAddPress = customAddAction || (() => setIsNewProjectModalVisible(true));
 
   return (
     <HeaderActionContext.Provider value={{ setCustomAddAction }}>
       <EventsProvider>
+      <NotificationsProvider>
       <Drawer
         // Establece el estado inicial del menú.
         // Abierto en pantallas grandes, cerrado en las demás.
@@ -162,6 +164,7 @@ export default function AppLayout() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+      </NotificationsProvider>
       </EventsProvider>
     </HeaderActionContext.Provider>
   );
