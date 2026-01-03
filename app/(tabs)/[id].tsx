@@ -1,14 +1,23 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, Alert, Modal, TextInput, TouchableOpacity, GestureResponderEvent, LayoutChangeEvent, PanResponder, Switch, useWindowDimensions, Platform, KeyboardAvoidingView, Pressable, ActivityIndicator, LayoutAnimation, UIManager, Animated } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, Modal, TextInput, TouchableOpacity, GestureResponderEvent, LayoutChangeEvent, PanResponder, Switch, useWindowDimensions, Platform, KeyboardAvoidingView, Pressable, ActivityIndicator, LayoutAnimation, UIManager, Animated } from 'react-native';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useProjects } from '../../contexts/ProjectsContext';
 import Svg, { Path as SvgPath } from 'react-native-svg';
+import * as DocumentPicker from 'expo-document-picker'; // Importar DocumentPicker
+import * as FileSystem from 'expo-file-system/legacy'; // Importar FileSystem Legacy
+import * as Sharing from 'expo-sharing';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import i18n from '../../constants/i18n';
 import api from '../../services/api';
+import { WebView } from 'react-native-webview';
+import CalendarPickerModal from '../../components/ui/CalendarPickerModal';
+import ItemDetailModal from '../../components/ui/ItemDetailModal';
+import EditProjectModal from '../../components/project-detail/EditProjectModal';
+import ProjectDocuments from '../../components/project-detail/ProjectDocuments';
+import { useCustomAlert } from '../../components/ui/CustomAlert';
 
 // --- Utilidades de Calendario ---
 const daysOfWeek = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -21,80 +30,6 @@ const getFirstDayOfMonth = (month: number, year: number) => new Date(year, month
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-
-// --- Componente Modal de Calendario ---
-const CalendarPickerModal = ({ visible, onClose, onSelect }: { visible: boolean, onClose: () => void, onSelect: (date: string) => void }) => {
-  const [currentDate, setCurrentDate] = useState(new Date());
-  
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
-  const daysInMonth = getDaysInMonth(month, year);
-  const firstDay = getFirstDayOfMonth(month, year);
-
-  const calendarDays = useMemo(() => {
-    const days = [];
-    for (let i = 0; i < firstDay; i++) days.push(null);
-    for (let i = 1; i <= daysInMonth; i++) days.push(i);
-    return days;
-  }, [month, year]);
-
-  const changeMonth = (increment: number) => {
-    setCurrentDate(new Date(year, month + increment, 1));
-  };
-
-  const handleDayPress = (day: number) => {
-    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    onSelect(dateStr);
-    onClose();
-  };
-
-  return (
-    <Modal visible={visible} transparent={true} animationType="fade" onRequestClose={onClose}>
-      <View style={styles.modalContainer}>
-        <View style={[styles.inputModalContent, { padding: 0, overflow: 'hidden' }]}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: '#F7FAFC', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' }}>
-            <Pressable onPress={() => changeMonth(-1)} style={{ padding: 4 }}><Feather name="chevron-left" size={24} color="#4A5568" /></Pressable>
-            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#2D3748' }}>{monthNames[month]} {year}</Text>
-            <Pressable onPress={() => changeMonth(1)} style={{ padding: 4 }}><Feather name="chevron-right" size={24} color="#4A5568" /></Pressable>
-          </View>
-          
-          <View style={{ flexDirection: 'row', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#EDF2F7' }}>
-            {daysOfWeek.map(d => <Text key={d} style={{ flex: 1, textAlign: 'center', fontSize: 12, color: '#718096', fontWeight: '600' }}>{d}</Text>)}
-          </View>
-
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', padding: 8 }}>
-            {calendarDays.map((day, i) => (
-              <View key={i} style={{ width: '14.28%', aspectRatio: 1, padding: 2 }}>
-                {day && (
-                  <Pressable 
-                    onPress={() => handleDayPress(day)}
-                    style={({pressed}) => ({ 
-                      flex: 1, 
-                      justifyContent: 'center', 
-                      alignItems: 'center', 
-                      borderRadius: 20, 
-                      backgroundColor: pressed ? '#EBF8FF' : 'transparent',
-                      borderWidth: 1,
-                      borderColor: pressed ? '#3182CE' : 'transparent'
-                    })}
-                  >
-                    <Text style={{ color: '#2D3748' }}>{day}</Text>
-                  </Pressable>
-                )}
-              </View>
-            ))}
-          </View>
-
-          <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
-            <Pressable style={[styles.modalButton, styles.cancelButton, { width: '100%', marginLeft: 0 }]} onPress={onClose}>
-              <Text style={{ textAlign: 'center', fontWeight: 'bold', color: '#4A5568' }}>{i18n.t('common.cancel')}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-};
 
 // --- Función auxiliar para calcular dimensiones ajustadas (Fit) ---
 const getFittedDimensions = (containerW: number, containerH: number, imgRatio: number) => {
@@ -156,7 +91,7 @@ export default function ProjectDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
-  const { getProjectById, getChecklistByProjectId, toggleChecklistItem, updateChecklistEvidence, addChecklistItem, updateProjectPlan, addChecklistEvidence, deleteChecklistEvidence, addChecklistComment, deleteChecklistItem, startProject, isLoading, fetchProjectChecklist, clearProjectChecklist } = useProjects();
+  const { getProjectById, getChecklistByProjectId, toggleChecklistItem, updateChecklistEvidence, addChecklistItem, updateProjectPlan, addChecklistEvidence, deleteChecklistEvidence, addChecklistComment, deleteChecklistItem, startProject, isLoading, fetchProjectChecklist, clearProjectChecklist, refreshProjects } = useProjects();
   const { user, token } = useAuth();
 
   const projectId = Array.isArray(id) ? id[0] : id;
@@ -165,6 +100,8 @@ export default function ProjectDetailScreen() {
   
   const [viewingImageSource, setViewingImageSource] = useState<{ uri: string; headers?: any } | null>(null);
   const [planImageSource, setPlanImageSource] = useState<any>(null);
+  const [planType, setPlanType] = useState<'image' | 'pdf'>('image');
+  const [viewingMediaType, setViewingMediaType] = useState<'image' | 'pdf'>('image');
   const [availableUsers, setAvailableUsers] = useState<any[]>([]);
 
   // Estados para el progreso de subida
@@ -185,6 +122,14 @@ export default function ProjectDetailScreen() {
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string | null>(null);
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
   const [filterSearchText, setFilterSearchText] = useState('');
+  const [isAspectRatioModalVisible, setIsAspectRatioModalVisible] = useState(false);
+  const [customAspectRatio, setCustomAspectRatio] = useState('1.5');
+  const [isEditProjectModalVisible, setIsEditProjectModalVisible] = useState(false);
+  const { showAlert, AlertComponent } = useCustomAlert();
+  const [pan, setPan] = useState({ x: 0, y: 0 }); // Estado para la posición (Pan)
+  const [isInteracting, setIsInteracting] = useState(false); // Estado para bloquear el scroll principal
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(null);
 
   // Animación para la altura del panel del catálogo
   const panelHeight = useRef(new Animated.Value(250)).current;
@@ -261,16 +206,30 @@ export default function ProjectDetailScreen() {
             const blob = await response.blob();
             const blobUrl = URL.createObjectURL(blob);
             setPlanImageSource({ uri: blobUrl });
+            
+            if (blob.type === 'application/pdf') {
+              setPlanType('pdf');
+              setImageAspectRatio(1.5); // Aspect ratio por defecto para PDF (aprox. carta/oficio horizontal)
+            } else {
+              setPlanType('image');
             // En Web calculamos el aspect ratio aquí porque onLoad no trae 'source'
             Image.getSize(blobUrl, (width, height) => {
               if (height > 0) setImageAspectRatio(width / height);
             }, (err) => console.error("Error getting image size:", err));
+            } // <--- ESTA LLAVE FALTABA
           }
         } catch (e) { console.error("Error loading plan:", e); } finally {
           setIsImageLoading(false);
         }
       } else {
         setPlanImageSource({ uri: finalUri, headers: { Authorization: `Bearer ${token}` } });
+        // Detectar PDF por extensión en Native
+        if (finalUri.toLowerCase().endsWith('.pdf')) {
+          setPlanType('pdf');
+          setImageAspectRatio(1.5); // Aspect ratio por defecto para PDF
+        } else {
+          setPlanType('image');
+        }
       }
     };
     
@@ -282,6 +241,12 @@ export default function ProjectDetailScreen() {
       setIsImageLoading(false);
     };
   }, [project?.architecturalPlanUri, token]);
+
+  useEffect(() => {
+    if (imageAspectRatio !== null) { // Check if imageAspectRatio is not null
+      setCustomAspectRatio(imageAspectRatio.toFixed(2));
+    }
+  }, [imageAspectRatio]);
 
   // Cargar Checklist del Proyecto al entrar
   useEffect(() => {
@@ -380,16 +345,25 @@ export default function ProjectDetailScreen() {
     let finalUri = uri;
     if (!uri.startsWith('http')) {
       // Si viene del backend, concatenamos a la baseURL
-      // Fallback para desarrollo local en móvil
-      const defaultBaseURL = process.env.EXPO_PUBLIC_API_URL || (Platform.OS === 'web' ? 'http://localhost:8080' : 'http://192.168.100.59:8080');
-      const baseURL = api.defaults.baseURL || defaultBaseURL;
-      if (!uri.includes('/')) {
-        finalUri = `${baseURL}/api/files/${uri}`;
-      } else {
-        finalUri = `${baseURL}${uri.startsWith('/') ? '' : '/'}${uri}`;
+      let baseURL = process.env.EXPO_PUBLIC_API_URL || api.defaults.baseURL;
+      
+      // Fallback inteligente si no hay configuración
+      if (!baseURL) {
+        const devHost = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
+        baseURL = `http://${devHost}:8080`;
       }
+
+      const cleanBase = baseURL.endsWith('/') ? baseURL.slice(0, -1) : baseURL;
+      const cleanPath = uri.startsWith('/') ? uri : `/${uri}`;
+      // Si no parece una ruta completa, asumimos que es un ID para /api/files
+      finalUri = !uri.includes('/') ? `${cleanBase}/api/files/${uri}` : `${cleanBase}${cleanPath}`;
     }
     
+    // FIX: Reemplazar localhost por 10.0.2.2 en Android para cualquier URL resultante
+    if (Platform.OS === 'android' && finalUri.includes('localhost')) {
+      finalUri = finalUri.replace('localhost', '10.0.2.2');
+    }
+
     return {
       uri: finalUri,
       headers: token ? { Authorization: `Bearer ${token}` } : undefined
@@ -417,27 +391,11 @@ export default function ProjectDetailScreen() {
   const [currentPencilPathDisplay, setCurrentPencilPathDisplay] = useState<string>(''); // Nueva variable para dibujar en píxeles (sin desfase)
   const [pencilColor, setPencilColor] = useState('#3182CE'); // Color por defecto (Azul)
   
-  const [pan, setPan] = useState({ x: 0, y: 0 }); // Estado para la posición (Pan)
-  const [isInteracting, setIsInteracting] = useState(false); // Estado para bloquear el scroll principal
-  const [containerWidth, setContainerWidth] = useState(0);
-  const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(null);
-
   // Estados para el Modal de Detalle de Item
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [newComment, setNewComment] = useState('');
   const selectedItem = selectedItemId ? checklistItems.find(i => i.id === selectedItemId) : null;
   const [startModalVisible, setStartModalVisible] = useState(false);
-
-  // Estado para Modal de Confirmación Genérico (Reemplazo de Alert.alert)
-  const [confirmationModal, setConfirmationModal] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-    onConfirm: () => void | Promise<void>;
-    confirmText?: string;
-    confirmColor?: string;
-    isLoading?: boolean;
-  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   // Refs para acceder al estado actualizado dentro del PanResponder (que no se recrea)
   const isDrawingModeRef = useRef(isDrawingMode);
@@ -736,9 +694,9 @@ export default function ProjectDetailScreen() {
     if (projectId) {
       try {
         await startProject(projectId);
-        Alert.alert("Éxito", "El proyecto ha iniciado correctamente.");
+        showAlert("Éxito", "El proyecto ha iniciado correctamente.");
       } catch (error) {
-        Alert.alert("Error", "No se pudo iniciar el proyecto.");
+        showAlert("Error", "No se pudo iniciar el proyecto.");
       }
     }
     setStartModalVisible(false);
@@ -757,7 +715,7 @@ export default function ProjectDetailScreen() {
     if (source === 'camera') {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        alert(i18n.t('common.permissionCamera'));
+        showAlert(i18n.t('common.permissionCamera'));
         return;
       }
       
@@ -769,7 +727,7 @@ export default function ProjectDetailScreen() {
     } else {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        alert(i18n.t('common.permissionGallery'));
+        showAlert(i18n.t('common.permissionGallery'));
         return;
       }
       result = await ImagePicker.launchImageLibraryAsync(options);
@@ -783,7 +741,7 @@ export default function ProjectDetailScreen() {
       try {
         await addChecklistEvidence(projectId, selectedItemId, type, asset.uri);
       } catch (error) {
-        Alert.alert("Error", "No se pudo subir la evidencia.");
+        showAlert("Error", "No se pudo subir la evidencia.");
       } finally {
         setIsEvidenceUploading(false);
       }
@@ -799,54 +757,64 @@ export default function ProjectDetailScreen() {
 
   const handleDeleteItem = () => {
     if (selectedItemId) {
-      setConfirmationModal({
-        visible: true,
-        title: i18n.t('projectDetail.deleteTask'),
-        message: i18n.t('projectDetail.deleteConfirmation'),
-        onConfirm: async () => {
-          await deleteChecklistItem(projectId, selectedItemId);
-          setSelectedItemId(null);
-        },
-        confirmText: i18n.t('common.delete'),
-        confirmColor: '#E53E3E'
-      });
+      showAlert(
+        i18n.t('projectDetail.deleteTask'),
+        i18n.t('projectDetail.deleteConfirmation'),
+        [
+          { text: i18n.t('common.cancel'), style: 'cancel' },
+          { 
+            text: i18n.t('common.delete'), 
+            style: 'destructive', 
+            onPress: async () => {
+              await deleteChecklistItem(projectId, selectedItemId);
+              setSelectedItemId(null);
+            }
+          }
+        ]
+      );
     }
   };
 
   const handleDeleteEvidence = (evidenceId: string) => {
     if (!selectedItemId) return;
     
-    setConfirmationModal({
-      visible: true,
-      title: "Eliminar Evidencia",
-      message: "¿Estás seguro de que deseas eliminar este archivo?",
-      onConfirm: async () => {
-        await deleteChecklistEvidence(projectId, selectedItemId, evidenceId);
-      },
-      confirmText: i18n.t('common.delete'),
-      confirmColor: '#E53E3E'
-    });
+    showAlert(
+      "Eliminar Evidencia",
+      "¿Estás seguro de que deseas eliminar este archivo?",
+      [
+        { text: i18n.t('common.cancel'), style: 'cancel' },
+        { 
+          text: i18n.t('common.delete'), 
+          style: 'destructive', 
+          onPress: async () => {
+            await deleteChecklistEvidence(projectId, selectedItemId, evidenceId);
+          }
+        }
+      ]
+    );
   };
 
   const handleUploadPlan = () => {
     if (project?.architecturalPlanUri) {
-      setConfirmationModal({
-        visible: true,
-        title: "Reemplazar Plano",
-        message: "¿Estás seguro de que deseas reemplazar el plano actual? Esta acción no se puede deshacer.",
-        onConfirm: () => {
-          setTimeout(() => startPlanUpload(), 100);
-        },
-        confirmText: "Reemplazar",
-        confirmColor: '#E53E3E'
-      });
+      showAlert(
+        "Reemplazar Plano",
+        "¿Estás seguro de que deseas reemplazar el plano actual? Esta acción no se puede deshacer.",
+        [
+          { text: "Cancelar", style: 'cancel' },
+          { 
+            text: "Reemplazar", 
+            style: 'destructive', 
+            onPress: () => { setTimeout(() => startPlanUpload(), 100); }
+          }
+        ]
+      );
     } else {
       startPlanUpload();
     }
   };
 
   // Función separada para manejar la subida y permitir reintentos
-  const uploadSelectedPlan = async (asset: ImagePicker.ImagePickerAsset) => {
+  const uploadSelectedPlan = async (file: { uri: string, name: string, type: string, blob?: any }) => {
     setIsUploading(true);
     setUploadProgress(0);
 
@@ -858,9 +826,7 @@ export default function ProjectDetailScreen() {
     abortControllerRef.current = controller;
 
     try {
-      const filename = asset.uri.split('/').pop() || 'plan.jpg';
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : 'image/jpeg';
+      const { uri, name, type } = file;
       
       // Construir payload básico del proyecto para el PUT
       const statusMap: Record<string, string> = {
@@ -885,23 +851,28 @@ export default function ProjectDetailScreen() {
       let imageFile: { uri: string, name: string, type: string, blob?: Blob } | { uri: string, name: string, type: string };
 
       if (Platform.OS === 'web') {
-        const response = await fetch(asset.uri);
-        const blob = await response.blob();
-        imageFile = { uri: asset.uri, name: filename, type, blob };
+        // Si ya tenemos el blob (DocumentPicker web), lo usamos. Si no, lo obtenemos (ImagePicker web a veces da base64/blob url)
+        const blob = file.blob || await (await fetch(uri)).blob();
+        imageFile = { uri, name, type, blob };
       } else {
-        imageFile = { uri: asset.uri, name: filename, type };
+        imageFile = { uri, name, type };
       }
 
       const response = await updateProjectWithFile(projectId, projectPayload, imageFile, (p) => setUploadProgress(p), controller.signal);
       
       // Usar la URI retornada por el servidor si existe, sino la local
-      const newUri = response.data?.architecturalPlanUri || response.data?.imageUri || asset.uri;
+      const newUri = response.data?.architecturalPlanUri || response.data?.imageUri || uri;
       updateProjectPlan(projectId, newUri);
       
       // Actualizar vista localmente para feedback inmediato
-      setPlanImageSource({ uri: asset.uri });
+      setPlanImageSource({ uri });
+      if (type === 'application/pdf' || name.toLowerCase().endsWith('.pdf')) {
+        setPlanType('pdf');
+      } else {
+        setPlanType('image');
+      }
       
-      Alert.alert("Éxito", "Plano subido correctamente.");
+      showAlert("Éxito", "Plano subido correctamente.");
 
     } catch (error: any) {
       // Verificar si el error fue por cancelación
@@ -910,25 +881,14 @@ export default function ProjectDetailScreen() {
       } else {
         console.error("Error uploading plan:", error);
         
-        if (Platform.OS === 'web') {
-          setConfirmationModal({
-            visible: true,
-            title: "Error de Subida",
-            message: "No se pudo subir el plano. ¿Deseas reintentar?",
-            onConfirm: () => uploadSelectedPlan(asset),
-            confirmText: "Reintentar",
-            confirmColor: '#3182CE'
-          });
-        } else {
-          Alert.alert(
-            "Error", 
-            "No se pudo subir el plano. ¿Deseas reintentar?",
-            [
-              { text: "Cancelar", style: "cancel" },
-              { text: "Reintentar", onPress: () => uploadSelectedPlan(asset) }
-            ]
-          );
-        }
+        showAlert(
+          "Error de Subida",
+          "No se pudo subir el plano. ¿Deseas reintentar?",
+          [
+            { text: "Cancelar", style: "cancel" },
+            { text: "Reintentar", onPress: () => uploadSelectedPlan(file) }
+          ]
+        );
       }
     } finally {
       setIsUploading(false);
@@ -937,8 +897,8 @@ export default function ProjectDetailScreen() {
     }
   };
 
-  // Lógica interna para seleccionar y subir la imagen
-  const startPlanUpload = async () => {
+  // Funciones auxiliares para selección
+  const pickImageForPlan = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permissionResult.granted === false) {
       alert(i18n.t('common.permissionGallery'));
@@ -952,8 +912,52 @@ export default function ProjectDetailScreen() {
     
     if (!result.canceled) {
       const asset = result.assets[0];
-      uploadSelectedPlan(asset);
+      const filename = asset.uri.split('/').pop() || 'plan.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : 'image/jpeg';
+      
+      uploadSelectedPlan({ uri: asset.uri, name: filename, type });
     }
+  };
+
+  const pickDocumentForPlan = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'application/pdf',
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) return;
+
+      const asset = result.assets[0];
+      uploadSelectedPlan({
+        uri: asset.uri,
+        name: asset.name,
+        type: 'application/pdf',
+        blob: (asset as any).file // Para soporte web
+      });
+    } catch (err) {
+      console.log('Error picking document:', err);
+    }
+  };
+
+  // Lógica interna para seleccionar y subir (Menú de opciones)
+  const startPlanUpload = () => {
+    if (Platform.OS === 'web') {
+      // En web usamos DocumentPicker que permite seleccionar cualquier archivo
+      pickDocumentForPlan();
+      return;
+    }
+
+    showAlert(
+      "Seleccionar Archivo",
+      "¿Qué tipo de archivo deseas subir?",
+      [
+        { text: "Imagen", onPress: pickImageForPlan },
+        { text: "PDF", onPress: pickDocumentForPlan },
+        { text: "Cancelar", style: "cancel" }
+      ]
+    );
   };
 
   const showEvidenceOptions = () => {
@@ -973,16 +977,21 @@ export default function ProjectDetailScreen() {
       buttons.push({ text: i18n.t('common.cancel'), style: "cancel" });
     }
 
-    Alert.alert(
+    showAlert(
       i18n.t('projectDetail.addEvidenceTitle'),
       i18n.t('projectDetail.addEvidenceMessage'),
-      buttons,
-      { cancelable: true }
+      buttons
     );
   };
 
   const saveNewItem = () => {
     if (newItemText.trim()) {
+      // Validación de límites: Verificar que el punto de inserción esté dentro del plano (0-100%)
+      if (newItemModal.x < 0 || newItemModal.y < 0 || newItemModal.x > 100 || newItemModal.y > 100) {
+        showAlert("Fuera de Límites", "No se puede crear la tarea fuera del área del plano.");
+        return;
+      }
+
       setIsSaving(true);
       let finalWidth = newItemModal.width || 0;
       let finalHeight = newItemModal.height || 0;
@@ -991,6 +1000,14 @@ export default function ProjectDetailScreen() {
       if ((drawingShape === 'rectangle' || drawingShape === 'circle') && finalWidth === 0 && finalHeight === 0) {
         finalWidth = 15; // 15% del ancho
         finalHeight = 10; // 10% del alto (aprox)
+      }
+
+      // Validar que el área completa (x + width, y + height) no exceda los límites
+      // Se da un pequeño margen (100.5) por posibles redondeos
+      if (drawingShape !== 'pencil' && (newItemModal.x + finalWidth > 100.5 || newItemModal.y + finalHeight > 100.5)) {
+        showAlert("Fuera de Límites", "El elemento se sale de los límites del plano. Intenta colocarlo más al centro.");
+        setIsSaving(false);
+        return;
       }
 
       addChecklistItem(projectId, newItemText, newItemModal.x, newItemModal.y, finalWidth, finalHeight, newItemAssignedTo, drawingShape, newItemDeadline || undefined, drawingShape === 'pencil' ? currentPencilPath : undefined, drawingShape === 'pencil' ? pencilColor : undefined, newItemStepId || undefined, newItemCategoryId || undefined)
@@ -1013,6 +1030,28 @@ export default function ProjectDetailScreen() {
         .finally(() => {
           setIsSaving(false);
         });
+    }
+  };
+
+  const handleUpdateProjectDetails = async (data: { name: string, participants: string[] }) => {
+    try {
+      // Reutilizamos updateProjectWithFile pero solo enviando el JSON del proyecto
+      const projectPayload = {
+        ...project,
+        name: data.name,
+        participants: data.participants,
+      };
+      
+      // Enviamos null como archivo para solo actualizar datos
+      await updateProjectWithFile(projectId, projectPayload, null);
+      
+      // Refrescamos la lista global de proyectos para que se refleje el cambio
+      if (refreshProjects) await refreshProjects();
+      
+      showAlert("Éxito", "Proyecto actualizado correctamente.");
+    } catch (error) {
+      console.error(error);
+      showAlert("Error", "No se pudo actualizar el proyecto.");
     }
   };
 
@@ -1077,6 +1116,84 @@ export default function ProjectDetailScreen() {
     setPan({ x: newPanX, y: newPanY });
   };
 
+  const handleDownloadViewingDoc = async () => {
+    if (!viewingImageSource?.uri) return;
+    
+    try {
+      if (Platform.OS === 'web') { // Web
+        const response = await fetch(viewingImageSource.uri, { headers: viewingImageSource.headers });
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        // Intentar obtener nombre del archivo de la URI
+        a.download = viewingImageSource.uri.split('/').pop() || 'download';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      } else {
+        let filename = viewingImageSource.uri.split('/').pop() || 'download'; // Native
+        
+        // Limpiar query params si existen
+        if (filename.includes('?')) filename = filename.split('?')[0];
+
+        // Asegurar extensión correcta para evitar "archivo corrupto" al compartir
+        if (viewingMediaType === 'pdf' && !filename.toLowerCase().endsWith('.pdf')) {
+          filename += '.pdf';
+        } else if (viewingMediaType === 'image' && !filename.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+          filename += '.jpg';
+        }
+
+        const fileDir = ((FileSystem as any).documentDirectory || '') + filename;
+        const downloadRes = await FileSystem.downloadAsync(
+          viewingImageSource.uri,
+          fileDir,
+          { headers: viewingImageSource.headers }
+        );
+        if (downloadRes.status === 200) {
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(downloadRes.uri, {
+              mimeType: viewingMediaType === 'pdf' ? 'application/pdf' : 'image/jpeg',
+              UTI: viewingMediaType === 'pdf' ? 'com.adobe.pdf' : 'public.image'
+            });
+          } else {
+            showAlert("Descarga completa", "Guardado en: " + downloadRes.uri);
+          }
+        }
+      }
+    } catch (error) {
+      console.error(error);
+      showAlert("Error", "No se pudo descargar el archivo.");
+    }
+  };
+
+  // Función para manejar la visualización de documentos (PDF/Imagen)
+  const handleViewDocument = async (uri: string, name: string, type: string) => {
+    const source = getPlanImageSource(uri);
+    if (!source) return;
+
+    const isPdf = type?.toLowerCase().includes('pdf') || name.toLowerCase().endsWith('.pdf') || uri.toLowerCase().endsWith('.pdf');
+
+    // WEB: Fetch con headers -> Blob -> ObjectURL para que el iframe pueda cargarlo
+    if (Platform.OS === 'web' && isPdf) {
+      setIsImageLoading(true);
+      try {
+        const response = await fetch(source.uri, { headers: source.headers });
+        if (!response.ok) throw new Error('No se pudo cargar el documento');
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        setViewingImageSource({ uri: blobUrl }); // Guardamos la URL local del blob
+        setViewingMediaType('pdf');
+      } catch (e) { console.error(e); showAlert("Error", "No se pudo cargar el documento."); }
+      finally { setIsImageLoading(false); }
+    } else {
+      // MOBILE & IMAGENES: Usamos la fuente directa
+      setViewingImageSource(source);
+      setViewingMediaType(isPdf ? 'pdf' : 'image');
+    }
+  };
+
   return (
     // El ScrollView principal se deshabilita si estamos dibujando para evitar conflictos, 
     // pero permitimos scroll si estamos en modo dibujo pero haciendo zoom/pan (manejado por los scrollviews internos)
@@ -1092,7 +1209,14 @@ export default function ProjectDetailScreen() {
       {/* Usamos Stack.Screen para configurar el título de la cabecera dinámicamente */}
       <Stack.Screen options={{ title: project.name, headerBackTitle: 'Proyectos' }} />
 
-      <Text style={styles.title}>{project.name}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={styles.title}>{project.name}</Text>
+        {(user?.role as string) === 'ADMIN' && (
+          <Pressable onPress={() => setIsEditProjectModalVisible(true)} style={{ padding: 8 }}>
+            <Feather name="edit-2" size={20} color="#3182CE" />
+          </Pressable>
+        )}
+      </View>
       <Text style={styles.client}>{i18n.t('projectDetail.client')}: {project.client}</Text>
       
       <View style={styles.addressContainer}>
@@ -1123,6 +1247,13 @@ export default function ProjectDetailScreen() {
         <Text style={styles.progressText}>{project.progress}% {i18n.t('common.completed')}</Text>
       </View>
 
+      {/* Sección de Documentos del Proyecto */}
+      <ProjectDocuments 
+        projectId={projectId} 
+        userRole={user?.role as string}
+        onViewDocument={handleViewDocument as any}
+      />
+
       {/* Sección del Plano Arquitectónico */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{i18n.t('projectDetail.interactivePlan')}</Text>
@@ -1150,6 +1281,11 @@ export default function ProjectDetailScreen() {
               <Pressable onPress={() => { setIsDrawingMode(true); setDrawingShape('pencil'); }} style={[styles.toolButton, isDrawingMode && drawingShape === 'pencil' && styles.toolButtonActive]}>
                 <Feather name="edit-3" size={20} color={isDrawingMode && drawingShape === 'pencil' ? '#FFF' : '#4A5568'} />
               </Pressable>
+              {planType === 'pdf' && (
+                <Pressable onPress={() => setIsAspectRatioModalVisible(true)} style={[styles.toolButton, isAspectRatioModalVisible && styles.toolButtonActive]}>
+                  <Feather name="maximize" size={20} color={isAspectRatioModalVisible ? '#FFF' : '#4A5568'} />
+                </Pressable>
+              )}
               <View style={styles.toolSeparator} />
               <Pressable onPress={() => { setIsCatalogOpen(!isCatalogOpen); updateMapBounds(); }} style={[styles.toolButton, isCatalogOpen && styles.toolButtonActive]}>
                 <Feather name="list" size={20} color={isCatalogOpen ? '#FFF' : '#4A5568'} />
@@ -1202,7 +1338,6 @@ export default function ProjectDetailScreen() {
               collapsable={false} // Importante para Android: evita que la vista se optimice y altere coordenadas
               {...panResponder.panHandlers}
             >
-              {/* Contenedor de Contenido (Imagen + Dibujos) que se transforma */}
               <View 
                 onLayout={onImageLayout}
                 style={{
@@ -1215,6 +1350,24 @@ export default function ProjectDetailScreen() {
                 }}
                 collapsable={false}
               >
+            {planType === 'pdf' ? (
+              <View style={{ width: '100%', height: '100%' }}>
+                {Platform.OS === 'web' ? (
+                  React.createElement('iframe', { src: planImageSource?.uri, style: { width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }, scrolling: 'no' })
+                ) : (
+                  <WebView 
+                    source={planImageSource || { uri: '' }} 
+                    style={{ flex: 1 }} 
+                    scalesPageToFit={true}
+                    scrollEnabled={false}
+                    // Ocultar controles nativos en Android si es posible
+                    overScrollMode="never"
+                  />
+                )}
+                {/* Capa transparente absoluta que "aplana" el PDF: Bloquea interacción directa con el visor y permite dibujar encima */}
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent', zIndex: 10 }]} />
+              </View>
+            ) : (
             <Image
               source={planImageSource || { uri: '' }}
               // IMPORTANTE: En Web, resizeMode debe estar en style para garantizar 'stretch' (fill)
@@ -1236,6 +1389,7 @@ export default function ProjectDetailScreen() {
                 if (Platform.OS !== 'web') setIsImageLoading(false);
               }}
             />
+            )}
 
             {/* Capa SVG para trazos de lápiz */}
             {/* MODIFICADO: viewBox 0-100 para usar porcentajes y preserveAspectRatio="none" para que se estire con la imagen */}
@@ -1403,8 +1557,11 @@ export default function ProjectDetailScreen() {
           </View>
           
           <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 8, gap: 20 }}>
-            <Pressable onPress={() => setViewingImageSource(planImageSource)}>
-              <Text style={{ color: '#3182CE', fontSize: 14 }}>{i18n.t('projectDetail.viewFullImage')}</Text>
+            <Pressable onPress={() => {
+              setViewingImageSource(planImageSource);
+              setViewingMediaType(planType);
+            }}>
+              <Text style={{ color: '#3182CE', fontSize: 14 }}>{planType === 'pdf' ? 'Ver Documento' : i18n.t('projectDetail.viewFullImage')}</Text>
             </Pressable>
             {(user?.role as string) === 'ADMIN' && (
               <Pressable onPress={handleUploadPlan} style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -1474,10 +1631,32 @@ export default function ProjectDetailScreen() {
           <Pressable style={styles.modalCloseButton} onPress={() => setViewingImageSource(null)}>
             <Feather name="x" size={32} color="#FFFFFF" />
           </Pressable>
-          <Image
-            source={viewingImageSource!}
-            style={styles.fullscreenImage}
-            resizeMode="contain" />
+          <Pressable style={styles.modalDownloadButton} onPress={handleDownloadViewingDoc}>
+            <Feather name="download" size={32} color="#FFFFFF" />
+          </Pressable>
+          {viewingMediaType === 'pdf' ? (
+            Platform.OS === 'web' ? (
+              React.createElement('iframe', { src: viewingImageSource?.uri, style: { width: '90%', height: '85%', border: 'none', backgroundColor: '#FFF' } })
+            ) : Platform.OS === 'android' ? (
+              // FIX ANDROID: WebView no renderiza PDF nativamente. Ofrecemos abrirlo externamente.
+              <View style={{ width: '85%', padding: 24, backgroundColor: '#FFF', borderRadius: 12, alignItems: 'center' }}>
+                <Feather name="file-text" size={48} color="#718096" />
+                <Text style={{ marginTop: 16, marginBottom: 24, textAlign: 'center', color: '#4A5568', fontSize: 16 }}>
+                  La vista previa de PDF requiere un visor externo en Android.
+                </Text>
+                <Pressable style={[styles.modalButton, { backgroundColor: '#3182CE', width: '100%', alignItems: 'center' }]} onPress={handleDownloadViewingDoc}>
+                  <Text style={{ color: '#FFF', fontWeight: 'bold' }}>Abrir PDF</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <WebView source={viewingImageSource!} style={{ flex: 1, width: '100%' }} />
+            )
+          ) : (
+            <Image
+              source={viewingImageSource!}
+              style={styles.fullscreenImage}
+              resizeMode="contain" />
+          )}
         </View>
       </Modal>
 
@@ -1614,7 +1793,7 @@ export default function ProjectDetailScreen() {
             <View style={styles.modalButtons}>
               <Pressable style={[styles.modalButton, styles.cancelButton]} onPress={handleCloseNewItemModal}><Text>{i18n.t('common.cancel')}</Text></Pressable>
               <Pressable 
-                style={[styles.modalButton, styles.saveButton, isSaving && { opacity: 0.7 }]} 
+ style={[styles.modalButton, styles.saveButton, isSaving && { opacity: 0.7 }]}
                 onPress={saveNewItem}
                 disabled={isSaving}
               >
@@ -1625,103 +1804,33 @@ export default function ProjectDetailScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Modal de Detalle de Item (Checklist) */}
-      <Modal
+      <ItemDetailModal
         visible={!!selectedItem}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={handleCloseItemDetail}
-      >
-        <View style={styles.itemModalContainer}>
-          <View style={styles.itemModalContent}>
-            <View style={styles.itemModalHeader}>
-              <Text style={styles.itemModalTitle}>{i18n.t('projectDetail.taskDetailTitle')}</Text>
-              <Pressable onPress={handleCloseItemDetail}>
-                <Feather name="x" size={24} color="#4A5568" />
-              </Pressable>
-            </View>
+        item={selectedItem}
+        onClose={handleCloseItemDetail}
+        onToggleStatus={(id) => handleToggleItem(id)}
+        onDelete={handleDeleteItem}
+        onAddEvidence={showEvidenceOptions}
+        onDeleteEvidence={handleDeleteEvidence}
+        onPostComment={handlePostComment}
+        newComment={newComment}
+        setNewComment={setNewComment}
+        userRole={user?.role as string}
+        getPlanImageSource={getPlanImageSource}
+        onViewImage={(source, type) => {
+          setViewingImageSource(source);
+          setViewingMediaType(type);
+        }}
+      />
 
-            <ScrollView style={{ maxHeight: 400 }}>
-              <Text style={styles.itemModalText}>{selectedItem?.text}</Text>
-              <View style={styles.itemStatusRow}>
-                {selectedItem?.deadline && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 16, backgroundColor: '#FFF5F5', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}>
-                    <Feather name="calendar" size={14} color="#E53E3E" style={{ marginRight: 4 }} />
-                    <Text style={{ fontSize: 12, color: '#E53E3E', fontWeight: '600' }}>{selectedItem.deadline}</Text>
-                  </View>
-                )}
-                <Text style={styles.statusLabel}>{i18n.t('common.status')}:</Text>
-                <Pressable onPress={() => selectedItem && handleToggleItem(selectedItem.id)} style={styles.statusButton}>
-                  <Text style={[styles.statusButtonText, { color: selectedItem?.completed ? '#38A169' : '#E53E3E' }]}>
-                    {selectedItem?.completed ? i18n.t('common.completed') : i18n.t('common.pending')}
-                  </Text>
-                </Pressable>
-              </View>
-
-              <Text style={styles.sectionHeader}>{i18n.t('projectDetail.evidence')}</Text>
-              <View style={styles.evidenceGrid}>
-                {selectedItem?.evidence?.map((ev) => (
-                  <View key={ev.id} style={{ position: 'relative' }}>
-                    <Pressable onPress={() => setViewingImageSource(getPlanImageSource(ev.uri))}>
-                      <Image source={getPlanImageSource(ev.uri) || { uri: '' }} style={styles.evidenceThumbnail} />
-                      {ev.type === 'video' && (
-                        <View style={styles.videoIconOverlay}>
-                          <Feather name="play-circle" size={20} color="#FFF" />
-                        </View>
-                      )}
-                    </Pressable>
-                    <Pressable 
-                      style={styles.removeEvidenceButton} 
-                      onPress={() => handleDeleteEvidence(ev.id)}
-                      hitSlop={8}
-                    >
-                      <Feather name="x" size={12} color="#FFF" />
-                    </Pressable>
-                  </View>
-                ))}
-                <Pressable style={styles.addEvidenceButton} onPress={showEvidenceOptions}>
-                  <Feather name="plus" size={24} color="#4A5568" />
-                  <Text style={styles.addEvidenceText}>{i18n.t('projectDetail.add')}</Text>
-                </Pressable>
-              </View>
-
-              <Text style={styles.sectionHeader}>{i18n.t('projectDetail.comments')}</Text>
-              {selectedItem?.comments?.map((comment: any) => (
-                <View key={comment.id} style={styles.commentItem}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#4A5568' }}>
-                      {comment.author || 'Usuario'} 
-                      {comment.role ? <Text style={{ fontWeight: 'normal', color: '#A0AEC0' }}> • {comment.role}</Text> : null}
-                    </Text>
-                    <Text style={styles.commentDate}>{new Date(comment.date).toLocaleDateString()} {new Date(comment.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
-                  </View>
-                  <Text style={styles.commentText}>{comment.text}</Text>
-                </View>
-              ))}
-
-              {/* Botón de Eliminar (Solo Admin) */}
-              {(user?.role as string) === 'ADMIN' && (
-                <Pressable onPress={handleDeleteItem} style={styles.deleteButton}>
-                  <Feather name="trash-2" size={20} color="#FFF" />
-                  <Text style={styles.deleteButtonText}>{i18n.t('projectDetail.deleteTask')}</Text>
-                </Pressable>
-              )}
-            </ScrollView>
-
-            <View style={styles.commentInputContainer}>
-              <TextInput
-                style={styles.commentInput}
-                placeholder={i18n.t('projectDetail.writeComment')}
-                value={newComment}
-                onChangeText={setNewComment}
-              />
-              <Pressable onPress={handlePostComment} style={styles.sendButton}>
-                <Feather name="send" size={20} color="#FFF" />
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {/* Modal de Edición de Proyecto */}
+      <EditProjectModal
+        visible={isEditProjectModalVisible}
+        onClose={() => setIsEditProjectModalVisible(false)}
+        project={project}
+        availableUsers={availableUsers}
+        onUpdate={handleUpdateProjectDetails}
+      />
 
       {/* Modal de Calendario */}
       <CalendarPickerModal 
@@ -1755,48 +1864,64 @@ export default function ProjectDetailScreen() {
         </View>
       </Modal>
 
-      {/* Modal de Confirmación Genérico (Custom Alert) */}
+      {/* Modal de Ajuste de Aspect Ratio (PDF) */}
       <Modal
-        visible={confirmationModal.visible}
+        visible={isAspectRatioModalVisible}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => !confirmationModal.isLoading && setConfirmationModal(prev => ({ ...prev, visible: false }))}
+        onRequestClose={() => setIsAspectRatioModalVisible(false)}
       >
         <View style={styles.inputModalContainer}>
           <View style={styles.inputModalContent}>
-            <Text style={styles.inputModalTitle}>{confirmationModal.title}</Text>
-            <Text style={{ fontSize: 16, color: '#4A5568', marginBottom: 24 }}>
-              {confirmationModal.message}
-            </Text>
-            <View style={styles.modalButtons}>
-              <Pressable 
-                style={[styles.modalButton, styles.cancelButton, confirmationModal.isLoading && { opacity: 0.5 }]} 
-                onPress={() => setConfirmationModal(prev => ({ ...prev, visible: false }))}
-                disabled={confirmationModal.isLoading}
-              >
-                <Text style={{ fontWeight: 'bold', color: '#4A5568' }}>{i18n.t('common.cancel')}</Text>
-              </Pressable>
-              <Pressable 
-                style={[styles.modalButton, { backgroundColor: confirmationModal.confirmColor || '#3182CE' }, confirmationModal.isLoading && { opacity: 0.7 }]} 
-                onPress={async () => {
-                  setConfirmationModal(prev => ({ ...prev, isLoading: true }));
-                  try {
-                    await confirmationModal.onConfirm();
-                  } catch (error) {
-                    console.error(error);
-                  } finally {
-                    setConfirmationModal(prev => ({ ...prev, visible: false, isLoading: false }));
-                  }
-                }}
-                disabled={confirmationModal.isLoading}
-              >
-                {confirmationModal.isLoading ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <Text style={styles.saveButtonText}>{confirmationModal.confirmText || i18n.t('common.confirm')}</Text>
-                )}
-              </Pressable>
+            <Text style={styles.inputModalTitle}>Ajustar Proporción (PDF)</Text>
+            <Text style={{ marginBottom: 16, color: '#718096' }}>Si el PDF se ve deformado, selecciona una proporción diferente:</Text>
+            
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+              {[
+                { label: '1:1', value: 1 },
+                { label: '4:3', value: 4/3 },
+                { label: '3:2', value: 1.5 },
+                { label: '16:9', value: 16/9 },
+                { label: '3:4', value: 3/4 },
+                { label: '2:3', value: 2/3 },
+              ].map(opt => (
+                <Pressable 
+                  key={opt.label} 
+                  style={[styles.shapeOption, Math.abs((imageAspectRatio || 1) - opt.value) < 0.01 && styles.shapeOptionSelected]}
+                  onPress={() => setImageAspectRatio(opt.value)}
+                >
+                  <Text style={[styles.shapeOptionText, Math.abs((imageAspectRatio || 1) - opt.value) < 0.01 && styles.shapeOptionTextSelected]}>{opt.label}</Text>
+                </Pressable>
+              ))}
             </View>
+
+            <Text style={{ marginBottom: 8, fontWeight: '600', color: '#4A5568' }}>Personalizado:</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24 }}>
+               <TextInput 
+                  style={[styles.input, { marginBottom: 0, flex: 1 }]} 
+                  keyboardType="numeric"
+                  placeholder="Ej. 1.5"
+                  value={customAspectRatio}
+                  onChangeText={setCustomAspectRatio}
+                  onEndEditing={() => {
+                    const val = parseFloat(customAspectRatio);
+                    if (!isNaN(val) && val > 0) setImageAspectRatio(val);
+                  }}
+               />
+               <Pressable 
+                 style={[styles.modalButton, { backgroundColor: '#3182CE', marginLeft: 8 }]}
+                 onPress={() => {
+                    const val = parseFloat(customAspectRatio);
+                    if (!isNaN(val) && val > 0) setImageAspectRatio(val);
+                 }}
+               >
+                 <Text style={{ color: '#FFF' }}>Aplicar</Text>
+               </Pressable>
+            </View>
+
+            <Pressable style={[styles.modalButton, styles.cancelButton, { width: '100%', marginLeft: 0 }]} onPress={() => setIsAspectRatioModalVisible(false)}>
+              <Text style={{ fontWeight: 'bold', color: '#4A5568', textAlign: 'center' }}>Cerrar</Text>
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -1841,6 +1966,8 @@ export default function ProjectDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      <AlertComponent />
       </ScrollView>
 
       {/* Panel de Catálogo (Bottom Sheet simulado) - AHORA FUERA DEL SCROLLVIEW */}
@@ -1955,8 +2082,8 @@ export default function ProjectDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#1A202C', marginBottom: 8 },
-  client: { fontSize: 18, color: '#4A5568', marginBottom: 8 },
+  title: { fontSize: 28, fontWeight: 'bold', fontFamily: 'Inter-Bold', color: '#1A202C', marginBottom: 8 },
+  client: { fontSize: 18, color: '#4A5568', fontFamily: 'Inter-Regular', marginBottom: 8 },
   addressContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1965,28 +2092,29 @@ const styles = StyleSheet.create({
   address: {
     fontSize: 16,
     color: '#4A5568',
+    fontFamily: 'Inter-Regular',
     marginLeft: 8,
   },
   statusRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 32 },
-  statusText: { fontSize: 16, color: '#718096' },
+  statusText: { fontSize: 16, color: '#718096', fontFamily: 'Inter-Regular' },
   inlineStartButton: { flexDirection: 'row', alignItems: 'center', marginLeft: 12, backgroundColor: '#F0FFF4', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: '#C6F6D5' },
-  inlineStartButtonText: { color: '#38A169', fontWeight: 'bold', fontSize: 12, marginLeft: 4 },
+  inlineStartButtonText: { color: '#38A169', fontWeight: 'bold', fontFamily: 'Inter-Bold', fontSize: 12, marginLeft: 4 },
   progressContainer: { marginBottom: 24 },
   progressBarBackground: { height: 10, backgroundColor: '#EDF2F7', borderRadius: 5, overflow: 'hidden' },
   progressBarFill: { height: '100%', backgroundColor: '#3182CE' },
-  progressText: { marginTop: 4, fontSize: 12, color: '#718096', textAlign: 'right' },
+  progressText: { marginTop: 4, fontSize: 12, color: '#718096', fontFamily: 'Inter-SemiBold', textAlign: 'right' },
   
   drawingControls: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  instructionText: { fontSize: 14, color: '#718096', marginRight: 8 },
+  instructionText: { fontSize: 14, color: '#718096', fontFamily: 'Inter-Regular', marginRight: 8 },
   toolsContainer: { flexDirection: 'row', backgroundColor: '#EDF2F7', borderRadius: 8, padding: 2 },
   toolButton: { padding: 8, borderRadius: 6 },
   toolButtonActive: { backgroundColor: '#3182CE' },
   toolSeparator: { width: 1, backgroundColor: '#CBD5E0', marginHorizontal: 4, marginVertical: 4 },
   filterContainer: { marginBottom: 12 },
   filterButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F7FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, alignSelf: 'flex-start' },
-  filterButtonText: { marginLeft: 8, color: '#2D3748', fontWeight: '600' },
+  filterButtonText: { marginLeft: 8, color: '#2D3748', fontWeight: '600', fontFamily: 'Inter-SemiBold' },
   filterModalItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: '#EDF2F7' },
-  filterModalItemText: { fontSize: 16, color: '#2D3748' },
+  filterModalItemText: { fontSize: 16, color: '#2D3748', fontFamily: 'Inter-Regular' },
   colorPickerRow: { flexDirection: 'row', gap: 12, marginBottom: 8, paddingHorizontal: 4 },
   colorOption: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: '#FFF', shadowColor: "#000", shadowOffset: {width: 0, height: 1}, shadowOpacity: 0.2, shadowRadius: 2, elevation: 2 },
   colorOptionSelected: { borderWidth: 2, borderColor: '#2D3748', transform: [{ scale: 1.1 }] },
@@ -2014,12 +2142,12 @@ const styles = StyleSheet.create({
   mapArea: { position: 'absolute', borderWidth: 2, borderRadius: 12 }, // Área dibujada (círculo/rectángulo redondeado)
   drawingOverlay: { position: 'absolute', borderWidth: 2, borderColor: '#3182CE', backgroundColor: 'rgba(49, 130, 206, 0.3)', borderRadius: 12 },
   
-  viewFullText: { textAlign: 'center', color: '#3182CE', marginTop: 8, fontSize: 14 },
-  assignedToText: { fontSize: 12, color: '#718096', marginLeft: 16, marginTop: 2 },
+  viewFullText: { textAlign: 'center', color: '#3182CE', marginTop: 8, fontSize: 14, fontFamily: 'Inter-Regular' },
+  assignedToText: { fontSize: 12, color: '#718096', marginLeft: 16, marginTop: 2, fontFamily: 'Inter-Regular' },
 
   section: { marginTop: 16 },
-  sectionTitle: { fontSize: 22, fontWeight: 'bold', color: '#1A202C', marginBottom: 12 },
-  placeholder: { fontSize: 16, color: '#A0AEC0', textAlign: 'center', paddingVertical: 40 },
+  sectionTitle: { fontSize: 22, fontWeight: 'bold', fontFamily: 'Inter-Bold', color: '#1A202C', marginBottom: 12 },
+  placeholder: { fontSize: 16, color: '#A0AEC0', textAlign: 'center', paddingVertical: 40, fontFamily: 'Inter-Regular' },
   checklistItemContainer: {
     paddingVertical: 12,
     borderBottomWidth: 1,
@@ -2038,6 +2166,7 @@ const styles = StyleSheet.create({
   checklistItemText: {
     fontSize: 16,
     color: '#2D3748',
+    fontFamily: 'Inter-Regular',
     marginLeft: 16,
   },
   checklistItemTextCompleted: {
@@ -2063,6 +2192,15 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 50,
     right: 20,
+    zIndex: 1,
+    padding: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
+  },
+  modalDownloadButton: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
     zIndex: 1,
     padding: 10,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -2119,22 +2257,22 @@ const styles = StyleSheet.create({
     shadowRadius: 1,
   },
   addEvidenceButton: { width: 80, height: 80, borderRadius: 8, borderWidth: 1, borderColor: '#CBD5E0', borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center' },
-  addEvidenceText: { fontSize: 12, color: '#718096', marginTop: 4 },
+  addEvidenceText: { fontSize: 12, color: '#718096', marginTop: 4, fontFamily: 'Inter-Regular' },
   commentItem: { backgroundColor: '#F7FAFC', padding: 12, borderRadius: 8, marginBottom: 8 },
-  commentText: { fontSize: 14, color: '#2D3748' },
-  commentDate: { fontSize: 10, color: '#A0AEC0', marginTop: 4, textAlign: 'right' },
+  commentText: { fontSize: 14, color: '#2D3748', fontFamily: 'Inter-Regular' },
+  commentDate: { fontSize: 10, color: '#A0AEC0', marginTop: 4, textAlign: 'right', fontFamily: 'Inter-Regular' },
   commentInputContainer: { flexDirection: 'row', marginTop: 16, alignItems: 'center' },
   commentInput: { flex: 1, backgroundColor: '#EDF2F7', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, marginRight: 8 },
   sendButton: { backgroundColor: '#3182CE', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
-  evidenceCountText: { fontSize: 12, color: '#718096', marginLeft: 40, marginTop: 4 },
+  evidenceCountText: { fontSize: 12, color: '#718096', marginLeft: 40, marginTop: 4, fontFamily: 'Inter-Regular' },
   deleteButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#E53E3E', padding: 12, borderRadius: 8, marginTop: 24 },
-  deleteButtonText: { color: '#FFF', fontWeight: 'bold', marginLeft: 8 },
+  deleteButtonText: { color: '#FFF', fontWeight: 'bold', marginLeft: 8, fontFamily: 'Inter-Bold' },
 
   // Estilos para sugerencias de usuarios
   suggestionsContainer: { position: 'absolute', top: 50, left: 0, right: 0, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderBottomLeftRadius: 8, borderBottomRightRadius: 8, elevation: 5, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, maxHeight: 150 },
   suggestionItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: '#EDF2F7' },
-  suggestionText: { fontSize: 14, color: '#2D3748', fontWeight: '500' },
-  suggestionRole: { fontSize: 12, color: '#718096' },
+  suggestionText: { fontSize: 14, color: '#2D3748', fontWeight: '500', fontFamily: 'Inter-Medium' },
+  suggestionRole: { fontSize: 12, color: '#718096', fontFamily: 'Inter-Regular' },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(247, 250, 252, 0.8)',
@@ -2145,16 +2283,16 @@ const styles = StyleSheet.create({
   // Estilos Catálogo
   catalogPanel: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFF', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16, elevation: 10, shadowColor: "#000", shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.1, shadowRadius: 4, zIndex: 100 },
   catalogHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  catalogTitle: { fontSize: 16, fontWeight: 'bold', color: '#2D3748' },
-  catalogSubtitle: { fontSize: 12, color: '#718096', marginBottom: 12 },
+  catalogTitle: { fontSize: 16, fontWeight: 'bold', color: '#2D3748', fontFamily: 'Inter-Bold' },
+  catalogSubtitle: { fontSize: 12, color: '#718096', marginBottom: 12, fontFamily: 'Inter-Regular' },
   catalogList: { flex: 1 },
   catalogItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EBF8FF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, marginRight: 8, borderWidth: 1, borderColor: '#BEE3F8' },
-  catalogItemText: { color: '#2C5282', fontWeight: '600', fontSize: 14 },
+  catalogItemText: { color: '#2C5282', fontWeight: '600', fontSize: 14, fontFamily: 'Inter-SemiBold' },
   catalogGroup: { marginRight: 16 },
-  catalogGroupTitle: { fontSize: 12, fontWeight: 'bold', color: '#718096', marginBottom: 8, marginLeft: 4 },
+  catalogGroupTitle: { fontSize: 12, fontWeight: 'bold', color: '#718096', marginBottom: 8, marginLeft: 4, fontFamily: 'Inter-Bold' },
   catalogOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.2)', zIndex: 90 },
   draggedGhost: { position: 'absolute', flexDirection: 'row', alignItems: 'center', backgroundColor: '#3182CE', padding: 12, borderRadius: 24, zIndex: 9999, elevation: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4, opacity: 0.9 },
-  draggedGhostText: { color: '#FFF', fontWeight: 'bold' },
+  draggedGhostText: { color: '#FFF', fontWeight: 'bold', fontFamily: 'Inter-Bold' },
   panelHandleContainer: { width: '100%', alignItems: 'center', paddingVertical: 10, marginTop: -10, marginBottom: 5 },
   panelHandle: { width: 40, height: 5, borderRadius: 3, backgroundColor: '#CBD5E0' },
 });

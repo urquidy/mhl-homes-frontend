@@ -222,6 +222,8 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
       console.error('Socket connection error:', err.message);
       if (Platform.OS === 'web') {
         console.warn('⚠️ En Web, esto suele ser un problema de CORS. Asegúrate de que tu servidor Backend permita el origen de tu app (ej. http://localhost:8082).');
+      } else {
+        console.warn('⚠️ En Móvil, verifica que la IP del servidor sea correcta y accesible (no localhost).');
       }
     });
 

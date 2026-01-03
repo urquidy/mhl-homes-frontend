@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, ScrollView, useWindowDimensions, Image, Animated } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, ScrollView, useWindowDimensions, Image, Animated, ActivityIndicator, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons'; // Assuming Feather is correctly imported
@@ -7,12 +7,18 @@ import { useProjects } from '../../contexts/ProjectsContext'; // Assuming usePro
 import { useEvents, CalendarEvent } from '../../contexts/EventsContext';
 import { Project } from '../../types'; // Adjusted path to types.ts
 import i18n from '../../constants/i18n';
-import { useNotifications, AppNotification } from '../../contexts/NotificationsContext';
+import { useNotifications, AppNotification, NotificationFilter } from '../../contexts/NotificationsContext';
+import NotificationFilters from '../../components/ui/NotificationFilters';
 
 type ProjectStatus = Project['status'];
 
 const FILTERS = ['All', 'In Progress', 'Delayed'] as const;
 type FilterType = typeof FILTERS[number];
+
+// Habilitar animaciones de layout en Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 // --- Componente para un solo ítem de la lista ---
 const ProjectListItem: React.FC<{ item: Project }> = ({ item }) => {
@@ -77,17 +83,24 @@ const ProjectListItem: React.FC<{ item: Project }> = ({ item }) => {
 // --- Componente Animado para Ítem de Notificación ---
 const AnimatedNotificationItem: React.FC<{ 
   notif: AppNotification; 
-  onPress: (n: AppNotification) => void 
-}> = ({ notif, onPress }) => {
+  onPress: (n: AppNotification) => void;
+  index: number;
+}> = ({ notif, onPress, index }) => {
   // Valores iniciales: Opacidad 0 y desplazado -20px hacia arriba
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-20)).current;
 
   useEffect(() => {
+    // Retraso escalonado basado en el índice (módulo 5 para que funcione bien con la paginación)
+    const delay = (index % 5) * 100;
+
     // Ejecutar animación paralela al montar el componente
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true })
+    Animated.sequence([
+      Animated.delay(delay),
+      Animated.parallel([
+        Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+        Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true })
+      ])
     ]).start();
   }, []);
 
@@ -110,8 +123,22 @@ const AnimatedNotificationItem: React.FC<{
 };
 
 // --- Componente para la sección de Notificaciones ---
-const Notifications: React.FC<{ notifications: AppNotification[], onMarkAsRead: (id: string) => void, onMarkAllRead: () => void }> = ({ notifications, onMarkAsRead, onMarkAllRead }) => {
+const Notifications: React.FC<{ 
+  notifications: AppNotification[], 
+  onMarkAsRead: (id: string) => void, 
+  onMarkAllRead: () => void,
+  filter: NotificationFilter,
+  setFilter: (f: NotificationFilter) => void,
+  loadMore: () => void,
+  hasMore: boolean,
+  isLoading: boolean
+}> = ({ notifications, onMarkAsRead, onMarkAllRead, filter, setFilter, loadMore, hasMore, isLoading }) => {
   const router = useRouter();
+
+  // Animar cambios en la lista (ej. al cargar más)
+  useEffect(() => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+  }, [notifications]);
 
   const handlePress = (notif: AppNotification) => {
     if (!notif.read) onMarkAsRead(notif.id);
@@ -149,11 +176,26 @@ const Notifications: React.FC<{ notifications: AppNotification[], onMarkAsRead: 
           </Pressable>
         )}
       </View>
-      {notifications.map(notif => (
-        <AnimatedNotificationItem key={notif.id} notif={notif} onPress={handlePress} />
+
+      {/* Filtros de Notificaciones */}
+      <View style={{ marginBottom: 12 }}>
+        <NotificationFilters filter={filter} setFilter={setFilter} />
+      </View>
+
+      {notifications.map((notif, index) => (
+        <AnimatedNotificationItem key={notif.id} notif={notif} onPress={handlePress} index={index} />
       ))}
-      {notifications.length === 0 && (
-        <Text style={{ color: '#A0AEC0', fontStyle: 'italic', fontSize: 14 }}>No hay notificaciones.</Text>
+      
+      {isLoading && <ActivityIndicator size="small" color="#3182CE" style={{ marginVertical: 10 }} />}
+
+      {hasMore && !isLoading && (
+        <Pressable onPress={loadMore} style={{ padding: 12, alignItems: 'center', backgroundColor: '#F7FAFC', borderRadius: 8, marginTop: 8 }}>
+          <Text style={{ color: '#3182CE', fontWeight: '600', fontSize: 14 }}>Cargar más notificaciones</Text>
+        </Pressable>
+      )}
+
+      {notifications.length === 0 && !isLoading && (
+        <Text style={{ color: '#A0AEC0', fontStyle: 'italic', fontSize: 14, textAlign: 'center', marginTop: 10 }}>No hay notificaciones.</Text>
       )}
     </View>
   );
@@ -196,7 +238,7 @@ const UpcomingMilestones: React.FC<{ milestones: CalendarEvent[] }> = ({ milesto
 export default function DashboardScreen() {
   const { projects, getChecklistByProjectId } = useProjects(); // Usamos los proyectos del contexto
   const { events } = useEvents(); // Usamos los eventos del contexto
-  const { notifications, markAsRead, markAllAsRead } = useNotifications(); // Usamos las notificaciones del contexto
+  const { displayedNotifications, filter, setFilter, loadMore, hasMore, isLoading, markAsRead, markAllAsRead } = useNotifications(); // Usamos las notificaciones del contexto
   const [activeFilter, setActiveFilter] = useState<FilterType>('All');
   const { width } = useWindowDimensions();
   const isLargeScreen = width > 1024; // Breakpoint para mostrar columnas
@@ -234,18 +276,19 @@ export default function DashboardScreen() {
   // Combinar notificaciones estáticas con la alerta dinámica
   const displayNotifications = useMemo(() => {
     // Clonamos las notificaciones del contexto
-    const notifs = [...notifications];
-    if (overdueTasksCount > 0) {
+    const notifs = [...displayedNotifications];
+    // Solo mostramos la alerta de tareas vencidas si el filtro es 'ALL' o 'UNREAD'
+    if (overdueTasksCount > 0 && (filter === 'ALL' || filter === 'UNREAD')) {
       notifs.unshift({
         id: 'alert-overdue',
         icon: 'alert-triangle',
         text: `¡Atención! Tienes ${overdueTasksCount} tarea(s) vencida(s).`,
         date: new Date().toISOString(),
-        read: false
+        read: false,
       });
     }
     return notifs;
-  }, [overdueTasksCount, notifications]);
+  }, [overdueTasksCount, displayedNotifications, filter]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['right', 'bottom', 'left']}>
@@ -303,6 +346,11 @@ export default function DashboardScreen() {
               notifications={displayNotifications} 
               onMarkAsRead={markAsRead}
               onMarkAllRead={markAllAsRead}
+              filter={filter}
+              setFilter={setFilter}
+              loadMore={loadMore}
+              hasMore={hasMore}
+              isLoading={isLoading}
             />
             <UpcomingMilestones milestones={upcomingMilestones} />
           </View>
@@ -339,6 +387,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
+    fontFamily: 'Inter-Bold',
     color: '#1A202C',
     marginBottom: 24,
   },
@@ -366,6 +415,7 @@ const styles = StyleSheet.create({
   filterText: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: 'Inter-SemiBold',
     color: '#4A5568',
   },
   filterTextActive: {
@@ -397,6 +447,7 @@ const styles = StyleSheet.create({
   projectName: {
     fontSize: 18,
     fontWeight: 'bold',
+    fontFamily: 'Inter-Bold',
     color: '#1A202C',
     flex: 1,
     marginRight: 8,
@@ -410,10 +461,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: 'bold',
+    fontFamily: 'Inter-Bold',
   },
   projectAddress: {
     fontSize: 14,
     color: '#718096',
+    fontFamily: 'Inter-Regular',
     marginBottom: 16,
   },
   progressSection: {
@@ -436,6 +489,7 @@ const styles = StyleSheet.create({
   progressText: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: 'Inter-SemiBold',
     color: '#4A5568',
   },
   participantsContainer: {
@@ -462,6 +516,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: 'bold',
+    fontFamily: 'Inter-Bold',
   },
   emptyContainer: {
     marginTop: 50,
@@ -470,11 +525,13 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: '#718096',
+    fontFamily: 'Inter-Regular',
   },
   // Estilos para los nuevos componentes
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
+    fontFamily: 'Inter-Bold',
     color: '#1A202C',
     marginBottom: 16,
   },
@@ -494,6 +551,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     color: '#4A5568',
+    fontFamily: 'Inter-Regular',
     lineHeight: 20,
   },
   milestoneItem: {
@@ -514,11 +572,13 @@ const styles = StyleSheet.create({
   calendarMonth: {
     fontSize: 10,
     fontWeight: 'bold',
+    fontFamily: 'Inter-Bold',
     color: '#718096',
   },
   calendarDay: {
     fontSize: 18,
     fontWeight: 'bold',
+    fontFamily: 'Inter-Bold',
     color: '#1A202C',
   },
   milestoneDetails: {
@@ -527,11 +587,13 @@ const styles = StyleSheet.create({
   milestoneTitle: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: 'Inter-SemiBold',
     color: '#2D3748',
   },
   milestoneProjectName: {
     fontSize: 12,
     color: '#718096',
+    fontFamily: 'Inter-Regular',
     marginTop: 2,
   },
 });

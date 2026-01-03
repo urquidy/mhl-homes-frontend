@@ -16,9 +16,17 @@ export interface AppNotification {
   referenceId?: string;
 }
 
+export type NotificationFilter = 'ALL' | 'UNREAD' | 'READ' | 'PROJECT' | 'AGENDA' | 'CHECKLIST' | 'BUDGET';
+
 interface NotificationsContextType {
-  notifications: AppNotification[];
+  notifications: AppNotification[]; // Lista completa (raw)
+  displayedNotifications: AppNotification[]; // Lista procesada para mostrar (filtrada y paginada)
   unreadCount: number;
+  filter: NotificationFilter;
+  setFilter: (filter: NotificationFilter) => void;
+  loadMore: () => void;
+  hasMore: boolean;
+  isLoading: boolean;
   addNotification: (text: string, icon?: keyof typeof Feather.glyphMap) => void;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
@@ -30,9 +38,14 @@ const NotificationsContext = createContext<NotificationsContextType | undefined>
 export const NotificationsProvider = ({ children }: { children: ReactNode }) => {
   const { token, user } = useAuth();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [filter, setFilter] = useState<NotificationFilter>('ALL');
+  const [page, setPage] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const ITEMS_PER_PAGE = 5;
 
   const refreshNotifications = useCallback(async () => {
     if (!token) return;
+    setIsLoading(true);
     try {
       const response = await api.get('/api/notifications');
       // Mapeamos la respuesta del backend a nuestra estructura local
@@ -62,10 +75,13 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
       setNotifications(prev => {
         const historyIds = new Set(mappedNotifications.map(n => n.id));
         const newFromSocket = prev.filter(n => !historyIds.has(n.id));
-        return [...newFromSocket, ...mappedNotifications].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        // Guardamos la lista completa. El ordenamiento visual lo haremos en el useMemo 'processedNotifications'
+        return [...newFromSocket, ...mappedNotifications];
       });
     } catch (error) {
       console.error('Error fetching notifications:', error);
+    } finally {
+      setIsLoading(false);
     }
   }, [token]);
 
@@ -175,8 +191,46 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
 
   const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
 
+  // --- LÓGICA DE ORDENAMIENTO Y FILTRADO ---
+  const processedNotifications = useMemo(() => {
+    let result = [...notifications];
+
+    // 1. Ordenar: Primero las NO LEÍDAS, luego por fecha descendente
+    result.sort((a, b) => {
+      if (a.read === b.read) {
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      }
+      return a.read ? 1 : -1; // false (no leída) va antes que true (leída)
+    });
+
+    // 2. Filtrar según selección
+    if (filter === 'UNREAD') {
+      result = result.filter(n => !n.read);
+    } else if (filter === 'READ') {
+      result = result.filter(n => n.read);
+    } else if (['PROJECT', 'AGENDA', 'CHECKLIST', 'BUDGET'].includes(filter)) {
+      result = result.filter(n => n.category === filter);
+    }
+
+    return result;
+  }, [notifications, filter]);
+
+  // --- LÓGICA DE PAGINACIÓN ---
+  const displayedNotifications = useMemo(() => {
+    return processedNotifications.slice(0, page * ITEMS_PER_PAGE);
+  }, [processedNotifications, page]);
+
+  const hasMore = displayedNotifications.length < processedNotifications.length;
+
+  const loadMore = useCallback(() => {
+    if (hasMore) setPage(p => p + 1);
+  }, [hasMore]);
+
+  // Resetear a la página 1 cuando cambia el filtro
+  useEffect(() => { setPage(1); }, [filter]);
+
   return (
-    <NotificationsContext.Provider value={{ notifications, unreadCount, addNotification, markAsRead, markAllAsRead, refreshNotifications }}>
+    <NotificationsContext.Provider value={{ notifications, displayedNotifications, unreadCount, filter, setFilter, loadMore, hasMore, isLoading, addNotification, markAsRead, markAllAsRead, refreshNotifications }}>
       {children}
     </NotificationsContext.Provider>
   );

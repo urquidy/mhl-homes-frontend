@@ -1,8 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, Platform, Image, ScrollView, Linking, Modal, ActivityIndicator, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useProjects } from '../../contexts/ProjectsContext';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { Feather } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import MapView from './MapComponent';
@@ -131,7 +133,7 @@ export default function NewProjectModal({ onClose }: NewProjectModalProps) {
   const [client, setClient] = useState('');
   const [address, setAddress] = useState('');
   const [planUri, setPlanUri] = useState<string | null>(null);
-  const [planBase64, setPlanBase64] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<{uri: string, name: string, type: string, blob?: any} | null>(null);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [status, setStatus] = useState<'Not Started' | 'In Progress' | 'Delayed' | 'On Time'>('Not Started');
@@ -195,7 +197,7 @@ export default function NewProjectModal({ onClose }: NewProjectModalProps) {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 1,
-      base64: true, // Solicitamos la imagen en Base64
+      base64: false, // No necesitamos base64 si usamos URI/Blob
     });
 
     if (!result.canceled) {
@@ -208,7 +210,45 @@ export default function NewProjectModal({ onClose }: NewProjectModalProps) {
       }
 
       setPlanUri(asset.uri);
-      setPlanBase64(asset.base64 || null);
+      
+      const fileName = asset.fileName || asset.uri.split('/').pop() || 'image.jpg';
+      const match = /\.(\w+)$/.exec(fileName);
+      const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+      setSelectedFile({
+        uri: asset.uri,
+        name: fileName,
+        type: type,
+      });
+    }
+  };
+
+  const pickDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'application/pdf',
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) return;
+
+      const asset = result.assets[0];
+      const MAX_SIZE_BYTES = 5 * 1024 * 1024;
+
+      if (asset.size && asset.size > MAX_SIZE_BYTES) {
+        alert('El archivo es demasiado grande. El límite es de 5MB.');
+        return;
+      }
+
+      setPlanUri(asset.uri);
+      setSelectedFile({
+        uri: asset.uri,
+        name: asset.name,
+        type: 'application/pdf',
+        blob: (asset as any).file 
+      });
+    } catch (err) {
+      console.log('Error picking document:', err);
     }
   };
 
@@ -268,7 +308,7 @@ export default function NewProjectModal({ onClose }: NewProjectModalProps) {
     setClient('');
     setAddress('');
     setPlanUri(null);
-    setPlanBase64(null);
+    setSelectedFile(null);
     setStartDate('');
     setEndDate('');
     setStatus('Not Started');
@@ -308,18 +348,24 @@ export default function NewProjectModal({ onClose }: NewProjectModalProps) {
         };
 
         let imageFile = null;
-        if (planUri) {
+        if (selectedFile) {
+          if (Platform.OS === 'web') {
+            if (selectedFile.blob) {
+               imageFile = { uri: selectedFile.uri, name: selectedFile.name, type: selectedFile.type, blob: selectedFile.blob };
+            } else {
+               const response = await fetch(selectedFile.uri);
+               const blob = await response.blob();
+               imageFile = { uri: selectedFile.uri, name: selectedFile.name, type: selectedFile.type, blob };
+            }
+          } else {
+            imageFile = { uri: selectedFile.uri, name: selectedFile.name, type: selectedFile.type };
+          }
+        } else if (planUri) {
+          // Fallback por si acaso, aunque selectedFile debería estar seteado
           const filename = planUri.split('/').pop() || 'plan.jpg';
           const match = /\.(\w+)$/.exec(filename);
           const type = match ? `image/${match[1]}` : 'image/jpeg';
-          
-          if (Platform.OS === 'web') {
-            const response = await fetch(planUri);
-            const blob = await response.blob();
-            imageFile = { uri: planUri, name: filename, type, blob };
-          } else {
-            imageFile = { uri: planUri, name: filename, type };
-          }
+          imageFile = { uri: planUri, name: filename, type };
         }
 
         await createProject(projectData, imageFile);
@@ -445,17 +491,28 @@ export default function NewProjectModal({ onClose }: NewProjectModalProps) {
         </View>
 
         <Text style={styles.label}>{i18n.t('newProject.planLabel')}</Text>
-        <Pressable style={styles.uploadButton} onPress={pickImage}>
-          <Feather name="upload" size={20} color="#4A5568" />
-          <Text style={styles.uploadButtonText}>
-            {planUri ? i18n.t('newProject.changePlan') : i18n.t('newProject.uploadPlan')}
-          </Text>
-        </Pressable>
+        <View style={styles.uploadButtonsRow}>
+          <Pressable style={[styles.uploadButton, { flex: 1, marginRight: 8 }]} onPress={pickImage}>
+            <Feather name="image" size={20} color="#4A5568" />
+            <Text style={styles.uploadButtonText}>Imagen</Text>
+          </Pressable>
+          <Pressable style={[styles.uploadButton, { flex: 1, marginLeft: 8 }]} onPress={pickDocument}>
+            <Feather name="file-text" size={20} color="#4A5568" />
+            <Text style={styles.uploadButtonText}>PDF</Text>
+          </Pressable>
+        </View>
 
         {planUri && (
           <View style={styles.imagePreviewContainer}>
-            <Image source={{ uri: planUri }} style={styles.imagePreview} resizeMode="cover" />
-            <Pressable style={styles.removeImageButton} onPress={() => setPlanUri(null)}>
+            {selectedFile?.type === 'application/pdf' ? (
+              <View style={styles.pdfPreview}>
+                <Feather name="file-text" size={48} color="#E53E3E" />
+                <Text style={styles.pdfName}>{selectedFile.name}</Text>
+              </View>
+            ) : (
+              <Image source={{ uri: planUri }} style={styles.imagePreview} resizeMode="cover" />
+            )}
+            <Pressable style={styles.removeImageButton} onPress={() => { setPlanUri(null); setSelectedFile(null); }}>
               <Feather name="x" size={16} color="#FFFFFF" />
             </Pressable>
           </View>
@@ -652,13 +709,18 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderRadius: 8,
     padding: 20,
-    marginBottom: 16,
+    // marginBottom: 16, // Moved to row container
   },
   uploadButtonText: {
     marginLeft: 8,
     color: '#4A5568',
     fontSize: 16,
     fontFamily: 'DMSans-Regular',
+  },
+  uploadButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
   },
   imagePreviewContainer: {
     position: 'relative',
@@ -671,6 +733,19 @@ const styles = StyleSheet.create({
   imagePreview: {
     width: '100%',
     height: 200,
+  },
+  pdfPreview: {
+    width: '100%',
+    height: 200,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F7FAFC',
+  },
+  pdfName: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#2D3748',
+    fontFamily: 'DMSans-Bold',
   },
   removeImageButton: {
     position: 'absolute',
