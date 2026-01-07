@@ -1,21 +1,52 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, Pressable, useColorScheme, Modal, ActivityIndicator, Alert, Platform } from 'react-native';
-import { useAuth } from '../../contexts/AuthContext';
 import { Colors } from '@/constants/theme';
-import { FontAwesome5 } from '@expo/vector-icons';
+import { Feather, FontAwesome5 } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Image, Modal, Platform, Pressable, StyleSheet, Text, TextInput, useColorScheme, View } from 'react-native';
+import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 
 export default function ProfileScreen() {
   const { user, logout, token, updateUserImage } = useAuth();
   const [modalVisible, setModalVisible] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [roleName, setRoleName] = useState('');
+  const [changePasswordModalVisible, setChangePasswordModalVisible] = useState(false);
+  const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const colorScheme = useColorScheme() ?? 'light';
   
   // Definimos colores locales si el tema no carga correctamente, o usamos los del tema
   const textColor = Colors[colorScheme]?.text || '#000';
   const subTextColor = Colors[colorScheme]?.icon || '#666';
   const bgColor = Colors[colorScheme]?.background || '#fff';
+
+  useEffect(() => {
+    const resolveRoleName = async () => {
+      if (!user?.role) {
+        setRoleName(user?.permissions?.includes('ROLE_ADMIN') ? 'Admin' : 'User');
+        return;
+      }
+
+      try {
+        const response = await api.get('/api/roles');
+        const roles = response.data || [];
+        const match = roles.find((r: any) => r.id === user.role);
+        if (match) {
+          setRoleName(match.name);
+        } else {
+          setRoleName(user.role);
+        }
+      } catch (error) {
+        setRoleName(user.role);
+      }
+    };
+
+    resolveRoleName();
+  }, [user?.role, user?.permissions]);
 
   const handleLogout = () => {
     setModalVisible(true);
@@ -71,6 +102,34 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleChangePassword = async () => {
+    if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
+      Alert.alert('Error', 'Por favor completa todos los campos.');
+      return;
+    }
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      Alert.alert('Error', 'Las contraseñas nuevas no coinciden.');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      await api.post(`/api/users/change-password`, {
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword
+      });
+      Alert.alert('Éxito', 'Contraseña actualizada correctamente.');
+      setChangePasswordModalVisible(false);
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (error: any) {
+      console.error('Error changing password:', error);
+      Alert.alert('Error', 'No se pudo actualizar la contraseña. Verifica tu contraseña actual.');
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
   const getProfileImageSource = () => {
     const uri = user?.imageUri;
     if (!uri) return { uri: 'https://i.pravatar.cc/150' };
@@ -110,7 +169,7 @@ export default function ProfileScreen() {
           <Text style={[styles.username, { color: textColor, marginBottom: 0 }]}>
             {user?.username || 'Usuario'}
           </Text>
-          {(user?.role as string) === 'ADMIN' && (
+          {(user?.permissions?.includes('ROLE_ADMIN')) && (
             <FontAwesome5 name="crown" size={18} color="#D4AF37" style={{ marginLeft: 8 }} />
           )}
         </View>
@@ -119,11 +178,21 @@ export default function ProfileScreen() {
         </Text>
         
         <View style={styles.roleBadge}>
-          <Text style={styles.roleText}>{user?.role || 'Viewer'}</Text>
+          <Text style={styles.roleText}>{roleName}</Text>
         </View>
       </View>
 
       <View style={styles.actions}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.changePasswordButton,
+            { opacity: pressed ? 0.8 : 1 }
+          ]}
+          onPress={() => setChangePasswordModalVisible(true)}
+        >
+          <Text style={styles.changePasswordText}>Cambiar Contraseña</Text>
+        </Pressable>
+
         <Pressable
           style={({ pressed }) => [
             styles.logoutButton,
@@ -152,6 +221,75 @@ export default function ProfileScreen() {
               </Pressable>
               <Pressable style={[styles.modalButton, styles.confirmButton]} onPress={confirmLogout}>
                 <Text style={styles.confirmButtonText}>Cerrar Sesión</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal de Cambio de Contraseña */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={changePasswordModalVisible}
+        onRequestClose={() => setChangePasswordModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: bgColor }]}>
+            <Text style={[styles.modalTitle, { color: textColor }]}>Cambiar Contraseña</Text>
+            
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Contraseña Actual"
+                placeholderTextColor="#A0AEC0"
+                secureTextEntry={!showCurrentPassword}
+                value={passwordData.currentPassword}
+                onChangeText={(text) => setPasswordData({...passwordData, currentPassword: text})}
+              />
+              <Pressable onPress={() => setShowCurrentPassword(!showCurrentPassword)} style={styles.eyeIcon}>
+                <Feather name={showCurrentPassword ? "eye" : "eye-off"} size={20} color="#A0AEC0" />
+              </Pressable>
+            </View>
+            
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Nueva Contraseña"
+                placeholderTextColor="#A0AEC0"
+                secureTextEntry={!showNewPassword}
+                value={passwordData.newPassword}
+                onChangeText={(text) => setPasswordData({...passwordData, newPassword: text})}
+              />
+              <Pressable onPress={() => setShowNewPassword(!showNewPassword)} style={styles.eyeIcon}>
+                <Feather name={showNewPassword ? "eye" : "eye-off"} size={20} color="#A0AEC0" />
+              </Pressable>
+            </View>
+
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Confirmar Nueva Contraseña"
+                placeholderTextColor="#A0AEC0"
+                secureTextEntry={!showConfirmPassword}
+                value={passwordData.confirmPassword}
+                onChangeText={(text) => setPasswordData({...passwordData, confirmPassword: text})}
+              />
+              <Pressable onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.eyeIcon}>
+                <Feather name={showConfirmPassword ? "eye" : "eye-off"} size={20} color="#A0AEC0" />
+              </Pressable>
+            </View>
+
+            <View style={styles.modalButtons}>
+              <Pressable style={[styles.modalButton, styles.cancelButton]} onPress={() => setChangePasswordModalVisible(false)}>
+                <Text style={styles.cancelButtonText}>Cancelar</Text>
+              </Pressable>
+              <Pressable 
+                style={[styles.modalButton, styles.saveButton]} 
+                onPress={handleChangePassword}
+                disabled={isChangingPassword}
+              >
+                {isChangingPassword ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.saveButtonText}>Guardar</Text>}
               </Pressable>
             </View>
           </View>
@@ -222,6 +360,18 @@ const styles = StyleSheet.create({
     marginTop: 'auto', // Empuja el botón hacia abajo
     marginBottom: 20,
   },
+  changePasswordButton: {
+    backgroundColor: '#EDF2F7',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  changePasswordText: {
+    color: '#2D3748',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
   logoutButton: {
     backgroundColor: '#FF3B30', // Rojo estándar de iOS para acciones destructivas
     paddingVertical: 16,
@@ -259,6 +409,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 24,
   },
+  input: {
+    backgroundColor: '#F7FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    fontSize: 16,
+    width: '100%',
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F7FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    width: '100%',
+    height: 50,
+  },
+  passwordInput: {
+    flex: 1,
+    fontSize: 16,
+    height: '100%',
+  },
+  eyeIcon: {
+    padding: 4,
+  },
   modalButtons: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -271,6 +451,13 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     backgroundColor: '#EDF2F7',
+  },
+  saveButton: {
+    backgroundColor: '#3182CE',
+  },
+  saveButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   confirmButton: {
     backgroundColor: '#FF3B30',

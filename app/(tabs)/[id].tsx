@@ -21,6 +21,7 @@ import ItemDetailModal from '../../components/ui/ItemDetailModal';
 import i18n from '../../constants/i18n';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProjects } from '../../contexts/ProjectsContext';
+import { usePermission } from '../../hooks/usePermission';
 import api from '../../services/api';
 
 const getDaysInMonth = (month: number, year: number) => new Date(year, month + 1, 0).getDate();
@@ -93,6 +94,7 @@ export default function ProjectDetailScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const { getProjectById, getChecklistByProjectId, toggleChecklistItem, updateChecklistEvidence, addChecklistItem, updateProjectPlan, addChecklistEvidence, deleteChecklistEvidence, addChecklistComment, deleteChecklistItem, startProject, isLoading, fetchProjectChecklist, clearProjectChecklist, refreshProjects } = useProjects();
   const { user, token } = useAuth();
+  const { hasPermission } = usePermission();
 
   const projectId = Array.isArray(id) ? id[0] : id;
   const project = projectId ? getProjectById(projectId) : undefined;
@@ -725,7 +727,7 @@ export default function ProjectDetailScreen() {
   };
 
   const handleReopenProject = async () => {
-    if ((user?.role as string) !== 'ADMIN') return;
+    if (!hasPermission('PROJECT_CLOSE')) return;
 
     showAlert(
       "Reabrir Proyecto",
@@ -1177,7 +1179,9 @@ export default function ProjectDetailScreen() {
         a.download = viewingImageSource.uri.split('/').pop() || 'download';
         document.body.appendChild(a);
         a.click();
-        document.body.removeChild(a);
+        if (document.body.contains(a)) {
+          document.body.removeChild(a);
+        }
         window.URL.revokeObjectURL(url);
       } else {
         let filename = viewingImageSource.uri.split('/').pop() || 'download'; // Native
@@ -1262,7 +1266,7 @@ export default function ProjectDetailScreen() {
           {(project.status === 'Completed' || (project?.status as string) === 'COMPLETED') && (
             <Pressable 
               onPress={() => {
-                if ((user?.role as string) === 'ADMIN') {
+                if (hasPermission('PROJECT_CLOSE')) {
                   handleReopenProject();
                 } else {
                   showAlert("Proyecto Cerrado", "Este proyecto está completado y no se pueden realizar modificaciones.");
@@ -1274,7 +1278,7 @@ export default function ProjectDetailScreen() {
             </Pressable>
           )}
         </View>
-        {(user?.role as string) === 'ADMIN' && (
+        {hasPermission('PROJECT_UPDATE') && (
           <Pressable 
             onPress={() => {
               if (project.status === 'Completed' || (project?.status as string) === 'COMPLETED') {
@@ -1655,7 +1659,7 @@ export default function ProjectDetailScreen() {
             }}>
               <Text style={{ color: '#3182CE', fontSize: 14 }}>{planType === 'pdf' ? 'Ver Documento' : i18n.t('projectDetail.viewFullImage')}</Text>
             </Pressable>
-            {(user?.role as string) === 'ADMIN' && (
+            {hasPermission('PROJECT_UPDATE') && (
               <Pressable onPress={handleUploadPlan} style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Feather name="refresh-cw" size={14} color="#718096" style={{ marginRight: 4 }} />
                 <Text style={{ color: '#718096', fontSize: 14 }}>Reemplazar Plano</Text>
@@ -1667,7 +1671,7 @@ export default function ProjectDetailScreen() {
           <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#EDF2F7' }]}>
             <Feather name="image" size={48} color="#CBD5E0" />
             <Text style={{ marginTop: 16, color: '#718096', marginBottom: 16 }}>{i18n.t('projectDetail.noPlan')}</Text>
-            {(user?.role as string) === 'ADMIN' && (
+            {hasPermission('PROJECT_UPDATE') && (
               <Pressable style={styles.uploadPlanButton} onPress={handleUploadPlan}>
                 <Feather name="upload" size={16} color="#3182CE" />
                 <Text style={styles.uploadPlanText}>{i18n.t('projectDetail.uploadPlan')}</Text>

@@ -1,11 +1,12 @@
 // Definición de Roles
-export type UserRole = 'Admin' | 'Project Manager' | 'Viewer';
+export type UserRole = 'Admin' | 'Project Manager' | 'Viewer' | string | null;
 
 export interface User {
   id: string;
   username: string;
   email: string;
   role: UserRole;
+  permissions?: string[];
   companyName: string;
   imageUri?: string;
 }

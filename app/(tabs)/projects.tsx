@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, Modal, Alert } from 'react-native';
-import { useProjects } from '../../contexts/ProjectsContext';
-import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { Alert, FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import i18n from '../../constants/i18n';
 import { useAuth } from '../../contexts/AuthContext';
+import { useProjects } from '../../contexts/ProjectsContext';
+import { usePermission } from '../../hooks/usePermission';
 
 export default function ProjectsScreen() {
   const { projects, deleteProject, startProject } = useProjects();
   const { user } = useAuth();
+  const { hasPermission } = usePermission();
   const router = useRouter();
   
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
@@ -82,7 +84,7 @@ export default function ProjectsScreen() {
                   <Feather name="play-circle" size={20} color="#38A169" />
                 </Pressable>
               )}
-              {(user?.role as string) === 'ADMIN' && (
+              {hasPermission('PROJECT_DELETE') && (
                 <Pressable onPress={() => handleDelete(item.id)} style={styles.deleteButton} hitSlop={10}>
                   <Feather name="trash-2" size={20} color="#E53E3E" />
                 </Pressable>

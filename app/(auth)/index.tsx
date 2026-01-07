@@ -1,19 +1,17 @@
+import { Colors, Fonts } from '@/constants/theme'; // Ajusta la ruta si es necesario
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
-  useColorScheme,
-  useWindowDimensions,
+  useWindowDimensions
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Colors, Fonts } from '@/constants/theme'; // Ajusta la ruta si es necesario
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 
@@ -46,13 +44,15 @@ export default function LoginScreen() {
 
       // Estructura actualizada: { token, refreshToken, id, username, email, role, imageUri }
       // Renombramos username a resUsername para evitar conflicto con el estado local
-      const { token, refreshToken, id, username: resUsername, email, role, imageUri } = data;
+      const { token, refreshToken, id, username: resUsername, email, role, imageUri, permissions, companyName } = data;
       
       await login({
         id,
         username: resUsername,
         email,
         role,
+        permissions,
+        companyName: companyName || 'MHL Homes',
         imageUri
       }, token, refreshToken);
       router.replace('/(tabs)');

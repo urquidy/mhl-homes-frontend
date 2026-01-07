@@ -1,14 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, FlatList, Image, Modal, TextInput, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import api from '../../services/api';
-import { useAuth } from '../../contexts/AuthContext';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import RolesManager from '../../components/admin/RolesManager';
 import { useCustomAlert } from '../../components/ui/CustomAlert';
+import { useAuth } from '../../contexts/AuthContext';
+import { usePermission } from '../../hooks/usePermission';
+import api from '../../services/api';
 
 export default function AdminScreen() {
   const { user } = useAuth();
-  const [currentView, setCurrentView] = useState<'menu' | 'users' | 'project-steps'>('menu');
+  const { hasPermission } = usePermission();
+  const [currentView, setCurrentView] = useState<'menu' | 'users' | 'project-steps' | 'roles'>('menu');
   const [users, setUsers] = useState<any[]>([]);
+  const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   
   const { showAlert, AlertComponent } = useCustomAlert();
@@ -38,6 +42,15 @@ export default function AdminScreen() {
     }
   };
 
+  const fetchRoles = async () => {
+    try {
+      const response = await api.get('/api/roles');
+      setRoles(response.data);
+    } catch (error) {
+      console.error('Error fetching roles:', error);
+    }
+  };
+
   const fetchProjectSteps = async () => {
     setLoading(true);
     try {
@@ -54,6 +67,7 @@ export default function AdminScreen() {
   useEffect(() => {
     if (currentView === 'users') {
       fetchUsers();
+      fetchRoles();
     } else if (currentView === 'project-steps') {
       fetchProjectSteps();
     }
@@ -66,6 +80,7 @@ export default function AdminScreen() {
     const isUsernameValid = formData.username.trim().length > 0;
     // La contraseña es obligatoria solo si estamos creando un usuario nuevo (editingUser es null)
     const isPasswordValid = editingUser ? true : formData.password.trim().length > 0;
+    const isRoleValid = formData.role.trim().length > 0;
 
     if (formData.email.length > 0 && !isEmailValid) {
       setEmailError('Por favor ingresa un correo electrónico válido.');
@@ -73,7 +88,7 @@ export default function AdminScreen() {
       setEmailError(null);
     }
 
-    setIsFormValid(isEmailValid && isUsernameValid && isPasswordValid);
+    setIsFormValid(isEmailValid && isUsernameValid && isPasswordValid && isRoleValid);
   }, [formData, editingUser]);
 
   const handleDeleteUser = (userId: string) => {
@@ -102,10 +117,13 @@ export default function AdminScreen() {
 
   const openEditModal = (userToEdit: any) => {
     setEditingUser(userToEdit);
+    // Intentar encontrar el ID del rol si lo que tenemos es el nombre, o usarlo directo si es ID
+    const matchingRole = roles.find(r => r.name === userToEdit.role || r.id === userToEdit.role);
+    const initialRole = matchingRole ? matchingRole.id : userToEdit.role;
     setFormData({ 
       username: userToEdit.username, 
       email: userToEdit.email, 
-      role: userToEdit.role,
+      role: initialRole,
       password: '' 
     });
     setEmailError(null);
@@ -114,14 +132,24 @@ export default function AdminScreen() {
 
   const openCreateModal = () => {
     setEditingUser(null);
-    setFormData({ username: '', email: '', role: 'USER', password: '' });
+    // Seleccionar el primer rol por defecto si existe
+    const defaultRole = roles.length > 0 ? roles[0].id : '';
+    setFormData({ username: '', email: '', role: defaultRole, password: '' });
     setEmailError(null);
     setEditModalVisible(true);
   };
 
   const handleCreateUser = async () => {
     try {
-      const response = await api.post('/api/users', formData);
+      const payload: any = { ...formData };
+      
+      // Enviar roles como array
+      if (payload.role) {
+        payload.roles = [payload.role];
+        delete payload.role;
+      }
+
+      const response = await api.post('/api/users', payload);
       setUsers(prev => [...prev, response.data]);
       setEditModalVisible(false);
       showAlert('Éxito', 'Usuario creado correctamente.');
@@ -135,8 +163,14 @@ export default function AdminScreen() {
     if (!editingUser) return;
     try {
       // Si la contraseña está vacía al editar, la eliminamos del payload para no sobrescribirla
-      const payload = { ...formData };
-      if (!payload.password) delete (payload as any).password;
+      const payload: any = { ...formData };
+      if (!payload.password) delete payload.password;
+
+      // Enviar roles como array
+      if (payload.role) {
+        payload.roles = [payload.role];
+        delete payload.role;
+      }
 
       await api.put(`/api/users/${editingUser.id}`, payload);
       setUsers(prev => prev.map(u => u.id === editingUser.id ? { ...u, ...formData } : u));
@@ -234,32 +268,41 @@ export default function AdminScreen() {
     );
   };
 
-  const renderUserItem = ({ item }: { item: any }) => (
-    <View style={styles.userRow}>
-      <Image 
-        source={{ uri: item.imageUri || `https://ui-avatars.com/api/?name=${item.username}&background=random` }} 
-        style={styles.avatar} 
-      />
-      <View style={styles.userInfo}>
-        <Text style={styles.userName}>{item.username}</Text>
-        <Text style={styles.userEmail}>{item.email}</Text>
-        <View style={[styles.roleBadge, item.role === 'ADMIN' ? styles.roleAdmin : styles.roleUser]}>
-          <Text style={[styles.roleText, item.role === 'ADMIN' ? { color: '#FFF' } : { color: '#2D3748' }]}>{item.role}</Text>
+  const renderUserItem = ({ item }: { item: any }) => {
+    // Resolver nombre del rol para mostrar (si item.role es un ID)
+    const roleObj = roles.find(r => r.id === item.role || r.name === item.role);
+    const roleName = roleObj ? roleObj.name : item.role;
+    const isAdmin = roleName === 'ADMIN';
+
+    return (
+      <View style={styles.userRow}>
+        <Image 
+          source={{ uri: item.imageUri || `https://ui-avatars.com/api/?name=${item.username}&background=random` }} 
+          style={styles.avatar} 
+        />
+        <View style={styles.userInfo}>
+          <Text style={styles.userName}>{item.username}</Text>
+          <Text style={styles.userEmail}>{item.email}</Text>
+          <View style={[styles.roleBadge, isAdmin ? styles.roleAdmin : styles.roleUser]}>
+            <Text style={[styles.roleText, isAdmin ? { color: '#FFF' } : { color: '#2D3748' }]}>{roleName}</Text>
+          </View>
         </View>
-      </View>
-      
-       {(user?.role as string) === 'ADMIN' && (
+        
+        {hasPermission('USER_UPDATE') && (
         <View style={styles.actions}>
           <Pressable onPress={() => openEditModal(item)} style={styles.actionButton}>
             <Feather name="edit-2" size={20} color="#3182CE" />
           </Pressable>
-          <Pressable onPress={() => handleDeleteUser(item.id)} style={[styles.actionButton, { marginLeft: 8 }]}>
-            <Feather name="trash-2" size={20} color="#E53E3E" />
-          </Pressable>
+          {hasPermission('USER_DELETE') && (
+            <Pressable onPress={() => handleDeleteUser(item.id)} style={[styles.actionButton, { marginLeft: 8 }]}>
+              <Feather name="trash-2" size={20} color="#E53E3E" />
+            </Pressable>
+          )}
         </View>
       )}
-    </View>
-  );
+      </View>
+    );
+  };
 
   if (currentView === 'users') {
     return (
@@ -330,16 +373,22 @@ export default function AdminScreen() {
               />
 
               <Text style={styles.label}>Rol</Text>
-              <View style={styles.roleSelector}>
-                {['ADMIN', 'USER'].map(role => (
+              <View style={[styles.roleSelector, { flexWrap: 'wrap' }]}>
+                {roles.map(role => (
                   <Pressable 
-                    key={role}
-                    style={[styles.roleOption, formData.role === role && styles.roleOptionSelected]}
-                    onPress={() => setFormData({...formData, role})}
+                    key={role.id}
+                    style={[styles.roleOption, formData.role === role.id && styles.roleOptionSelected, { marginBottom: 8, alignItems: 'flex-start' }]}
+                    onPress={() => setFormData({...formData, role: role.id})}
                   >
-                    <Text style={[styles.roleOptionText, formData.role === role && styles.roleOptionTextSelected]}>{role}</Text>
+                    <Text style={[styles.roleOptionText, formData.role === role.id && styles.roleOptionTextSelected]}>{role.name}</Text>
+                    {role.description && (
+                      <Text style={[styles.roleDescription, formData.role === role.id && styles.roleDescriptionSelected]}>{role.description}</Text>
+                    )}
                   </Pressable>
                 ))}
+                {roles.length === 0 && (
+                  <Text style={{ color: '#A0AEC0', fontStyle: 'italic' }}>Cargando roles...</Text>
+                )}
               </View>
 
               <Pressable 
@@ -475,6 +524,10 @@ export default function AdminScreen() {
     );
   }
 
+  if (currentView === 'roles') {
+    return <RolesManager onBack={() => setCurrentView('menu')} />;
+  }
+
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.title}>Administrator</Text>
@@ -501,6 +554,20 @@ export default function AdminScreen() {
             <View style={styles.cardContent}>
                 <Text style={styles.cardTitle}>Pasos del Proyecto</Text>
                 <Text style={styles.cardDescription}>Gestionar árbol de procesos (Cimientos, Estructura...)</Text>
+            </View>
+            <Feather name="chevron-right" size={24} color="#CBD5E0" />
+        </Pressable>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Roles & Permissions</Text>
+        <Pressable style={styles.card} onPress={() => setCurrentView('roles')}>
+            <View style={styles.cardIcon}>
+                <Feather name="shield" size={24} color="#DD6B20" />
+            </View>
+            <View style={styles.cardContent}>
+                <Text style={styles.cardTitle}>Roles Management</Text>
+                <Text style={styles.cardDescription}>Create and edit user roles</Text>
             </View>
             <Feather name="chevron-right" size={24} color="#CBD5E0" />
         </Pressable>
@@ -592,6 +659,8 @@ const styles = StyleSheet.create({
   roleOptionSelected: { backgroundColor: '#EBF8FF', borderColor: '#3182CE' },
   roleOptionText: { color: '#718096', fontWeight: '600', fontFamily: 'Inter-SemiBold' },
   roleOptionTextSelected: { color: '#3182CE' },
+  roleDescription: { fontSize: 11, color: '#A0AEC0', marginTop: 2, fontFamily: 'Inter-Regular' },
+  roleDescriptionSelected: { color: '#63B3ED' },
   saveButton: { backgroundColor: '#3182CE', paddingVertical: 14, borderRadius: 8, alignItems: 'center' },
   disabledButton: { backgroundColor: '#CBD5E0' },
   saveButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold', fontFamily: 'Inter-Bold' },

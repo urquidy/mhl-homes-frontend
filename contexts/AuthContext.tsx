@@ -1,13 +1,13 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
+import * as SecureStore from 'expo-secure-store';
+import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { User, UserRole } from '../types';
-import * as SecureStore from 'expo-secure-store';
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
-  login: (userData: { id: string; username: string; email: string; role: UserRole; imageUri?: string }, token: string, refreshToken: string) => Promise<void>;
+  login: (userData: { id: string; username: string; email: string; role: UserRole; imageUri?: string; permissions?: string[]; companyName?: string }, token: string, refreshToken: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUserImage: (uri: string) => Promise<void>;
 }
@@ -45,13 +45,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     loadSession();
   }, []);
 
-  const login = async (userData: { id: string; username: string; email: string; role: UserRole; imageUri?: string }, newToken: string, refreshToken: string) => {
+  const login = async (userData: { id: string; username: string; email: string; role: UserRole; imageUri?: string; permissions?: string[]; companyName?: string }, newToken: string, refreshToken: string) => {
     const newUser: User = {
       id: userData.id,
       username: userData.username,
       email: userData.email,
       role: userData.role,
-      companyName: 'MHL Homes',
+      permissions: userData.permissions || [],
+      companyName: userData.companyName || 'MHL Homes',
       imageUri: userData.imageUri || 'https://i.pravatar.cc/150?u=' + userData.email,
     };
 

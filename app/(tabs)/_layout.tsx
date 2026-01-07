@@ -1,33 +1,25 @@
-import React, { useState } from 'react';
-import { Drawer } from 'expo-router/drawer';
-import { Feather } from '@expo/vector-icons';
 import Header from '@/components/Header';
-import { View, Text, StyleSheet, Pressable, useWindowDimensions, Modal, KeyboardAvoidingView, Platform } from 'react-native';
-import { usePathname, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '../../contexts/AuthContext';
-import i18n from '../../constants/i18n';
 import NewProjectModal from '@/components/projects/NewProjectModal';
+import { Feather } from '@expo/vector-icons';
+import { usePathname, useRouter } from 'expo-router';
+import { Drawer } from 'expo-router/drawer';
+import React, { useEffect, useState } from 'react';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import i18n from '../../constants/i18n';
+import { useAuth } from '../../contexts/AuthContext';
 import { EventsProvider } from '../../contexts/EventsContext';
 import { NotificationsProvider } from '../../contexts/NotificationsContext';
+import api from '../../services/api';
 
 // --- Datos y tipos movidos desde SideMenu.tsx ---
 interface MenuItem {
-  href: string;
-  name: string;
-  icon: keyof typeof Feather.glyphMap;
-  roles?: string[];
+  link: string;
+  title: string;
+  icon: string;
+  permission?: string;
+  order?: number;
 }
-
-const menuItems: MenuItem[] = [
-  { href: '/(tabs)/', name: 'nav.dashboard', icon: 'grid' },
-  { href: '/(tabs)/projects', name: 'nav.projects', icon: 'briefcase' },
-  { href: '/(tabs)/budgets', name: 'nav.budgets', icon: 'clipboard', roles: ['ADMIN', 'Project Manager'] },
-  { href: '/(tabs)/checklist', name: 'nav.checklist', icon: 'check-square', roles: ['ADMIN', 'Project Manager'] },
-  { href: '/(tabs)/agenda', name: 'nav.agenda', icon: 'calendar' },
-  { href: '/(tabs)/reports', name: 'nav.reports', icon: 'bar-chart-2', roles: ['ADMIN', 'Viewer'] },
-  { href: '/(tabs)/admin', name: 'nav.administrator', icon: 'settings', roles: ['ADMIN'] },
-];
 
 // Contexto para permitir que las pantallas cambien la acción del botón "Agregar" del Header
 export const HeaderActionContext = React.createContext<{
@@ -49,8 +41,18 @@ export default function AppLayout() {
   // Estado para la acción personalizada del botón "Agregar"
   const [customAddAction, setCustomAddAction] = useState<(() => void) | null>(null);
   const [isNewProjectModalVisible, setIsNewProjectModalVisible] = useState(false);
+  const [dynamicMenuItems, setDynamicMenuItems] = useState<MenuItem[]>([]);
 
-  const visibleMenuItems = menuItems.filter(item => !item.roles || (user && item.roles.includes(user.role as string)));
+  // Cargar menú desde la API al iniciar o cambiar token
+  useEffect(() => {
+    if (token) {
+      api.get('/api/menu')
+        .then(response => {
+          setDynamicMenuItems(response.data || []);
+        })
+        .catch(err => console.error("Error fetching menu:", err));
+    }
+  }, [token]);
 
   const handleAddPress = customAddAction || (() => setIsNewProjectModalVisible(true));
 
@@ -72,21 +74,23 @@ export default function AppLayout() {
                 </View>
                 <View style={styles.headerTextContainer}>
                   <Text style={styles.companyName}>{user?.companyName || 'MHL Homes'}</Text>
-                  <Text style={styles.userRole}>{user?.role || 'Guest'}</Text>
+                  <Text style={styles.userRole}>{user?.role || (user?.permissions?.includes('ROLE_ADMIN') ? 'Admin' : 'User')}</Text>
                 </View>
               </View>
 
               <View style={styles.navContainer}>
-                {visibleMenuItems.map((item) => {                
+                {dynamicMenuItems.map((item) => {                
                   // Determina si el ítem actual es el activo.
-                  // Condición especial para el Dashboard que puede tener la ruta '/' o '/(tabs)/'
-                  const screenName = item.href.split('/').pop() || 'index';
+                  // Mapeo de rutas del backend a nombres de pantalla de Expo Router
+                  let screenName = item.link.replace(/^\//, ''); // Quitar slash inicial
+                  if (screenName === 'dashboard') screenName = 'index'; // Dashboard mapea a index
+                  
                   const isActive = (screenName === 'index' && pathname === '/') || (screenName !== 'index' && pathname === `/${screenName}`);
 
                   
                   return (
                     <Pressable 
-                      key={item.name} 
+                      key={item.title} 
                       onPress={() => {
                         props.navigation.navigate(screenName); // Navegación programática
                         props.navigation.closeDrawer();
@@ -94,8 +98,8 @@ export default function AppLayout() {
                     >
                       {({ pressed }) => (
                         <View style={[ styles.navItem, isActive && styles.navItemActive, pressed && styles.navItemPressed ]}>
-                          <Feather name={item.icon} size={22} color="#D4AF37" />
-                          <Text style={[styles.navText, isActive && styles.navTextActive]}>{i18n.t(item.name)}</Text>
+                          <Feather name={item.icon as keyof typeof Feather.glyphMap} size={22} color="#D4AF37" />
+                          <Text style={[styles.navText, isActive && styles.navTextActive]}>{i18n.t(item.title)}</Text>
                         </View>
                       )}
                     </Pressable>
@@ -104,6 +108,7 @@ export default function AppLayout() {
               </View>
 
               {/* --- Botón de Nuevo Proyecto --- */}
+              {user?.permissions?.includes('PROJECT_CREATE') && (
               <View style={styles.footer}>
                 <Pressable
                   onPress={() => {
@@ -115,6 +120,7 @@ export default function AppLayout() {
                   <Text style={styles.newProjectButtonText}>{i18n.t('nav.newProject')}</Text>
                 </Pressable>
               </View>
+              )}
             </View>
           );
         }}
