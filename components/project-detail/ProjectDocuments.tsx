@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, FlatList, Platform, ActivityIndicator, Linking } from 'react-native';
+import { View, Text, Pressable, StyleSheet, FlatList, Platform, ActivityIndicator, Linking, LayoutAnimation, UIManager } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import api from '../../services/api';
@@ -9,16 +9,28 @@ import { useCustomAlert } from '../../components/ui/CustomAlert';
 interface ProjectDocumentsProps {
   projectId: string;
   userRole?: string;
+  projectStatus?: string;
   onViewDocument: (uri: string, name: string, type?: string) => void;
   onRefreshProjects?: () => void;
   onRefreshChecklist?: () => void;
 }
 
-export default function ProjectDocuments({ projectId, userRole, onViewDocument, onRefreshProjects, onRefreshChecklist }: ProjectDocumentsProps) {
+// Habilitar animaciones de layout en Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+export default function ProjectDocuments({ projectId, userRole, projectStatus, onViewDocument, onRefreshProjects, onRefreshChecklist }: ProjectDocumentsProps) {
   const [documents, setDocuments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const { showAlert, AlertComponent } = useCustomAlert();
+  const [isExpanded, setIsExpanded] = useState(true);
+
+  const toggleExpand = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsExpanded(!isExpanded);
+  };
 
   // Usamos useCallback para estabilizar la función y evitar ejecuciones dobles innecesarias
   const fetchDocuments = useCallback(async () => {
@@ -57,6 +69,10 @@ export default function ProjectDocuments({ projectId, userRole, onViewDocument, 
   }, [fetchDocuments]);
 
   const handleUpload = async () => {
+    if (projectStatus === 'Completed' || projectStatus === 'COMPLETED') {
+      showAlert("Acción Restringida", "No se pueden subir documentos en un proyecto completado.");
+      return;
+    }
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: '*/*', // Permitir cualquier archivo
@@ -95,6 +111,10 @@ export default function ProjectDocuments({ projectId, userRole, onViewDocument, 
   };
 
   const handleDelete = (doc: any) => {
+    if (projectStatus === 'Completed' || projectStatus === 'COMPLETED') {
+      showAlert("Acción Restringida", "No se pueden eliminar documentos en un proyecto completado.");
+      return;
+    }
     showAlert(
       "Eliminar Documento",
       "¿Estás seguro?",
@@ -142,7 +162,10 @@ export default function ProjectDocuments({ projectId, userRole, onViewDocument, 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Documentos del Proyecto</Text>
+        <Pressable onPress={toggleExpand} style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+          <Text style={styles.title}>Documentos del Proyecto</Text>
+          <Feather name={isExpanded ? "chevron-down" : "chevron-right"} size={24} color="#1A202C" style={{ marginLeft: 8 }} />
+        </Pressable>
         {userRole === 'ADMIN' && (
           <Pressable style={styles.addButton} onPress={handleUpload} disabled={isUploading}>
             {isUploading ? <ActivityIndicator size="small" color="#3182CE" /> : <Feather name="plus" size={20} color="#3182CE" />}
@@ -151,7 +174,8 @@ export default function ProjectDocuments({ projectId, userRole, onViewDocument, 
         )}
       </View>
 
-      {isLoading ? (
+      {isExpanded && (
+        isLoading ? (
         <ActivityIndicator style={{ marginTop: 20 }} />
       ) : documents.length === 0 ? (
         <Text style={styles.emptyText}>No hay documentos adjuntos.</Text>
@@ -174,7 +198,7 @@ export default function ProjectDocuments({ projectId, userRole, onViewDocument, 
             </Pressable>
           ))}
         </View>
-      )}
+      ))}
       <AlertComponent />
     </View>
   );
@@ -183,7 +207,7 @@ export default function ProjectDocuments({ projectId, userRole, onViewDocument, 
 const styles = StyleSheet.create({
   container: { marginTop: 24, paddingBottom: 20 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  title: { fontSize: 22, fontWeight: 'bold', fontFamily: 'Inter-Bold', color: '#1A202C' },
+  title: { fontSize: 18, fontWeight: 'bold', fontFamily: 'Inter-Bold', color: '#1A202C' },
   addButton: { flexDirection: 'row', alignItems: 'center', padding: 8, backgroundColor: '#EBF8FF', borderRadius: 8 },
   addText: { marginLeft: 6, color: '#3182CE', fontWeight: '600', fontSize: 14, fontFamily: 'Inter-SemiBold' },
   emptyText: { color: '#A0AEC0', fontStyle: 'italic', textAlign: 'center', padding: 20, fontFamily: 'Inter-Regular' },

@@ -16,6 +16,8 @@ export default function AdminScreen() {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
   const [formData, setFormData] = useState({ username: '', email: '', role: '', password: '' });
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [isFormValid, setIsFormValid] = useState(false);
 
   // Estado para Pasos del Proyecto (Catálogo)
   const [projectSteps, setProjectSteps] = useState<any[]>([]);
@@ -57,6 +59,23 @@ export default function AdminScreen() {
     }
   }, [currentView]);
 
+  // Validación en tiempo real
+  useEffect(() => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const isEmailValid = emailRegex.test(formData.email);
+    const isUsernameValid = formData.username.trim().length > 0;
+    // La contraseña es obligatoria solo si estamos creando un usuario nuevo (editingUser es null)
+    const isPasswordValid = editingUser ? true : formData.password.trim().length > 0;
+
+    if (formData.email.length > 0 && !isEmailValid) {
+      setEmailError('Por favor ingresa un correo electrónico válido.');
+    } else {
+      setEmailError(null);
+    }
+
+    setIsFormValid(isEmailValid && isUsernameValid && isPasswordValid);
+  }, [formData, editingUser]);
+
   const handleDeleteUser = (userId: string) => {
     showAlert(
       'Eliminar Usuario',
@@ -89,12 +108,14 @@ export default function AdminScreen() {
       role: userToEdit.role,
       password: '' 
     });
+    setEmailError(null);
     setEditModalVisible(true);
   };
 
   const openCreateModal = () => {
     setEditingUser(null);
     setFormData({ username: '', email: '', role: 'USER', password: '' });
+    setEmailError(null);
     setEditModalVisible(true);
   };
 
@@ -290,12 +311,13 @@ export default function AdminScreen() {
 
               <Text style={styles.label}>Email</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, emailError && { borderColor: '#E53E3E', marginBottom: 4 }]}
                 value={formData.email}
                 onChangeText={text => setFormData({...formData, email: text})}
                 keyboardType="email-address"
                 autoCapitalize="none"
               />
+              {emailError && <Text style={styles.errorText}>{emailError}</Text>}
 
               <Text style={styles.label}>{editingUser ? 'Nueva Contraseña' : 'Contraseña'}</Text>
               <TextInput
@@ -320,7 +342,11 @@ export default function AdminScreen() {
                 ))}
               </View>
 
-              <Pressable style={styles.saveButton} onPress={editingUser ? handleUpdateUser : handleCreateUser}>
+              <Pressable 
+                style={[styles.saveButton, !isFormValid && styles.disabledButton]} 
+                onPress={editingUser ? handleUpdateUser : handleCreateUser}
+                disabled={!isFormValid}
+              >
                 <Text style={styles.saveButtonText}>{editingUser ? 'Guardar Cambios' : 'Crear Usuario'}</Text>
               </Pressable>
             </View>
@@ -559,6 +585,7 @@ const styles = StyleSheet.create({
   input: { backgroundColor: '#F7FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 16, color: '#2D3748', fontFamily: 'Inter-Regular' },
   modalButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
   modalButton: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 8 },
+  errorText: { color: '#E53E3E', fontSize: 12, marginBottom: 12, fontFamily: 'Inter-Regular' },
   cancelButton: { backgroundColor: '#EDF2F7' },
   roleSelector: { flexDirection: 'row', gap: 12, marginBottom: 24 },
   roleOption: { flex: 1, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center' },
@@ -566,6 +593,7 @@ const styles = StyleSheet.create({
   roleOptionText: { color: '#718096', fontWeight: '600', fontFamily: 'Inter-SemiBold' },
   roleOptionTextSelected: { color: '#3182CE' },
   saveButton: { backgroundColor: '#3182CE', paddingVertical: 14, borderRadius: 8, alignItems: 'center' },
+  disabledButton: { backgroundColor: '#CBD5E0' },
   saveButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold', fontFamily: 'Inter-Bold' },
 
   // Floating Action Button

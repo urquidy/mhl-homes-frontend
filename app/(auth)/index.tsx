@@ -13,7 +13,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Colors } from '@/constants/theme'; // Ajusta la ruta si es necesario
+import { Colors, Fonts } from '@/constants/theme'; // Ajusta la ruta si es necesario
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 
@@ -99,9 +99,8 @@ export default function LoginScreen() {
       maxWidth: 400, // El formulario no será más ancho que 400px
     },
     title: {
-      fontFamily:'DMSans-Bold',
+      fontFamily: Fonts.title,
       fontSize: 32,
-      fontWeight: '700',
       color: Colors[colorScheme].tint,
       marginBottom: 24,
       textAlign: 'center',
@@ -113,7 +112,7 @@ export default function LoginScreen() {
       paddingHorizontal: 15,
       marginBottom: 16,
       fontSize: 16,
-      fontFamily:'DMSans-Regular',
+      fontFamily: Fonts.regular,
       color: Colors[colorScheme].text,
       borderWidth: 1,
       borderColor: colorScheme === 'dark' ? '#3A3A3C' : '#E5E5EA',
@@ -128,8 +127,7 @@ export default function LoginScreen() {
     },
     buttonText: {
       fontSize: 18,
-      fontFamily:'DMSans-Bold',
-      fontWeight: '700',
+      fontFamily: Fonts.bold,
       // El texto del botón será negro sobre dorado, y blanco sobre dorado oscuro
       color: colorScheme === 'dark' ? '#080808' : '#FFFFFF',
     },

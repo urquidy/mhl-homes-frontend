@@ -15,14 +15,30 @@ export default function EditProjectModal({ visible, onClose, project, availableU
   const [name, setName] = useState('');
   const [participants, setParticipants] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [searchText, setSearchText] = useState('');
 
   useEffect(() => {
     if (project) {
+      console.log('DEBUG - Project Data:', JSON.stringify(project, null, 2));
+      console.log('DEBUG - Available Users:', JSON.stringify(availableUsers, null, 2));
+
       setName(project.name || '');
-      // Asumimos que project.participants es un array de usernames o IDs
-      setParticipants(project.participants || []);
+      
+      // Normalizar participantes: Manejar tanto array de strings como array de objetos
+      const rawParticipants = project.participants || [];
+      const normalizedParticipants = rawParticipants.map((p: any) => {
+        // 1. Extraer valor base (puede ser objeto con username/id, o un string directo)
+        let val = (typeof p === 'object' && p !== null) ? (p.username || p.id) : p;
+        
+        // 2. Si el valor es un ID que existe en availableUsers, lo convertimos al username correcto
+        const userById = availableUsers.find(u => u.id === val);
+        return userById ? userById.username : val;
+      }).filter(Boolean);
+
+      setParticipants(normalizedParticipants);
+      setSearchText('');
     }
-  }, [project, visible]);
+  }, [project, visible, availableUsers]);
 
   const toggleParticipant = (username: string) => {
     if (participants.includes(username)) {
@@ -30,6 +46,17 @@ export default function EditProjectModal({ visible, onClose, project, availableU
     } else {
       setParticipants([...participants, username]);
     }
+  };
+
+  const filteredUsers = availableUsers.filter(u => 
+    u.username.toLowerCase().includes(searchText.toLowerCase()) || 
+    (u.email && u.email.toLowerCase().includes(searchText.toLowerCase()))
+  );
+
+  const handleSelectAll = () => {
+    const newSet = new Set(participants);
+    filteredUsers.forEach(u => newSet.add(u.username));
+    setParticipants(Array.from(newSet));
   };
 
   const handleSave = async () => {
@@ -63,9 +90,26 @@ export default function EditProjectModal({ visible, onClose, project, availableU
           />
 
           <Text style={styles.label}>Participantes</Text>
+          
+          <View style={styles.searchContainer}>
+            <Feather name="search" size={20} color="#A0AEC0" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Buscar usuario..."
+              value={searchText}
+              onChangeText={setSearchText}
+            />
+          </View>
+
+          {filteredUsers.length > 0 && (
+            <Pressable onPress={handleSelectAll} style={{ alignSelf: 'flex-end', marginBottom: 8, padding: 4 }}>
+              <Text style={{ color: '#3182CE', fontSize: 12, fontWeight: '600' }}>Seleccionar todos</Text>
+            </Pressable>
+          )}
+
           <View style={styles.listContainer}>
             <ScrollView nestedScrollEnabled>
-              {availableUsers.map(user => {
+              {filteredUsers.map(user => {
                 const isSelected = participants.includes(user.username);
                 return (
                   <Pressable key={user.id} style={styles.userItem} onPress={() => toggleParticipant(user.username)}>
@@ -77,6 +121,9 @@ export default function EditProjectModal({ visible, onClose, project, availableU
                   </Pressable>
                 );
               })}
+              {filteredUsers.length === 0 && (
+                <Text style={styles.emptyText}>No se encontraron usuarios.</Text>
+              )}
             </ScrollView>
           </View>
 
@@ -101,6 +148,9 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontWeight: 'bold', color: '#1A202C' },
   label: { fontSize: 14, fontWeight: '600', color: '#4A5568', marginBottom: 8 },
   input: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 16, color: '#2D3748' },
+  searchContainer: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, marginBottom: 8, backgroundColor: '#F7FAFC' },
+  searchIcon: { marginRight: 8 },
+  searchInput: { flex: 1, paddingVertical: 10, fontSize: 14, color: '#2D3748' },
   listContainer: { maxHeight: 200, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, marginBottom: 20 },
   userItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: '#F7FAFC' },
   userName: { fontSize: 14, fontWeight: '600', color: '#2D3748' },
@@ -110,4 +160,5 @@ const styles = StyleSheet.create({
   cancelText: { color: '#4A5568', fontWeight: 'bold' },
   saveButton: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, backgroundColor: '#3182CE', minWidth: 80, alignItems: 'center' },
   saveText: { color: '#FFF', fontWeight: 'bold' },
+  emptyText: { padding: 12, color: '#A0AEC0', textAlign: 'center', fontStyle: 'italic' },
 });

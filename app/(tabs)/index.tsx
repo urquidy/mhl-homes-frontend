@@ -9,10 +9,11 @@ import { Project } from '../../types'; // Adjusted path to types.ts
 import i18n from '../../constants/i18n';
 import { useNotifications, AppNotification, NotificationFilter } from '../../contexts/NotificationsContext';
 import NotificationFilters from '../../components/ui/NotificationFilters';
+import api from '../../services/api';
 
 type ProjectStatus = Project['status'];
 
-const FILTERS = ['All', 'In Progress', 'Delayed'] as const;
+const FILTERS = ['All', 'In Progress', 'Delayed', 'Completed'] as const;
 type FilterType = typeof FILTERS[number];
 
 // Habilitar animaciones de layout en Android
@@ -57,18 +58,30 @@ const ProjectListItem: React.FC<{ item: Project }> = ({ item }) => {
         {/* Lista de Participantes */}
         <View style={styles.participantsContainer}>
           {item.participants.map((participant, index) => {
-            const participantStr = String(participant || '');
-            const isUrl = participantStr.startsWith('http');
+            let imageUri = null;
+            let initial = '?';
+
+            if (typeof participant === 'string') {
+              if (participant.startsWith('http')) imageUri = participant;
+              else initial = participant.charAt(0).toUpperCase();
+            } else if (participant && typeof participant === 'object') {
+              if (participant.imageUri) {
+                 const baseURL = api.defaults.baseURL || process.env.EXPO_PUBLIC_API_URL || '';
+                 imageUri = participant.imageUri.startsWith('http') ? participant.imageUri : `${baseURL}${participant.imageUri.startsWith('/') ? '' : '/'}${participant.imageUri}`;
+              }
+              if (participant.username) initial = participant.username.charAt(0).toUpperCase();
+            }
+
             return (
               <View key={index} style={[styles.participantWrapper, { marginLeft: index > 0 ? -12 : 0, zIndex: item.participants.length - index }]}>
-                {isUrl ? (
+                {imageUri ? (
                   <Image 
-                    source={{ uri: participantStr }} 
+                    source={{ uri: imageUri }} 
                     style={styles.participantAvatar} 
                   />
                 ) : (
                   <View style={[styles.participantAvatar, styles.participantInitials]}>
-                    <Text style={styles.initialsText}>{participantStr.charAt(0).toUpperCase()}</Text>
+                    <Text style={styles.initialsText}>{initial}</Text>
                   </View>
                 )}
               </View>
@@ -255,8 +268,7 @@ export default function DashboardScreen() {
   // useMemo optimiza el rendimiento, recalculando la lista solo si los proyectos o el filtro cambian.
   const filteredProjects = useMemo(() => {
     if (activeFilter === 'All') {
-      // Mostramos todos excepto los completados, ya que la sección es de "Proyectos Activos".
-      return projects.filter(p => p.status !== 'Completed');
+      return projects;
     }
     return projects.filter(p => p.status === activeFilter);
   }, [activeFilter, projects]);
@@ -309,7 +321,8 @@ export default function DashboardScreen() {
                   <Text style={[styles.filterText, activeFilter === filter && styles.filterTextActive]}>
                     {filter === 'All' ? i18n.t('dashboard.filters.all') : 
                      filter === 'In Progress' ? i18n.t('dashboard.filters.inProgress') :
-                     i18n.t('dashboard.filters.delayed')}
+                     filter === 'Delayed' ? i18n.t('dashboard.filters.delayed') :
+                     i18n.t('dashboard.status.completed')}
                   </Text>
                 </Pressable>
               ))}

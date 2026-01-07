@@ -121,6 +121,7 @@ const i18n = new I18n({
       recordVideo: 'Record Video',
       gallery: 'Gallery',
       assignedTo: 'Assigned to',
+      documents:'Documents'
     },
     map: {
       webFallback: 'Interactive map view not available on Web',
@@ -245,6 +246,7 @@ const i18n = new I18n({
       recordVideo: 'Grabar Video',
       gallery: 'Galería',
       assignedTo: 'Asignado a',
+      documents:'Documentos'
     },
     map: {
       webFallback: 'Vista de mapa interactiva no disponible en Web',

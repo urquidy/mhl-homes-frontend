@@ -144,7 +144,7 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 (p.status === 'NOT_STARTED' || p.status === 'Not Started') ? 'Not Started' : 'In Progress',
         address: p.address,
         progress: p.progress,
-        participants: p.participants ? p.participants.map((part: any) => part.imageUri || part.username) : [],
+        participants: p.participants || [],
         architecturalPlanUri: p.architecturalPlanUri || p.imageUri,
         imageUri: p.imageUri,
         startDate: p.startDate,

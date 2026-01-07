@@ -1,27 +1,27 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, Modal, TextInput, TouchableOpacity, GestureResponderEvent, LayoutChangeEvent, PanResponder, Switch, useWindowDimensions, Platform, KeyboardAvoidingView, Pressable, ActivityIndicator, LayoutAnimation, UIManager, Animated } from 'react-native';
-import { useLocalSearchParams, Stack } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import { useProjects } from '../../contexts/ProjectsContext';
-import Svg, { Path as SvgPath } from 'react-native-svg';
 import * as DocumentPicker from 'expo-document-picker'; // Importar DocumentPicker
 import * as FileSystem from 'expo-file-system/legacy'; // Importar FileSystem Legacy
+import * as ImagePicker from 'expo-image-picker';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Image, LayoutAnimation, LayoutChangeEvent, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, UIManager, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '../../contexts/AuthContext';
-import i18n from '../../constants/i18n';
-import api from '../../services/api';
+import Svg, { Path as SvgPath } from 'react-native-svg';
 import { WebView } from 'react-native-webview';
-import CalendarPickerModal from '../../components/ui/CalendarPickerModal';
-import ItemDetailModal from '../../components/ui/ItemDetailModal';
+import AspectRatioModal from '../../components/project-detail/AspectRatioModal';
 import EditProjectModal from '../../components/project-detail/EditProjectModal';
+import EvidenceUploadModal from '../../components/project-detail/EvidenceUploadModal';
+import HistoryModal from '../../components/project-detail/HistoryModal';
+import NewTaskModal, { NewTaskData } from '../../components/project-detail/NewTaskModal';
+import PlanUploadModal from '../../components/project-detail/PlanUploadModal';
 import ProjectDocuments from '../../components/project-detail/ProjectDocuments';
 import { useCustomAlert } from '../../components/ui/CustomAlert';
-
-// --- Utilidades de Calendario ---
-const daysOfWeek = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+import ItemDetailModal from '../../components/ui/ItemDetailModal';
+import i18n from '../../constants/i18n';
+import { useAuth } from '../../contexts/AuthContext';
+import { useProjects } from '../../contexts/ProjectsContext';
+import api from '../../services/api';
 
 const getDaysInMonth = (month: number, year: number) => new Date(year, month + 1, 0).getDate();
 const getFirstDayOfMonth = (month: number, year: number) => new Date(year, month, 1).getDay();
@@ -97,6 +97,10 @@ export default function ProjectDetailScreen() {
   const projectId = Array.isArray(id) ? id[0] : id;
   const project = projectId ? getProjectById(projectId) : undefined;
   const checklistItems = projectId ? getChecklistByProjectId(projectId) : [];
+
+  const totalTasks = checklistItems.length;
+  const completedTasks = checklistItems.filter(i => i.completed).length;
+  const isAllTasksCompleted = totalTasks > 0 && totalTasks === completedTasks;
   
   const [viewingImageSource, setViewingImageSource] = useState<{ uri: string; headers?: any } | null>(null);
   const [planImageSource, setPlanImageSource] = useState<any>(null);
@@ -123,7 +127,9 @@ export default function ProjectDetailScreen() {
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
   const [filterSearchText, setFilterSearchText] = useState('');
   const [isAspectRatioModalVisible, setIsAspectRatioModalVisible] = useState(false);
-  const [customAspectRatio, setCustomAspectRatio] = useState('1.5');
+  const [isHistoryModalVisible, setIsHistoryModalVisible] = useState(false);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [isEditProjectModalVisible, setIsEditProjectModalVisible] = useState(false);
   const { showAlert, AlertComponent } = useCustomAlert();
   const [pan, setPan] = useState({ x: 0, y: 0 }); // Estado para la posición (Pan)
@@ -241,12 +247,6 @@ export default function ProjectDetailScreen() {
       setIsImageLoading(false);
     };
   }, [project?.architecturalPlanUri, token]);
-
-  useEffect(() => {
-    if (imageAspectRatio !== null) { // Check if imageAspectRatio is not null
-      setCustomAspectRatio(imageAspectRatio.toFixed(2));
-    }
-  }, [imageAspectRatio]);
 
   // Cargar Checklist del Proyecto al entrar
   useEffect(() => {
@@ -372,16 +372,7 @@ export default function ProjectDetailScreen() {
   
   // Estados para agregar items en el plano
   const [imageLayout, setImageLayout] = useState<{ width: number; height: number } | null>(null);
-  const [newItemModal, setNewItemModal] = useState<{ visible: boolean; x: number; y: number; width?: number; height?: number }>({ visible: false, x: 0, y: 0 });
-  const [newItemText, setNewItemText] = useState('');
-  const [newItemAssignedTo, setNewItemAssignedTo] = useState('');
-  const [showUserSuggestions, setShowUserSuggestions] = useState(false);
-  const [newItemStepId, setNewItemStepId] = useState<string | null>(null);
-  const [newItemCategoryId, setNewItemCategoryId] = useState<string | null>(null);
-  const [showStepSelector, setShowStepSelector] = useState(false);
-
-  const [newItemDeadline, setNewItemDeadline] = useState('');
-  const [showCalendar, setShowCalendar] = useState(false);
+  const [newItemModal, setNewItemModal] = useState<{ visible: boolean; x: number; y: number; width?: number; height?: number; initialText?: string; initialStepId?: string | null; initialCategoryId?: string | null }>({ visible: false, x: 0, y: 0 });
   
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [currentDrawing, setCurrentDrawing] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
@@ -641,13 +632,8 @@ export default function ProjectDetailScreen() {
         const pctX = (imgX / baseWidth) * 100;
         const pctY = (imgY / baseHeight) * 100;
 
-        setNewItemText(item.name);
-        setNewItemAssignedTo('');
-        setNewItemStepId(item.id);
-        setNewItemCategoryId(groupId);
-        setNewItemDeadline('');
         setDrawingShape('pin'); // Por defecto Pin al arrastrar
-        setNewItemModal({ visible: true, x: pctX, y: pctY, width: 0, height: 0 });
+        setNewItemModal({ visible: true, x: pctX, y: pctY, width: 0, height: 0, initialText: item.name, initialStepId: item.id, initialCategoryId: groupId });
       }
       setDraggedItem(null);
     }
@@ -683,10 +669,18 @@ export default function ProjectDetailScreen() {
   }
 
   const handleToggleItem = (itemId: string) => {
+    if (project?.status === 'Completed' || (project?.status as string) === 'COMPLETED') {
+      showAlert("Acción Restringida", "No se puede cambiar el estatus de las tareas en un proyecto completado.");
+      return;
+    }
     toggleChecklistItem(projectId, itemId);
   };
 
   const handleStartProject = () => {
+    if ((user?.role as string) !== 'ADMIN') {
+      showAlert("Acceso Denegado", "Solo el administrador puede cambiar el estatus del proyecto.");
+      return;
+    }
     setStartModalVisible(true);
   };
 
@@ -702,8 +696,65 @@ export default function ProjectDetailScreen() {
     setStartModalVisible(false);
   };
 
+  const handleCompleteProject = async () => {
+    if ((user?.role as string) !== 'ADMIN') { // Fix: Ensure user.role is explicitly compared as a string
+      showAlert("Acceso Denegado", "Solo el administrador puede cerrar proyectos.");
+      return;
+    }
+
+    showAlert(
+      "Finalizar Proyecto",
+      "¿Estás seguro de que deseas marcar este proyecto como Completado?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Finalizar",
+          onPress: async () => {
+            try {
+              await api.patch(`/api/projects/${projectId}/status`, { status: 'COMPLETED' });
+              if (refreshProjects) await refreshProjects();
+              showAlert("Éxito", "Proyecto finalizado correctamente.");
+            } catch (error) {
+              console.error(error);
+              showAlert("Error", "No se pudo finalizar el proyecto.");
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleReopenProject = async () => {
+    if ((user?.role as string) !== 'ADMIN') return;
+
+    showAlert(
+      "Reabrir Proyecto",
+      "¿Deseas reabrir este proyecto? El estado cambiará a 'En Progreso'.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Reabrir",
+          onPress: async () => {
+            try {
+              await api.patch(`/api/projects/${projectId}/status`, { status: 'IN_PROGRESS' });
+              if (refreshProjects) await refreshProjects();
+              showAlert("Éxito", "Proyecto reabierto correctamente.");
+            } catch (error) {
+              console.error(error);
+              showAlert("Error", "No se pudo reabrir el proyecto.");
+            }
+          }
+        }
+      ]
+    );
+  };
+
   // --- Funciones para Evidencias (Foto/Video) ---
   const handleAddEvidenceMedia = async (source: 'camera' | 'gallery', cameraType?: 'image' | 'video') => {
+    if (project?.status === 'Completed' || (project?.status as string) === 'COMPLETED') {
+      showAlert("Acción Restringida", "No se pueden subir evidencias en un proyecto completado.");
+      return;
+    }
     if (!selectedItemId) return;
 
     let result;
@@ -756,6 +807,10 @@ export default function ProjectDetailScreen() {
   };
 
   const handleDeleteItem = () => {
+    if (project?.status === 'Completed' || (project?.status as string) === 'COMPLETED') {
+      showAlert("Acción Restringida", "No se pueden eliminar tareas en un proyecto completado.");
+      return;
+    }
     if (selectedItemId) {
       showAlert(
         i18n.t('projectDetail.deleteTask'),
@@ -776,6 +831,10 @@ export default function ProjectDetailScreen() {
   };
 
   const handleDeleteEvidence = (evidenceId: string) => {
+    if (project?.status === 'Completed' || (project?.status as string) === 'COMPLETED') {
+      showAlert("Acción Restringida", "No se pueden eliminar evidencias en un proyecto completado.");
+      return;
+    }
     if (!selectedItemId) return;
     
     showAlert(
@@ -795,6 +854,10 @@ export default function ProjectDetailScreen() {
   };
 
   const handleUploadPlan = () => {
+    if (project?.status === 'Completed' || (project?.status as string)  === 'COMPLETED') {
+      showAlert("Acción Restringida", "No se puede modificar el plano en un proyecto completado.");
+      return;
+    }
     if (project?.architecturalPlanUri) {
       showAlert(
         "Reemplazar Plano",
@@ -984,8 +1047,13 @@ export default function ProjectDetailScreen() {
     );
   };
 
-  const saveNewItem = () => {
-    if (newItemText.trim()) {
+  const saveNewItem = (data: NewTaskData) => {
+    if (project?.status === 'Completed' || (project?.status as string) === 'COMPLETED') {
+      showAlert("Acción Restringida", "No se pueden agregar tareas a un proyecto completado.");
+      return;
+    }
+
+    if (data.text.trim()) {
       // Validación de límites: Verificar que el punto de inserción esté dentro del plano (0-100%)
       if (newItemModal.x < 0 || newItemModal.y < 0 || newItemModal.x > 100 || newItemModal.y > 100) {
         showAlert("Fuera de Límites", "No se puede crear la tarea fuera del área del plano.");
@@ -997,29 +1065,24 @@ export default function ProjectDetailScreen() {
       let finalHeight = newItemModal.height || 0;
 
       // Si se seleccionó una forma de área (rectángulo/círculo) pero no tiene dimensiones (fue un drop), asignar tamaño por defecto
-      if ((drawingShape === 'rectangle' || drawingShape === 'circle') && finalWidth === 0 && finalHeight === 0) {
+      if ((data.shape === 'rectangle' || data.shape === 'circle') && finalWidth === 0 && finalHeight === 0) {
         finalWidth = 15; // 15% del ancho
         finalHeight = 10; // 10% del alto (aprox)
       }
 
       // Validar que el área completa (x + width, y + height) no exceda los límites
       // Se da un pequeño margen (100.5) por posibles redondeos
-      if (drawingShape !== 'pencil' && (newItemModal.x + finalWidth > 100.5 || newItemModal.y + finalHeight > 100.5)) {
+      if (data.shape !== 'pencil' && (newItemModal.x + finalWidth > 100.5 || newItemModal.y + finalHeight > 100.5)) {
         showAlert("Fuera de Límites", "El elemento se sale de los límites del plano. Intenta colocarlo más al centro.");
         setIsSaving(false);
         return;
       }
 
-      addChecklistItem(projectId, newItemText, newItemModal.x, newItemModal.y, finalWidth, finalHeight, newItemAssignedTo, drawingShape, newItemDeadline || undefined, drawingShape === 'pencil' ? currentPencilPath : undefined, drawingShape === 'pencil' ? pencilColor : undefined, newItemStepId || undefined, newItemCategoryId || undefined)
+      addChecklistItem(projectId, data.text, newItemModal.x, newItemModal.y, finalWidth, finalHeight, data.assignedTo, data.shape, data.deadline || undefined, data.shape === 'pencil' ? currentPencilPath : undefined, data.shape === 'pencil' ? pencilColor : undefined, data.stepId || undefined, data.categoryId || undefined)
         .then(() => {
-          setNewItemText('');
-          setNewItemAssignedTo('');
-          setNewItemDeadline('');
           setCurrentPencilPath('');
           setCurrentPencilPathDisplay('');
           // Limpiar dibujo (rectángulo/círculo) al guardar
-          setNewItemStepId(null);
-          setNewItemCategoryId(null);
           setCurrentDrawing(null);
           currentDrawingRef.current = null;
           setNewItemModal({ ...newItemModal, visible: false });
@@ -1056,28 +1119,12 @@ export default function ProjectDetailScreen() {
   };
 
   const handleCloseNewItemModal = () => {
-    setNewItemText('');
-    setNewItemAssignedTo('');
-    setNewItemDeadline('');
-    setNewItemStepId(null);
-    setNewItemCategoryId(null);
-    setShowUserSuggestions(false);
     setCurrentPencilPath('');
     setCurrentPencilPathDisplay('');
     // Limpiar dibujo (rectángulo/círculo) al cancelar
     setCurrentDrawing(null);
     currentDrawingRef.current = null;
     setNewItemModal({ ...newItemModal, visible: false });
-  };
-
-  // Helper para obtener nombre del paso seleccionado
-  const getSelectedStepName = () => {
-    if (!newItemStepId) return 'Seleccionar Categoría/Paso...';
-    for (const group of catalogGroups) {
-      const step = group.items.find(i => i.id === newItemStepId);
-      if (step) return `${group.name} > ${step.name}`;
-    }
-    return 'Paso seleccionado';
   };
 
   const handleCloseItemDetail = () => {
@@ -1210,10 +1257,35 @@ export default function ProjectDetailScreen() {
       <Stack.Screen options={{ title: project.name, headerBackTitle: 'Proyectos' }} />
 
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={styles.title}>{project.name}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginBottom: 8 }}>
+          <Text style={[styles.title, { marginBottom: 0, flexShrink: 1 }]}>{project.name}</Text>
+          {(project.status === 'Completed' || (project?.status as string) === 'COMPLETED') && (
+            <Pressable 
+              onPress={() => {
+                if ((user?.role as string) === 'ADMIN') {
+                  handleReopenProject();
+                } else {
+                  showAlert("Proyecto Cerrado", "Este proyecto está completado y no se pueden realizar modificaciones.");
+                }
+              }}
+              style={{ marginLeft: 8, backgroundColor: '#FED7D7', padding: 4, borderRadius: 6 }}
+            >
+              <Feather name="lock" size={16} color="#C53030" />
+            </Pressable>
+          )}
+        </View>
         {(user?.role as string) === 'ADMIN' && (
-          <Pressable onPress={() => setIsEditProjectModalVisible(true)} style={{ padding: 8 }}>
-            <Feather name="edit-2" size={20} color="#3182CE" />
+          <Pressable 
+            onPress={() => {
+              if (project.status === 'Completed' || (project?.status as string) === 'COMPLETED') {
+                showAlert("Proyecto Cerrado", "No se puede editar un proyecto completado.");
+              } else {
+                setIsEditProjectModalVisible(true);
+              }
+            }} 
+            style={{ padding: 8, marginBottom: 8 }}
+          >
+            <Feather name="edit-2" size={20} color={(project.status === 'Completed' || (project?.status as string) === 'COMPLETED') ? "#A0AEC0" : "#3182CE"} />
           </Pressable>
         )}
       </View>
@@ -1225,16 +1297,35 @@ export default function ProjectDetailScreen() {
       </View>
 
       <View style={styles.statusRow}>
-        <Text style={styles.statusText}>{i18n.t('common.status')}: {
-          project.status === 'Not Started' ? (i18n.t('dashboard.status.notStarted') || 'Not Started') :
-          project.status === 'In Progress' ? i18n.t('dashboard.status.inProgress') :
-          project.status === 'Delayed' ? i18n.t('dashboard.status.delayed') :
-          project.status === 'Completed' ? i18n.t('dashboard.status.completed') : i18n.t('dashboard.status.onTime')
-        }</Text>
+        <Pressable 
+          onPress={() => {
+            setIsHistoryModalVisible(true);
+            setIsLoadingHistory(true);
+            api.get(`/api/audit-logs/entity/${projectId}`)
+              .then(res => setAuditLogs(res.data))
+              .catch(err => console.error(err))
+              .finally(() => setIsLoadingHistory(false));
+          }} 
+          style={{ flexDirection: 'row', alignItems: 'center' }}
+        >
+          <Text style={styles.statusText}>{i18n.t('common.status')}: {
+            project.status === 'Not Started' ? (i18n.t('dashboard.status.notStarted') || 'Not Started') :
+            project.status === 'In Progress' ? i18n.t('dashboard.status.inProgress') :
+            project.status === 'Delayed' ? i18n.t('dashboard.status.delayed') :
+            project.status === 'Completed' ? i18n.t('dashboard.status.completed') : i18n.t('dashboard.status.onTime')
+          }</Text>
+          <Feather name="info" size={16} color="#718096" style={{ marginLeft: 8 }} />
+        </Pressable>
         {project.status === 'Not Started' && (
           <Pressable onPress={handleStartProject} style={styles.inlineStartButton}>
             <Feather name="play-circle" size={16} color="#38A169" />
             <Text style={styles.inlineStartButtonText}>Iniciar</Text>
+          </Pressable>
+        )}
+        {project.status !== 'Completed' && isAllTasksCompleted && (
+          <Pressable onPress={handleCompleteProject} style={[styles.inlineStartButton, { backgroundColor: '#EBF8FF', borderColor: '#3182CE' }]}>
+            <Feather name="check-circle" size={16} color="#3182CE" />
+            <Text style={[styles.inlineStartButtonText, { color: '#3182CE' }]}>Finalizar</Text>
           </Pressable>
         )}
       </View>
@@ -1251,6 +1342,7 @@ export default function ProjectDetailScreen() {
       <ProjectDocuments 
         projectId={projectId} 
         userRole={user?.role as string}
+        projectStatus={project?.status}
         onViewDocument={handleViewDocument as any}
       />
 
@@ -1661,148 +1753,20 @@ export default function ProjectDetailScreen() {
       </Modal>
 
       {/* Modal para agregar nueva tarea en el plano */}
-      <Modal
+      <NewTaskModal
         visible={newItemModal.visible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={handleCloseNewItemModal}
-      >
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.inputModalContainer}
-        >
-          <View style={styles.inputModalContent}>
-            <Text style={styles.inputModalTitle}>{i18n.t('projectDetail.newTaskTitle')}</Text>
-            <TextInput
-              style={styles.input}
-              placeholder={i18n.t('projectDetail.taskDescPlaceholder')}
-              value={newItemText}
-              onChangeText={setNewItemText}
-              autoFocus
-            />
-            
-            {/* Selector de Forma */}
-            <View style={{ marginBottom: 16 }}>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: '#4A5568', marginBottom: 8 }}>Tipo de Marcador</Text>
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <Pressable onPress={() => setDrawingShape('pin')} style={[styles.shapeOption, drawingShape === 'pin' && styles.shapeOptionSelected]}>
-                  <Feather name="map-pin" size={20} color={drawingShape === 'pin' ? '#3182CE' : '#A0AEC0'} />
-                  <Text style={[styles.shapeOptionText, drawingShape === 'pin' && styles.shapeOptionTextSelected]}>Pin</Text>
-                </Pressable>
-                <Pressable onPress={() => setDrawingShape('rectangle')} style={[styles.shapeOption, drawingShape === 'rectangle' && styles.shapeOptionSelected]}>
-                  <Feather name="square" size={20} color={drawingShape === 'rectangle' ? '#3182CE' : '#A0AEC0'} />
-                  <Text style={[styles.shapeOptionText, drawingShape === 'rectangle' && styles.shapeOptionTextSelected]}>Área</Text>
-                </Pressable>
-                <Pressable onPress={() => setDrawingShape('circle')} style={[styles.shapeOption, drawingShape === 'circle' && styles.shapeOptionSelected]}>
-                  <Feather name="circle" size={20} color={drawingShape === 'circle' ? '#3182CE' : '#A0AEC0'} />
-                  <Text style={[styles.shapeOptionText, drawingShape === 'circle' && styles.shapeOptionTextSelected]}>Círculo</Text>
-                </Pressable>
-              </View>
-            </View>
-
-            {/* Selector de Categoría/Paso (ComboBox) */}
-            <View style={{ marginBottom: 16, zIndex: 20 }}>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: '#4A5568', marginBottom: 8 }}>Asociar a Catálogo (Opcional)</Text>
-              <Pressable 
-                style={[styles.input, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 0 }]}
-                onPress={() => setShowStepSelector(!showStepSelector)}
-              >
-                <Text style={{ color: newItemStepId ? '#2D3748' : '#A0AEC0', flex: 1 }} numberOfLines={1}>
-                  {getSelectedStepName()}
-                </Text>
-                <Feather name={showStepSelector ? "chevron-up" : "chevron-down"} size={20} color="#718096" />
-              </Pressable>
-              
-              {showStepSelector && (
-                <View style={styles.suggestionsContainer}>
-                  <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled={true}>
-                    {catalogGroups.map(group => (
-                      <View key={group.id}>
-                        <Text style={{ padding: 8, backgroundColor: '#F7FAFC', fontWeight: 'bold', color: '#718096', fontSize: 12 }}>{group.name}</Text>
-                        {group.items.map(step => (
-                          <Pressable 
-                            key={step.id}
-                            style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: '#EDF2F7', paddingLeft: 24 }}
-                            onPress={() => {
-                              setNewItemStepId(step.id);
-                              setNewItemCategoryId(group.id);
-                              setNewItemText(step.name); // Opcional: Actualizar texto
-                              setShowStepSelector(false);
-                            }}
-                          >
-                            <Text style={{ fontSize: 14, color: '#2D3748' }}>{step.name}</Text>
-                          </Pressable>
-                        ))}
-                      </View>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-            </View>
-
-            {/* Input con Buscador de Usuarios */}
-            <View style={{ zIndex: 10, marginBottom: 16 }}>
-              <TextInput
-                style={[styles.input, { marginBottom: 0 }]}
-                placeholder={i18n.t('projectDetail.assignToPlaceholder')}
-                value={newItemAssignedTo}
-                onChangeText={(text) => {
-                  setNewItemAssignedTo(text);
-                  setShowUserSuggestions(text.length > 0);
-                }}
-                onFocus={() => setShowUserSuggestions(newItemAssignedTo.length > 0)}
-              />
-              {showUserSuggestions && (
-                <View style={styles.suggestionsContainer}>
-                  <ScrollView style={{ maxHeight: 150 }} keyboardShouldPersistTaps="handled">
-                    {availableUsers.filter(u => (u.username || '').toLowerCase().includes(newItemAssignedTo.toLowerCase())).map(user => (
-                      <Pressable 
-                        key={user.id} 
-                        style={styles.suggestionItem}
-                        onPress={() => {
-                          setNewItemAssignedTo(user.username);
-                          setShowUserSuggestions(false);
-                        }}
-                      >
-                        <Text style={styles.suggestionText}>{user.username}</Text>
-                        <Text style={styles.suggestionRole}>{user.role}</Text>
-                      </Pressable>
-                    ))}
-                    {availableUsers.filter(u => (u.username || '').toLowerCase().includes(newItemAssignedTo.toLowerCase())).length === 0 && (
-                      <View style={styles.suggestionItem}>
-                        <Text style={[styles.suggestionText, { color: '#A0AEC0', fontStyle: 'italic' }]}>No users found</Text>
-                      </View>
-                    )}
-                  </ScrollView>
-                </View>
-              )}
-            </View>
-
-            {/* Selector de Fecha Límite */}
-            <View style={{ marginBottom: 16 }}>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: '#4A5568', marginBottom: 8 }}>Fecha Límite (Opcional)</Text>
-              <Pressable 
-                style={[styles.input, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 0 }]}
-                onPress={() => setShowCalendar(true)}
-              >
-                <Text style={{ color: newItemDeadline ? '#2D3748' : '#A0AEC0' }}>{newItemDeadline || 'Seleccionar fecha'}</Text>
-                <Feather name="calendar" size={20} color="#718096" />
-              </Pressable>
-            </View>
-
-            <View style={styles.modalButtons}>
-              <Pressable style={[styles.modalButton, styles.cancelButton]} onPress={handleCloseNewItemModal}><Text>{i18n.t('common.cancel')}</Text></Pressable>
-              <Pressable 
- style={[styles.modalButton, styles.saveButton, isSaving && { opacity: 0.7 }]}
-                onPress={saveNewItem}
-                disabled={isSaving}
-              >
-                {isSaving ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.saveButtonText}>{i18n.t('common.save')}</Text>}
-              </Pressable>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        onClose={handleCloseNewItemModal}
+        onSave={saveNewItem}
+        isSaving={isSaving}
+        catalogGroups={catalogGroups}
+        availableUsers={availableUsers}
+        initialData={{
+          text: newItemModal.initialText,
+          stepId: newItemModal.initialStepId,
+          categoryId: newItemModal.initialCategoryId,
+          shape: drawingShape
+        }}
+      />
 
       <ItemDetailModal
         visible={!!selectedItem}
@@ -1832,12 +1796,6 @@ export default function ProjectDetailScreen() {
         onUpdate={handleUpdateProjectDetails}
       />
 
-      {/* Modal de Calendario */}
-      <CalendarPickerModal 
-        visible={showCalendar} 
-        onClose={() => setShowCalendar(false)} 
-        onSelect={setNewItemDeadline} 
-      />
 
       {/* Modal de Confirmación de Inicio */}
       <Modal
@@ -1865,107 +1823,30 @@ export default function ProjectDetailScreen() {
       </Modal>
 
       {/* Modal de Ajuste de Aspect Ratio (PDF) */}
-      <Modal
+      <AspectRatioModal
         visible={isAspectRatioModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setIsAspectRatioModalVisible(false)}
-      >
-        <View style={styles.inputModalContainer}>
-          <View style={styles.inputModalContent}>
-            <Text style={styles.inputModalTitle}>Ajustar Proporción (PDF)</Text>
-            <Text style={{ marginBottom: 16, color: '#718096' }}>Si el PDF se ve deformado, selecciona una proporción diferente:</Text>
-            
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-              {[
-                { label: '1:1', value: 1 },
-                { label: '4:3', value: 4/3 },
-                { label: '3:2', value: 1.5 },
-                { label: '16:9', value: 16/9 },
-                { label: '3:4', value: 3/4 },
-                { label: '2:3', value: 2/3 },
-              ].map(opt => (
-                <Pressable 
-                  key={opt.label} 
-                  style={[styles.shapeOption, Math.abs((imageAspectRatio || 1) - opt.value) < 0.01 && styles.shapeOptionSelected]}
-                  onPress={() => setImageAspectRatio(opt.value)}
-                >
-                  <Text style={[styles.shapeOptionText, Math.abs((imageAspectRatio || 1) - opt.value) < 0.01 && styles.shapeOptionTextSelected]}>{opt.label}</Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <Text style={{ marginBottom: 8, fontWeight: '600', color: '#4A5568' }}>Personalizado:</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24 }}>
-               <TextInput 
-                  style={[styles.input, { marginBottom: 0, flex: 1 }]} 
-                  keyboardType="numeric"
-                  placeholder="Ej. 1.5"
-                  value={customAspectRatio}
-                  onChangeText={setCustomAspectRatio}
-                  onEndEditing={() => {
-                    const val = parseFloat(customAspectRatio);
-                    if (!isNaN(val) && val > 0) setImageAspectRatio(val);
-                  }}
-               />
-               <Pressable 
-                 style={[styles.modalButton, { backgroundColor: '#3182CE', marginLeft: 8 }]}
-                 onPress={() => {
-                    const val = parseFloat(customAspectRatio);
-                    if (!isNaN(val) && val > 0) setImageAspectRatio(val);
-                 }}
-               >
-                 <Text style={{ color: '#FFF' }}>Aplicar</Text>
-               </Pressable>
-            </View>
-
-            <Pressable style={[styles.modalButton, styles.cancelButton, { width: '100%', marginLeft: 0 }]} onPress={() => setIsAspectRatioModalVisible(false)}>
-              <Text style={{ fontWeight: 'bold', color: '#4A5568', textAlign: 'center' }}>Cerrar</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setIsAspectRatioModalVisible(false)}
+        currentAspectRatio={imageAspectRatio}
+        onAspectRatioChange={setImageAspectRatio}
+      />
 
       {/* Modal de Progreso de Carga */}
-      <Modal
+      <PlanUploadModal
         visible={isUploading}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => {}}
-      >
-        <View style={styles.inputModalContainer}>
-          <View style={styles.inputModalContent}>
-            <Text style={styles.inputModalTitle}>Subiendo Plano</Text>
-            <Text style={{ fontSize: 16, color: '#4A5568', marginBottom: 16, textAlign: 'center' }}>
-              Por favor espere... {uploadProgress}%
-            </Text>
-            <View style={{ height: 10, backgroundColor: '#EDF2F7', borderRadius: 5, width: '100%', overflow: 'hidden', marginBottom: 20 }}>
-              <View style={{ height: '100%', backgroundColor: '#3182CE', width: `${uploadProgress}%` }} />
-            </View>
-            <Pressable style={[styles.modalButton, styles.cancelButton, { width: '100%', marginLeft: 0 }]} onPress={handleCancelUpload}>
-              <Text style={{ fontWeight: 'bold', color: '#E53E3E', textAlign: 'center' }}>Cancelar Subida</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+        progress={uploadProgress}
+        onCancel={handleCancelUpload}
+      />
+
+      {/* Modal de Historial de Cambios */}
+      <HistoryModal
+        visible={isHistoryModalVisible}
+        onClose={() => setIsHistoryModalVisible(false)}
+        isLoading={isLoadingHistory}
+        auditLogs={auditLogs}
+      />
 
       {/* Modal de Carga de Evidencia */}
-      <Modal
-        visible={isEvidenceUploading}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => {}}
-      >
-        <View style={styles.inputModalContainer}>
-          <View style={styles.inputModalContent}>
-            <Text style={styles.inputModalTitle}>Subiendo Evidencia</Text>
-            <View style={{ alignItems: 'center', paddingVertical: 20 }}>
-              <ActivityIndicator size="large" color="#3182CE" />
-              <Text style={{ marginTop: 16, color: '#718096' }}>Procesando archivo...</Text>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <EvidenceUploadModal visible={isEvidenceUploading} />
 
       <AlertComponent />
       </ScrollView>
@@ -2206,16 +2087,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     borderRadius: 20,
   },
-  // Estilos Modal Input
-  inputModalContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', width: '100%' },
-  inputModalContent: { width: '85%', maxWidth: 400, backgroundColor: '#FFF', padding: 20, borderRadius: 12, elevation: 5 },
-  inputModalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16 },
-  input: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 16 },
-  shapeOption: { flexDirection: 'row', alignItems: 'center', padding: 8, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, backgroundColor: '#F7FAFC' },
-  shapeOptionSelected: { borderColor: '#3182CE', backgroundColor: '#EBF8FF' },
-  shapeOptionText: { marginLeft: 6, fontSize: 14, color: '#718096' },
-  shapeOptionTextSelected: { color: '#3182CE', fontWeight: '600' },
-  modalButtons: { flexDirection: 'row', justifyContent: 'flex-end' },
   modalButton: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 8, marginLeft: 8 },
   cancelButton: { backgroundColor: '#EDF2F7' },
   saveButton: { backgroundColor: '#3182CE' },
@@ -2268,11 +2139,6 @@ const styles = StyleSheet.create({
   deleteButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#E53E3E', padding: 12, borderRadius: 8, marginTop: 24 },
   deleteButtonText: { color: '#FFF', fontWeight: 'bold', marginLeft: 8, fontFamily: 'Inter-Bold' },
 
-  // Estilos para sugerencias de usuarios
-  suggestionsContainer: { position: 'absolute', top: 50, left: 0, right: 0, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderBottomLeftRadius: 8, borderBottomRightRadius: 8, elevation: 5, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, maxHeight: 150 },
-  suggestionItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: '#EDF2F7' },
-  suggestionText: { fontSize: 14, color: '#2D3748', fontWeight: '500', fontFamily: 'Inter-Medium' },
-  suggestionRole: { fontSize: 12, color: '#718096', fontFamily: 'Inter-Regular' },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(247, 250, 252, 0.8)',
@@ -2295,4 +2161,11 @@ const styles = StyleSheet.create({
   draggedGhostText: { color: '#FFF', fontWeight: 'bold', fontFamily: 'Inter-Bold' },
   panelHandleContainer: { width: '100%', alignItems: 'center', paddingVertical: 10, marginTop: -10, marginBottom: 5 },
   panelHandle: { width: 40, height: 5, borderRadius: 3, backgroundColor: '#CBD5E0' },
+
+  // Estilos Modales Generales (Restaurados)
+  inputModalContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', width: '100%' },
+  inputModalContent: { width: '85%', maxWidth: 400, backgroundColor: '#FFF', padding: 20, borderRadius: 12, elevation: 5 },
+  inputModalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16 },
+  input: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 16, backgroundColor: '#FFF' },
+  modalButtons: { flexDirection: 'row', justifyContent: 'flex-end' },
 });

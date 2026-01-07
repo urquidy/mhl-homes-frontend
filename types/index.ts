@@ -19,11 +19,17 @@ export interface Project {
   status: ProjectStatus;
   address?: string;
   progress: number;
-  participants: string[];
+  participants: any[];
   architecturalPlanUri?: string;
   imageUri?: string;
   startDate?: string;
   endDate?: string;
+  statusHistory?: {
+    status: ProjectStatus;
+    changedBy: string;
+    date: string;
+    comment?: string;
+  }[];
 }
 
 export interface Evidence {

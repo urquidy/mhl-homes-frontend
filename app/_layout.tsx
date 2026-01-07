@@ -1,6 +1,7 @@
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, View, Image, StyleSheet, Animated } from 'react-native';
+import { useFonts } from 'expo-font';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { ProjectsProvider } from '../contexts/ProjectsContext';
 import { EventsProvider } from '../contexts/EventsContext';
@@ -12,8 +13,14 @@ function InitialLayout() {
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const [isSplashVisible, setSplashVisible] = useState(true);
 
+  const [fontsLoaded] = useFonts({
+    'DMSans-Regular': require('@/assets/fonts/DMSans-Regular.ttf'),
+    'DMSans-Medium': require('@/assets/fonts/DMSans-Medium.ttf'),
+    'DMSans-Bold': require('@/assets/fonts/DMSans-Bold.ttf'),
+  });
+
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || !fontsLoaded) return;
 
     const inAuthGroup = segments[0] === '(auth)';
 
@@ -33,12 +40,12 @@ function InitialLayout() {
     }).start(() => {
       setSplashVisible(false); // Desmontar componente al terminar
     });
-  }, [user, isLoading, segments]);
+  }, [user, isLoading, segments, fontsLoaded]);
 
   return (
     <View style={{ flex: 1 }}>
       {/* Renderizamos la App (Slot) pero oculta detrás del Splash hasta que cargue */}
-      {!isLoading && <Slot />}
+      {!isLoading && fontsLoaded && <Slot />}
       
       {isSplashVisible && (
         <Animated.View
