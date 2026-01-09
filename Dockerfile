@@ -1,21 +1,24 @@
-FROM node:20-alpine
+# Etapa 1: Construcción (Builder)
+FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+# Copiar archivos de dependencias
+COPY package*.json ./
 RUN npm install
 
+# Copiar el resto del código y construir
 COPY . .
-
-# Argumento para la URL de la API (se pasa desde docker-compose)
-ARG EXPO_PUBLIC_API_URL
-ENV EXPO_PUBLIC_API_URL=${EXPO_PUBLIC_API_URL}
-
-# Generar los archivos estáticos para web (carpeta dist)
+# Expo Router exporta por defecto a la carpeta 'dist' para web
 RUN npx expo export -p web
 
-RUN npm install -g serve
+# Etapa 2: Producción (Nginx)
+FROM nginx:alpine
+
+# Copiar los archivos estáticos generados en la etapa anterior
+COPY --from=builder /app/dist /usr/share/nginx/html
+# Copiar configuración personalizada de Nginx
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
-
-CMD ["serve", "-s", "dist", "-l", "80"]
+CMD ["nginx", "-g", "daemon off;"]
