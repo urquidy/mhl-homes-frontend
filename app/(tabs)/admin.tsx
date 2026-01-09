@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import RolesManager from '../../components/admin/RolesManager';
 import { useCustomAlert } from '../../components/ui/CustomAlert';
+import i18n from '../../constants/i18n';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePermission } from '../../hooks/usePermission';
 import api from '../../services/api';
@@ -10,7 +11,7 @@ import api from '../../services/api';
 export default function AdminScreen() {
   const { user } = useAuth();
   const { hasPermission } = usePermission();
-  const [currentView, setCurrentView] = useState<'menu' | 'users' | 'project-steps' | 'roles'>('menu');
+  const [currentView, setCurrentView] = useState<'menu' | 'users' | 'project-steps' | 'roles' | 'agenda-types'>('menu');
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -29,6 +30,12 @@ export default function AdminScreen() {
   const [stepFormData, setStepFormData] = useState({ name: '', description: '', order: '1', type: 'CATEGORY', parentId: null as string | null });
   const [editingStep, setEditingStep] = useState<any>(null);
 
+  // Estado para Tipos de Agenda (Catálogo Genérico)
+  const [agendaTypes, setAgendaTypes] = useState<any[]>([]);
+  const [agendaTypeModalVisible, setAgendaTypeModalVisible] = useState(false);
+  const [agendaTypeFormData, setAgendaTypeFormData] = useState({ name: '', description: '', primaryColor: '#3182CE', icon: 'calendar' });
+  const [editingAgendaType, setEditingAgendaType] = useState<any>(null);
+
   const fetchUsers = async () => {
     setLoading(true);
     try {
@@ -36,7 +43,7 @@ export default function AdminScreen() {
       setUsers(response.data);
     } catch (error) {
       console.error('Error fetching users:', error);
-      showAlert('Error', 'No se pudieron cargar los usuarios.');
+      showAlert(i18n.t('common.error'), i18n.t('admin.errorLoadingUsers'));
     } finally {
       setLoading(false);
     }
@@ -58,7 +65,19 @@ export default function AdminScreen() {
       setProjectSteps(response.data);
     } catch (error) {
       console.error('Error fetching project steps:', error);
-      showAlert('Error', 'No se pudieron cargar los pasos del proyecto.');
+      showAlert(i18n.t('common.error'), i18n.t('admin.errorLoadingSteps'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchAgendaTypes = async () => {
+    setLoading(true);
+    try {
+      const response = await api.get('/api/catalogs/type/AGENDA_TYPE');
+      setAgendaTypes(response.data || []);
+    } catch (error) {
+      console.error('Error fetching agenda types:', error);
     } finally {
       setLoading(false);
     }
@@ -70,6 +89,8 @@ export default function AdminScreen() {
       fetchRoles();
     } else if (currentView === 'project-steps') {
       fetchProjectSteps();
+    } else if (currentView === 'agenda-types') {
+      fetchAgendaTypes();
     }
   }, [currentView]);
 
@@ -77,13 +98,13 @@ export default function AdminScreen() {
   useEffect(() => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const isEmailValid = emailRegex.test(formData.email);
-    const isUsernameValid = formData.username.trim().length > 0;
+    const isUsernameValid = (formData.username || '').trim().length > 0;
     // La contraseña es obligatoria solo si estamos creando un usuario nuevo (editingUser es null)
-    const isPasswordValid = editingUser ? true : formData.password.trim().length > 0;
-    const isRoleValid = formData.role.trim().length > 0;
+    const isPasswordValid = editingUser ? true : (formData.password || '').trim().length > 0;
+    const isRoleValid = (formData.role || '').trim().length > 0;
 
     if (formData.email.length > 0 && !isEmailValid) {
-      setEmailError('Por favor ingresa un correo electrónico válido.');
+      setEmailError(i18n.t('admin.invalidEmail'));
     } else {
       setEmailError(null);
     }
@@ -93,21 +114,21 @@ export default function AdminScreen() {
 
   const handleDeleteUser = (userId: string) => {
     showAlert(
-      'Eliminar Usuario',
-      '¿Estás seguro de que deseas eliminar este usuario? Esta acción no se puede deshacer.',
+      i18n.t('admin.deleteUser'),
+      i18n.t('admin.deleteUserConfirmation'),
       [
-        { text: 'Cancelar', style: 'cancel' },
+        { text: i18n.t('common.cancel'), style: 'cancel' },
         {
-          text: 'Eliminar',
+          text: i18n.t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             try {
               await api.delete(`/api/users/${userId}`);
               setUsers(prev => prev.filter(u => u.id !== userId));
-              showAlert('Éxito', 'Usuario eliminado correctamente.');
+              showAlert(i18n.t('common.success'), i18n.t('admin.userDeleted'));
             } catch (error) {
               console.error('Error deleting user:', error);
-              showAlert('Error', 'No se pudo eliminar el usuario.');
+              showAlert(i18n.t('common.error'), i18n.t('admin.errorDeletingUser'));
             }
           }
         }
@@ -152,10 +173,10 @@ export default function AdminScreen() {
       const response = await api.post('/api/users', payload);
       setUsers(prev => [...prev, response.data]);
       setEditModalVisible(false);
-      showAlert('Éxito', 'Usuario creado correctamente.');
+      showAlert(i18n.t('common.success'), i18n.t('admin.userCreated'));
     } catch (error) {
       console.error('Error creating user:', error);
-      showAlert('Error', 'No se pudo crear el usuario.');
+      showAlert(i18n.t('common.error'), i18n.t('admin.errorCreatingUser'));
     }
   };
 
@@ -175,10 +196,10 @@ export default function AdminScreen() {
       await api.put(`/api/users/${editingUser.id}`, payload);
       setUsers(prev => prev.map(u => u.id === editingUser.id ? { ...u, ...formData } : u));
       setEditModalVisible(false);
-      showAlert('Éxito', 'Usuario actualizado correctamente.');
+      showAlert(i18n.t('common.success'), i18n.t('admin.userUpdated'));
     } catch (error) {
       console.error('Error updating user:', error);
-      showAlert('Error', 'No se pudo actualizar el usuario.');
+      showAlert(i18n.t('common.error'), i18n.t('admin.errorUpdatingUser'));
     }
   };
 
@@ -208,13 +229,13 @@ export default function AdminScreen() {
   };
 
   const handleSaveStep = async () => {
-    if (!stepFormData.name.trim()) {
-      showAlert('Error', 'El nombre es obligatorio.');
+    if (!(stepFormData.name || '').trim()) {
+      showAlert(i18n.t('common.error'), i18n.t('admin.nameRequired'));
       return;
     }
 
     if (stepFormData.type === 'STEP' && !stepFormData.parentId) {
-      showAlert('Error', 'El paso debe tener una categoría padre asignada.');
+      showAlert(i18n.t('common.error'), i18n.t('admin.parentCategoryRequired'));
       return;
     }
 
@@ -231,41 +252,107 @@ export default function AdminScreen() {
 
       if (editingStep) {
         await api.put(`/api/project-steps/${editingStep.id}`, payload);
-        showAlert('Éxito', 'Elemento actualizado correctamente.');
+        showAlert(i18n.t('common.success'), i18n.t('admin.elementUpdated'));
       } else {
         await api.post('/api/project-steps', payload);
-        showAlert('Éxito', 'Elemento creado correctamente.');
+        showAlert(i18n.t('common.success'), i18n.t('admin.elementCreated'));
       }
       setStepModalVisible(false);
       fetchProjectSteps();
     } catch (error) {
       console.error('Error saving step:', error);
-      showAlert('Error', 'No se pudo guardar el elemento.');
+      showAlert(i18n.t('common.error'), i18n.t('admin.errorSavingElement'));
     }
   };
 
   const handleDeleteStep = (id: string) => {
     showAlert(
-      'Eliminar Elemento',
-      '¿Estás seguro? Se eliminarán también los elementos hijos.',
+      i18n.t('admin.deleteElement'),
+      i18n.t('admin.deleteElementConfirmation'),
       [
-        { text: 'Cancelar', style: 'cancel' },
+        { text: i18n.t('common.cancel'), style: 'cancel' },
         {
-          text: 'Eliminar',
+          text: i18n.t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             try {
               await api.delete(`/api/project-steps/${id}`);
               fetchProjectSteps();
-              showAlert('Éxito', 'Elemento eliminado.');
+              showAlert(i18n.t('common.success'), i18n.t('admin.elementDeleted'));
             } catch (error) {
               console.error('Error deleting step:', error);
-              showAlert('Error', 'No se pudo eliminar el elemento.');
+              showAlert(i18n.t('common.error'), i18n.t('admin.errorDeletingElement'));
             }
           }
         }
       ]
     );
+  };
+
+  // --- FUNCIONES PARA TIPOS DE AGENDA ---
+  const openCreateAgendaTypeModal = () => {
+    setEditingAgendaType(null);
+    setAgendaTypeFormData({ name: '', description: '', primaryColor: '#3182CE', icon: 'calendar' });
+    setAgendaTypeModalVisible(true);
+  };
+
+  const openEditAgendaTypeModal = (item: any) => {
+    setEditingAgendaType(item);
+    setAgendaTypeFormData({
+      name: item.name,
+      description: item.description || '',
+      primaryColor: item.metadata?.primaryColor || '#3182CE',
+      icon: item.metadata?.icon || 'calendar'
+    });
+    setAgendaTypeModalVisible(true);
+  };
+
+  const handleSaveAgendaType = async () => {
+    if (!agendaTypeFormData.name.trim()) {
+      showAlert(i18n.t('common.error'), i18n.t('admin.nameRequired'));
+      return;
+    }
+
+    try {
+      const payload = {
+        type: 'AGENDA_TYPE',
+        name: agendaTypeFormData.name,
+        description: agendaTypeFormData.description,
+        metadata: {
+          primaryColor: agendaTypeFormData.primaryColor,
+          icon: agendaTypeFormData.icon
+        }
+      };
+
+      if (editingAgendaType) {
+        await api.put(`/api/catalogs/${editingAgendaType.id}`, payload);
+        showAlert(i18n.t('common.success'), i18n.t('admin.agendaTypeUpdated'));
+      } else {
+        await api.post('/api/catalogs', payload);
+        showAlert(i18n.t('common.success'), i18n.t('admin.agendaTypeCreated'));
+      }
+      setAgendaTypeModalVisible(false);
+      fetchAgendaTypes();
+    } catch (error) {
+      console.error('Error saving agenda type:', error);
+      showAlert(i18n.t('common.error'), i18n.t('admin.errorSavingAgendaType'));
+    }
+  };
+
+  const handleDeleteAgendaType = (id: string) => {
+    showAlert(i18n.t('admin.deleteAgendaType'), i18n.t('admin.deleteAgendaTypeConfirmation'), [
+      { text: i18n.t('common.cancel'), style: 'cancel' },
+      { text: i18n.t('common.delete'), style: 'destructive', onPress: async () => {
+        try {
+          await api.delete(`/api/catalogs/${id}`);
+          fetchAgendaTypes();
+          showAlert(i18n.t('common.success'), i18n.t('admin.agendaTypeDeleted'));
+        } catch (error) {
+          console.error('Error deleting agenda type:', error);
+          showAlert(i18n.t('common.error'), i18n.t('admin.errorDeletingAgendaType'));
+        }
+      }}
+    ]);
   };
 
   const renderUserItem = ({ item }: { item: any }) => {
@@ -311,7 +398,7 @@ export default function AdminScreen() {
           <Pressable onPress={() => setCurrentView('menu')} style={styles.backButton}>
             <Feather name="arrow-left" size={24} color="#4A5568" />
           </Pressable>
-          <Text style={styles.title}>Gestión de Usuarios</Text>
+          <Text style={styles.title}>{i18n.t('admin.userManagement')}</Text>
         </View>
 
         {loading ? (
@@ -322,7 +409,7 @@ export default function AdminScreen() {
             keyExtractor={item => item.id}
             renderItem={renderUserItem}
             contentContainerStyle={styles.listContent}
-            ListEmptyComponent={<Text style={styles.emptyText}>No hay usuarios registrados.</Text>}
+            ListEmptyComponent={<Text style={styles.emptyText}>{i18n.t('admin.noUsers')}</Text>}
           />
         )}
 
@@ -339,13 +426,13 @@ export default function AdminScreen() {
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>{editingUser ? 'Editar Usuario' : 'Nuevo Usuario'}</Text>
+                <Text style={styles.modalTitle}>{editingUser ? i18n.t('admin.editUser') : i18n.t('admin.newUser')}</Text>
                 <Pressable onPress={() => setEditModalVisible(false)}>
                   <Feather name="x" size={24} color="#4A5568" />
                 </Pressable>
               </View>
 
-              <Text style={styles.label}>Usuario</Text>
+              <Text style={styles.label}>{i18n.t('common.username')}</Text>
               <TextInput
                 style={styles.input}
                 value={formData.username}
@@ -362,17 +449,17 @@ export default function AdminScreen() {
               />
               {emailError && <Text style={styles.errorText}>{emailError}</Text>}
 
-              <Text style={styles.label}>{editingUser ? 'Nueva Contraseña' : 'Contraseña'}</Text>
+              <Text style={styles.label}>{editingUser ? i18n.t('profile.newPassword') : i18n.t('common.password')}</Text>
               <TextInput
                 style={styles.input}
                 value={formData.password}
                 onChangeText={text => setFormData({...formData, password: text})}
                 secureTextEntry
-                placeholder={editingUser ? "Dejar en blanco para mantener" : ""}
+                placeholder={editingUser ? i18n.t('admin.leaveBlankToKeep') : ""}
                 placeholderTextColor="#A0AEC0"
               />
 
-              <Text style={styles.label}>Rol</Text>
+              <Text style={styles.label}>{i18n.t('common.role')}</Text>
               <View style={[styles.roleSelector, { flexWrap: 'wrap' }]}>
                 {roles.map(role => (
                   <Pressable 
@@ -387,7 +474,7 @@ export default function AdminScreen() {
                   </Pressable>
                 ))}
                 {roles.length === 0 && (
-                  <Text style={{ color: '#A0AEC0', fontStyle: 'italic' }}>Cargando roles...</Text>
+                  <Text style={{ color: '#A0AEC0', fontStyle: 'italic' }}>{i18n.t('admin.loadingRoles')}</Text>
                 )}
               </View>
 
@@ -396,7 +483,7 @@ export default function AdminScreen() {
                 onPress={editingUser ? handleUpdateUser : handleCreateUser}
                 disabled={!isFormValid}
               >
-                <Text style={styles.saveButtonText}>{editingUser ? 'Guardar Cambios' : 'Crear Usuario'}</Text>
+                <Text style={styles.saveButtonText}>{editingUser ? i18n.t('common.saveChanges') : i18n.t('admin.createUser')}</Text>
               </Pressable>
             </View>
           </View>
@@ -413,7 +500,7 @@ export default function AdminScreen() {
           <Pressable onPress={() => setCurrentView('menu')} style={styles.backButton}>
             <Feather name="arrow-left" size={24} color="#4A5568" />
           </Pressable>
-          <Text style={styles.title}>Pasos del Proyecto</Text>
+          <Text style={styles.title}>{i18n.t('admin.projectSteps')}</Text>
         </View>
 
         {loading ? (
@@ -424,13 +511,13 @@ export default function AdminScreen() {
               <View key={category.id} style={styles.treeNode}>
                 {/* Nodo Categoría */}
                 <View style={styles.treeNodeHeader}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
                     <View style={[styles.treeNodeIcon, { backgroundColor: '#EBF8FF' }]}>
                       <Feather name="folder" size={20} color="#3182CE" />
                     </View>
-                    <View>
-                      <Text style={styles.treeNodeTitle}>{category.name}</Text>
-                      <Text style={styles.treeNodeSubtitle}>{category.description}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.treeNodeTitle} numberOfLines={1}>{category.name}</Text>
+                      <Text style={styles.treeNodeSubtitle} numberOfLines={1}>{category.description}</Text>
                     </View>
                   </View>
                   <View style={styles.treeNodeActions}>
@@ -449,9 +536,9 @@ export default function AdminScreen() {
                 {/* Nodos Hijos (Pasos) */}
                 {category.children && category.children.map((step: any) => (
                   <View key={step.id} style={styles.treeChildNode}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
                       <Feather name="corner-down-right" size={16} color="#A0AEC0" style={{ marginRight: 8 }} />
-                      <Text style={styles.treeChildTitle}>{step.name}</Text>
+                      <Text style={styles.treeChildTitle} numberOfLines={1}>{step.name}</Text>
                     </View>
                     <View style={styles.treeNodeActions}>
                       <Pressable onPress={() => openEditStepModal(step)} style={styles.actionButton}>
@@ -465,7 +552,7 @@ export default function AdminScreen() {
                 ))}
               </View>
             ))}
-            {projectSteps.length === 0 && <Text style={styles.emptyText}>No hay pasos configurados.</Text>}
+            {projectSteps.length === 0 && <Text style={styles.emptyText}>{i18n.t('admin.noSteps')}</Text>}
           </ScrollView>
         )}
 
@@ -484,28 +571,28 @@ export default function AdminScreen() {
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>
-                  {editingStep ? 'Editar Elemento' : (stepFormData.parentId ? 'Nuevo Paso' : 'Nueva Categoría')}
+                  {editingStep ? i18n.t('admin.editElement') : (stepFormData.parentId ? i18n.t('admin.newStep') : i18n.t('admin.newCategory'))}
                 </Text>
                 <Pressable onPress={() => setStepModalVisible(false)}>
                   <Feather name="x" size={24} color="#4A5568" />
                 </Pressable>
               </View>
 
-              <Text style={styles.label}>Nombre</Text>
+              <Text style={styles.label}>{i18n.t('common.name')}</Text>
               <TextInput
                 style={styles.input}
                 value={stepFormData.name}
                 onChangeText={text => setStepFormData({...stepFormData, name: text})}
               />
 
-              <Text style={styles.label}>Descripción</Text>
+              <Text style={styles.label}>{i18n.t('common.description')}</Text>
               <TextInput
                 style={styles.input}
                 value={stepFormData.description}
                 onChangeText={text => setStepFormData({...stepFormData, description: text})}
               />
 
-              <Text style={styles.label}>Orden</Text>
+              <Text style={styles.label}>{i18n.t('common.order')}</Text>
               <TextInput
                 style={styles.input}
                 value={stepFormData.order}
@@ -514,8 +601,99 @@ export default function AdminScreen() {
               />
 
               <Pressable style={styles.saveButton} onPress={handleSaveStep}>
-                <Text style={styles.saveButtonText}>Guardar</Text>
+                <Text style={styles.saveButtonText}>{i18n.t('common.save')}</Text>
               </Pressable>
+            </View>
+          </View>
+        </Modal>
+        <AlertComponent />
+      </View>
+    );
+  }
+
+  if (currentView === 'agenda-types') {
+    return (
+      <View style={styles.container}>
+        <View style={styles.headerRow}>
+          <Pressable onPress={() => setCurrentView('menu')} style={styles.backButton}>
+            <Feather name="arrow-left" size={24} color="#4A5568" />
+          </Pressable>
+          <Text style={styles.title}>{i18n.t('admin.agendaTypes')}</Text>
+        </View>
+
+        {loading ? (
+          <ActivityIndicator size="large" color="#3182CE" style={{ marginTop: 20 }} />
+        ) : (
+          <FlatList
+            data={agendaTypes}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.listContent}
+            ListEmptyComponent={<Text style={styles.emptyText}>{i18n.t('admin.noAgendaTypes')}</Text>}
+            renderItem={({ item }) => (
+              <View style={styles.userRow}>
+                <View style={[styles.colorPreview, { backgroundColor: item.metadata?.primaryColor || '#CBD5E0', justifyContent: 'center', alignItems: 'center' }]}>
+                  <Feather name={item.metadata?.icon || 'calendar'} size={14} color="#FFF" />
+                </View>
+                <View style={styles.userInfo}>
+                  <Text style={styles.userName}>{item.name}</Text>
+                  <Text style={styles.userEmail}>{item.description}</Text>
+                </View>
+                <View style={styles.actions}>
+                  <Pressable onPress={() => openEditAgendaTypeModal(item)} style={styles.actionButton}>
+                    <Feather name="edit-2" size={20} color="#3182CE" />
+                  </Pressable>
+                  <Pressable onPress={() => handleDeleteAgendaType(item.id)} style={[styles.actionButton, { marginLeft: 8 }]}>
+                    <Feather name="trash-2" size={20} color="#E53E3E" />
+                  </Pressable>
+                </View>
+              </View>
+            )}
+          />
+        )}
+
+        <Pressable style={styles.fab} onPress={openCreateAgendaTypeModal}>
+          <Feather name="plus" size={24} color="#FFF" />
+        </Pressable>
+
+        <Modal visible={agendaTypeModalVisible} transparent={true} animationType="fade" onRequestClose={() => setAgendaTypeModalVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{editingAgendaType ? i18n.t('admin.editAgendaType') : i18n.t('admin.newAgendaType')}</Text>
+                <Pressable onPress={() => setAgendaTypeModalVisible(false)}><Feather name="x" size={24} color="#4A5568" /></Pressable>
+              </View>
+              <Text style={styles.label}>{i18n.t('common.name')}</Text>
+              <TextInput style={styles.input} value={agendaTypeFormData.name} onChangeText={text => setAgendaTypeFormData({...agendaTypeFormData, name: text})} />
+              <Text style={styles.label}>{i18n.t('common.description')}</Text>
+              <TextInput style={styles.input} value={agendaTypeFormData.description} onChangeText={text => setAgendaTypeFormData({...agendaTypeFormData, description: text})} />
+              <Text style={styles.label}>{i18n.t('admin.color')}</Text>
+              <View style={styles.colorPickerRow}>
+                {['#3182CE', '#E53E3E', '#38A169', '#D69E2E', '#805AD5', '#D53F8C', '#319795', '#DD6B20', '#718096', '#000000'].map(color => (
+                  <Pressable
+                    key={color}
+                    style={[styles.colorOption, { backgroundColor: color }, agendaTypeFormData.primaryColor === color && styles.colorOptionSelected]}
+                    onPress={() => setAgendaTypeFormData({...agendaTypeFormData, primaryColor: color})}
+                  />
+                ))}
+              </View>
+              <Text style={styles.label}>{i18n.t('admin.icon')}</Text>
+              <View style={styles.iconPickerRow}>
+                {['calendar', 'users', 'check-circle', 'clock', 'briefcase', 'file-text', 'tool', 'truck', 'home', 'alert-triangle', 'flag', 'map-pin'].map(iconName => (
+                  <Pressable
+                    key={iconName}
+                    style={[
+                      styles.iconOption, 
+                      agendaTypeFormData.icon === iconName && styles.iconOptionSelected,
+                      agendaTypeFormData.icon === iconName && { backgroundColor: agendaTypeFormData.primaryColor }
+                    ]}
+                    onPress={() => setAgendaTypeFormData({...agendaTypeFormData, icon: iconName})}
+                  >
+                    <Feather name={iconName as any} size={20} color={agendaTypeFormData.icon === iconName ? '#FFF' : '#718096'} />
+                  </Pressable>
+                ))}
+              </View>
+
+              <Pressable style={styles.saveButton} onPress={handleSaveAgendaType}><Text style={styles.saveButtonText}>{i18n.t('common.save')}</Text></Pressable>
             </View>
           </View>
         </Modal>
@@ -530,58 +708,58 @@ export default function AdminScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>Administrator</Text>
-      <Text style={styles.subtitle}>Manage catalogs and users</Text>
+      <Text style={styles.title}>{i18n.t('nav.administrator')}</Text>
+      <Text style={styles.subtitle}>{i18n.t('admin.subtitle')}</Text>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Catalogs</Text>
+        <Text style={styles.sectionTitle}>{i18n.t('admin.catalogs')}</Text>
         
-        <Pressable style={styles.card} onPress={() => console.log('Manage Categories')}>
-            <View style={styles.cardIcon}>
-                <Feather name="list" size={24} color="#3182CE" />
-            </View>
-            <View style={styles.cardContent}>
-                <Text style={styles.cardTitle}>Budget Categories</Text>
-                <Text style={styles.cardDescription}>Manage expense categories (Partidas)</Text>
-            </View>
-            <Feather name="chevron-right" size={24} color="#CBD5E0" />
-        </Pressable>
-
         <Pressable style={styles.card} onPress={() => setCurrentView('project-steps')}>
             <View style={styles.cardIcon}>
                 <Feather name="layers" size={24} color="#805AD5" />
             </View>
             <View style={styles.cardContent}>
-                <Text style={styles.cardTitle}>Pasos del Proyecto</Text>
-                <Text style={styles.cardDescription}>Gestionar árbol de procesos (Cimientos, Estructura...)</Text>
+                <Text style={styles.cardTitle}>{i18n.t('admin.projectSteps')}</Text>
+                <Text style={styles.cardDescription}>{i18n.t('admin.manageProjectSteps')}</Text>
+            </View>
+            <Feather name="chevron-right" size={24} color="#CBD5E0" />
+        </Pressable>
+
+        <Pressable style={styles.card} onPress={() => setCurrentView('agenda-types')}>
+            <View style={styles.cardIcon}>
+                <Feather name="calendar" size={24} color="#D69E2E" />
+            </View>
+            <View style={styles.cardContent}>
+                <Text style={styles.cardTitle}>{i18n.t('admin.agendaTypes')}</Text>
+                <Text style={styles.cardDescription}>{i18n.t('admin.manageAgendaTypes')}</Text>
             </View>
             <Feather name="chevron-right" size={24} color="#CBD5E0" />
         </Pressable>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Roles & Permissions</Text>
+        <Text style={styles.sectionTitle}>{i18n.t('admin.rolesPermissions')}</Text>
         <Pressable style={styles.card} onPress={() => setCurrentView('roles')}>
             <View style={styles.cardIcon}>
                 <Feather name="shield" size={24} color="#DD6B20" />
             </View>
             <View style={styles.cardContent}>
-                <Text style={styles.cardTitle}>Roles Management</Text>
-                <Text style={styles.cardDescription}>Create and edit user roles</Text>
+                <Text style={styles.cardTitle}>{i18n.t('admin.rolesManagement')}</Text>
+                <Text style={styles.cardDescription}>{i18n.t('admin.manageRoles')}</Text>
             </View>
             <Feather name="chevron-right" size={24} color="#CBD5E0" />
         </Pressable>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Users</Text>
+        <Text style={styles.sectionTitle}>{i18n.t('admin.users')}</Text>
         <Pressable style={styles.card} onPress={() => setCurrentView('users')}>
             <View style={styles.cardIcon}>
                 <Feather name="users" size={24} color="#38A169" />
             </View>
             <View style={styles.cardContent}>
-                <Text style={styles.cardTitle}>User Management</Text>
-                <Text style={styles.cardDescription}>Add, remove or edit users</Text>
+                <Text style={styles.cardTitle}>{i18n.t('admin.userManagementTitle')}</Text>
+                <Text style={styles.cardDescription}>{i18n.t('admin.manageUsers')}</Text>
             </View>
             <Feather name="chevron-right" size={24} color="#CBD5E0" />
         </Pressable>
@@ -692,4 +870,12 @@ const styles = StyleSheet.create({
   treeNodeActions: { flexDirection: 'row', alignItems: 'center' },
   treeChildNode: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, paddingLeft: 24, borderBottomWidth: 1, borderBottomColor: '#EDF2F7' },
   treeChildTitle: { fontSize: 14, color: '#4A5568', fontFamily: 'Inter-Regular' },
+  
+  colorPreview: { width: 24, height: 24, borderRadius: 12, marginRight: 12, borderWidth: 1, borderColor: '#E2E8F0' },
+  colorPickerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 },
+  colorOption: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: '#FFF', shadowColor: "#000", shadowOffset: {width: 0, height: 1}, shadowOpacity: 0.2, shadowRadius: 2, elevation: 2 },
+  colorOptionSelected: { borderWidth: 2, borderColor: '#2D3748', transform: [{ scale: 1.1 }] },
+  iconPickerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 },
+  iconOption: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center', backgroundColor: '#F7FAFC' },
+  iconOptionSelected: { borderWidth: 0, transform: [{ scale: 1.1 }] },
 });

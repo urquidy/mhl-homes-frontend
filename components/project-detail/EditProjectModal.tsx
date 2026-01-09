@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, Modal, TextInput, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import i18n from '../../constants/i18n';
 
 interface EditProjectModalProps {
@@ -19,8 +19,8 @@ export default function EditProjectModal({ visible, onClose, project, availableU
 
   useEffect(() => {
     if (project) {
-      console.log('DEBUG - Project Data:', JSON.stringify(project, null, 2));
-      console.log('DEBUG - Available Users:', JSON.stringify(availableUsers, null, 2));
+      //console.log('DEBUG - Project Data:', JSON.stringify(project, null, 2));
+      //console.log('DEBUG - Available Users:', JSON.stringify(availableUsers, null, 2));
 
       setName(project.name || '');
       

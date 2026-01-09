@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Platform } from 'react-native';
-import { useProjects } from '../../contexts/ProjectsContext';
 import { Feather } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import React from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCustomAlert } from '../../components/ui/CustomAlert';
 import i18n from '../../constants/i18n';
+import { useProjects } from '../../contexts/ProjectsContext';
 
 // --- Helper para simular datos de gastos (Mock) ---
 const getMockExpenses = (projectId: string) => {
@@ -18,6 +19,7 @@ const getMockExpenses = (projectId: string) => {
 
 export default function ReportsScreen() {
   const { projects, getChecklistByProjectId } = useProjects();
+  const { showAlert, AlertComponent } = useCustomAlert();
 
   // 1. Calcular Estadísticas Dinámicas
   const totalProjects = projects.length;
@@ -127,7 +129,7 @@ export default function ReportsScreen() {
       const { uri } = await Print.printToFileAsync({ html: htmlContent });
       await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
     } catch (error) {
-      Alert.alert('Error', 'No se pudo generar el reporte PDF.');
+      showAlert(i18n.t('common.error'), i18n.t('reports.pdfError'));
       console.error(error);
     }
   };
@@ -135,14 +137,14 @@ export default function ReportsScreen() {
   const generateExcel = () => {
     // Nota: Para Excel real se requiere instalar la librería 'xlsx'.
     // Aquí mostramos la alerta simulando la acción.
-    Alert.alert('Exportar a Excel', 'Se generaría un archivo .xlsx con el desglose de presupuestos y tareas.');
+    showAlert(i18n.t('reports.exportExcel'), i18n.t('reports.excelMockMessage'));
   };
 
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>{i18n.t('nav.reports') || 'Reportes'}</Text>
-        <Text style={styles.subtitle}>Resumen general y exportación de datos</Text>
+        <Text style={styles.title}>{i18n.t('reports.title')}</Text>
+        <Text style={styles.subtitle}>{i18n.t('reports.subtitle')}</Text>
       </View>
 
       {/* Tarjetas de Resumen */}
@@ -152,7 +154,7 @@ export default function ReportsScreen() {
             <Feather name="briefcase" size={24} color="#3182CE" />
           </View>
           <Text style={styles.statValue}>{totalProjects}</Text>
-          <Text style={styles.statLabel}>Total Proyectos</Text>
+          <Text style={styles.statLabel}>{i18n.t('reports.totalProjects')}</Text>
         </View>
 
         <View style={styles.statCard}>
@@ -160,7 +162,7 @@ export default function ReportsScreen() {
             <Feather name="activity" size={24} color="#38A169" />
           </View>
           <Text style={styles.statValue}>{activeProjects}</Text>
-          <Text style={styles.statLabel}>Activos</Text>
+          <Text style={styles.statLabel}>{i18n.t('reports.active')}</Text>
         </View>
 
         <View style={styles.statCard}>
@@ -168,7 +170,7 @@ export default function ReportsScreen() {
             <Feather name="alert-circle" size={24} color="#E53E3E" />
           </View>
           <Text style={styles.statValue}>{delayedProjects}</Text>
-          <Text style={styles.statLabel}>Retrasados</Text>
+          <Text style={styles.statLabel}>{i18n.t('reports.delayed')}</Text>
         </View>
 
         <View style={styles.statCard}>
@@ -176,34 +178,34 @@ export default function ReportsScreen() {
             <Feather name="check-square" size={24} color="#805AD5" />
           </View>
           <Text style={styles.statValue}>{taskCompletionRate}%</Text>
-          <Text style={styles.statLabel}>Tareas Completadas</Text>
+          <Text style={styles.statLabel}>{i18n.t('reports.completedTasks')}</Text>
         </View>
       </View>
 
       {/* Sección de Exportación */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Exportar Datos</Text>
+        <Text style={styles.sectionTitle}>{i18n.t('reports.exportData')}</Text>
         <View style={styles.exportButtonsContainer}>
           <Pressable style={[styles.exportButton, { backgroundColor: '#E53E3E' }]} onPress={generatePdf}>
             <Feather name="file-text" size={20} color="#FFF" />
-            <Text style={styles.exportButtonText}>Generar PDF</Text>
+            <Text style={styles.exportButtonText}>{i18n.t('reports.generatePdf')}</Text>
           </Pressable>
           
           <Pressable style={[styles.exportButton, { backgroundColor: '#276749' }]} onPress={generateExcel}>
             <Feather name="grid" size={20} color="#FFF" />
-            <Text style={styles.exportButtonText}>Exportar Excel</Text>
+            <Text style={styles.exportButtonText}>{i18n.t('reports.exportExcel')}</Text>
           </Pressable>
         </View>
       </View>
 
       {/* Tabla de Vista Previa */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Vista Previa de Proyectos</Text>
+        <Text style={styles.sectionTitle}>{i18n.t('reports.projectsPreview')}</Text>
         <View style={styles.table}>
           <View style={styles.tableHeader}>
-            <Text style={[styles.colName, styles.headerText]}>Proyecto</Text>
-            <Text style={[styles.colStatus, styles.headerText]}>Estado</Text>
-            <Text style={[styles.colProgress, styles.headerText]}>Progreso</Text>
+            <Text style={[styles.colName, styles.headerText]}>{i18n.t('common.project')}</Text>
+            <Text style={[styles.colStatus, styles.headerText]}>{i18n.t('common.status')}</Text>
+            <Text style={[styles.colProgress, styles.headerText]}>{i18n.t('common.progress')}</Text>
           </View>
           {projects.map(p => (
             <View key={p.id} style={styles.tableRow}>
@@ -224,6 +226,7 @@ export default function ReportsScreen() {
           ))}
         </View>
       </View>
+      <AlertComponent />
     </ScrollView>
   );
 }

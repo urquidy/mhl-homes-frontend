@@ -1,9 +1,9 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect, useRef } from 'react';
-import { AppState, Platform } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
+import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import api from '../services/api';
+import { disconnectSocket, initSocket } from '../services/socket';
 import { useAuth } from './AuthContext';
-import { initSocket, disconnectSocket } from '../services/socket';
 
 export interface CalendarEvent {
   id: string;
@@ -19,6 +19,7 @@ interface EventsContextType {
   addEvent: (event: Omit<CalendarEvent, 'id'>) => Promise<void>;
   updateEvent: (event: CalendarEvent) => Promise<void>;
   deleteEvent: (id: string) => Promise<void>;
+  refreshEvents: () => Promise<void>;
 }
 
 const EventsContext = createContext<EventsContextType | undefined>(undefined);
@@ -125,7 +126,7 @@ export const EventsProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <EventsContext.Provider value={{ events, addEvent, updateEvent, deleteEvent }}>
+    <EventsContext.Provider value={{ events, addEvent, updateEvent, deleteEvent, refreshEvents: fetchEvents }}>
       {children}
     </EventsContext.Provider>
   );

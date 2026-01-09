@@ -1,15 +1,16 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, ScrollView, useWindowDimensions, Image, Animated, ActivityIndicator, LayoutAnimation, Platform, UIManager } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Link, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons'; // Assuming Feather is correctly imported
-import { useProjects } from '../../contexts/ProjectsContext'; // Assuming useProjects is correctly imported
-import { useEvents, CalendarEvent } from '../../contexts/EventsContext';
-import { Project } from '../../types'; // Adjusted path to types.ts
-import i18n from '../../constants/i18n';
-import { useNotifications, AppNotification, NotificationFilter } from '../../contexts/NotificationsContext';
+import { Link, useRouter } from 'expo-router';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, FlatList, Image, LayoutAnimation, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, UIManager, useWindowDimensions, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import NotificationFilters from '../../components/ui/NotificationFilters';
+import i18n from '../../constants/i18n';
+import { CalendarEvent, useEvents } from '../../contexts/EventsContext';
+import { AppNotification, NotificationFilter, useNotifications } from '../../contexts/NotificationsContext';
+import { useProjects } from '../../contexts/ProjectsContext'; // Assuming useProjects is correctly imported
 import api from '../../services/api';
+import { Project } from '../../types'; // Adjusted path to types.ts
+import { MenuContext } from './_layout';
 
 type ProjectStatus = Project['status'];
 
@@ -59,31 +60,26 @@ const ProjectListItem: React.FC<{ item: Project }> = ({ item }) => {
         <View style={styles.participantsContainer}>
           {item.participants.map((participant, index) => {
             let imageUri = null;
-            let initial = '?';
+            let nameForAvatar = '?';
 
             if (typeof participant === 'string') {
               if (participant.startsWith('http')) imageUri = participant;
-              else initial = participant.charAt(0).toUpperCase();
+              else nameForAvatar = participant;
             } else if (participant && typeof participant === 'object') {
               if (participant.imageUri) {
                  const baseURL = api.defaults.baseURL || process.env.EXPO_PUBLIC_API_URL || '';
                  imageUri = participant.imageUri.startsWith('http') ? participant.imageUri : `${baseURL}${participant.imageUri.startsWith('/') ? '' : '/'}${participant.imageUri}`;
               }
-              if (participant.username) initial = participant.username.charAt(0).toUpperCase();
+              if (participant.username) nameForAvatar = participant.username;
+              else if (participant.name) nameForAvatar = participant.name; // Fallback si no hay username
             }
+
+            // Usar UI Avatars como fallback si no hay imagen
+            const finalUri = imageUri || `https://ui-avatars.com/api/?name=${encodeURIComponent(nameForAvatar)}&background=random&color=fff&size=128&bold=true&format=png`;
 
             return (
               <View key={index} style={[styles.participantWrapper, { marginLeft: index > 0 ? -12 : 0, zIndex: item.participants.length - index }]}>
-                {imageUri ? (
-                  <Image 
-                    source={{ uri: imageUri }} 
-                    style={styles.participantAvatar} 
-                  />
-                ) : (
-                  <View style={[styles.participantAvatar, styles.participantInitials]}>
-                    <Text style={styles.initialsText}>{initial}</Text>
-                  </View>
-                )}
+                <Image source={{ uri: finalUri }} style={[styles.participantAvatar, { backgroundColor: '#CBD5E0' }]} />
               </View>
             );
           })}
@@ -247,14 +243,80 @@ const UpcomingMilestones: React.FC<{ milestones: CalendarEvent[] }> = ({ milesto
   );
 };
 
+// --- Componente Skeleton (Carga) ---
+const SkeletonItem = ({ style }: { style: any }) => {
+  const opacity = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.7, duration: 800, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  return <Animated.View style={[{ backgroundColor: '#EDF2F7', borderRadius: 4 }, style, { opacity }]} />;
+};
+
+const DashboardSkeleton = () => {
+  const { width } = useWindowDimensions();
+  const isLargeScreen = width > 1024;
+
+  return (
+    <SafeAreaView style={styles.safeArea} edges={['right', 'bottom', 'left']}>
+      <View style={[styles.container, !isLargeScreen && { flexDirection: 'column' }]}>
+        {/* Main Content Skeleton */}
+        <View style={isLargeScreen ? styles.mainContent : styles.fullWidthContent}>
+          <SkeletonItem style={{ width: 200, height: 32, marginBottom: 24 }} />
+          <SkeletonItem style={{ width: '100%', height: 40, marginBottom: 24, borderRadius: 10 }} />
+          {[1, 2, 3].map(i => (
+            <View key={i} style={styles.projectCard}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+                <SkeletonItem style={{ width: 150, height: 24 }} />
+                <SkeletonItem style={{ width: 80, height: 24, borderRadius: 12 }} />
+              </View>
+              <SkeletonItem style={{ width: 200, height: 16, marginBottom: 16 }} />
+              <SkeletonItem style={{ width: '100%', height: 8, marginBottom: 16 }} />
+              <View style={{ flexDirection: 'row' }}>
+                <SkeletonItem style={{ width: 32, height: 32, borderRadius: 16, marginRight: -10 }} />
+                <SkeletonItem style={{ width: 32, height: 32, borderRadius: 16, marginRight: -10 }} />
+                <SkeletonItem style={{ width: 32, height: 32, borderRadius: 16 }} />
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {/* Sidebar Skeleton */}
+        <View style={isLargeScreen ? styles.sidebar : styles.fullWidthContent}>
+          <View style={styles.sidebarSection}>
+            <SkeletonItem style={{ width: 150, height: 24, marginBottom: 16 }} />
+            {[1, 2, 3, 4].map(i => (
+              <View key={i} style={{ flexDirection: 'row', marginBottom: 16 }}>
+                <SkeletonItem style={{ width: 20, height: 20, marginRight: 12 }} />
+                <View style={{ flex: 1 }}>
+                  <SkeletonItem style={{ width: '80%', height: 16, marginBottom: 4 }} />
+                  <SkeletonItem style={{ width: '60%', height: 16 }} />
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+};
+
 // --- Componente Principal del Dashboard ---
 export default function DashboardScreen() {
-  const { projects, getChecklistByProjectId } = useProjects(); // Usamos los proyectos del contexto
-  const { events } = useEvents(); // Usamos los eventos del contexto
-  const { displayedNotifications, filter, setFilter, loadMore, hasMore, isLoading, markAsRead, markAllAsRead } = useNotifications(); // Usamos las notificaciones del contexto
+  const { projects, getChecklistByProjectId, refreshProjects, isLoading: isProjectsLoading } = useProjects(); // Usamos los proyectos del contexto
+  const { events, refreshEvents } = useEvents(); // Usamos los eventos del contexto
+  const { displayedNotifications, filter, setFilter, loadMore, hasMore, isLoading, markAsRead, markAllAsRead, refreshNotifications } = useNotifications(); // Usamos las notificaciones del contexto
+  const { reloadMenu } = useContext(MenuContext);
   const [activeFilter, setActiveFilter] = useState<FilterType>('All');
   const { width } = useWindowDimensions();
   const isLargeScreen = width > 1024; // Breakpoint para mostrar columnas
+  const [refreshing, setRefreshing] = useState(false);
 
   // Filtrar próximos hitos (eventos futuros)
   const upcomingMilestones = useMemo(() => {
@@ -302,9 +364,35 @@ export default function DashboardScreen() {
     return notifs;
   }, [overdueTasksCount, displayedNotifications, filter]);
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        reloadMenu(),
+        refreshProjects(),
+        refreshNotifications(),
+        refreshEvents()
+      ]);
+    } catch (error) {
+      console.error("Error refreshing dashboard:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [reloadMenu, refreshProjects, refreshNotifications, refreshEvents]);
+
+  // Mostrar Skeleton solo en carga inicial (si no hay proyectos y no estamos refrescando manualmente)
+  if (isProjectsLoading && !refreshing && projects.length === 0) {
+    return <DashboardSkeleton />;
+  }
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['right', 'bottom', 'left']}>
-      <ScrollView style={styles.scrollView}>
+      <ScrollView 
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#3182CE']} />
+        }
+      >
         <View style={[styles.container, !isLargeScreen && { flexDirection: 'column' }]}>
           {/* --- Columna Principal (Proyectos) --- */}
           <View style={isLargeScreen ? styles.mainContent : styles.fullWidthContent}>

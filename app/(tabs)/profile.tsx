@@ -1,14 +1,19 @@
 import { Colors } from '@/constants/theme';
 import { Feather, FontAwesome5 } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Modal, Platform, Pressable, StyleSheet, Text, TextInput, useColorScheme, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Platform, Pressable, StyleSheet, Text, TextInput, useColorScheme, View } from 'react-native';
+import { useCustomAlert } from '../../components/ui/CustomAlert';
+import LanguageSelector from '../../components/ui/LanguageSelector';
+import i18n from '../../constants/i18n';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 
 export default function ProfileScreen() {
   const { user, logout, token, updateUserImage } = useAuth();
   const [modalVisible, setModalVisible] = useState(false);
+  const [languageModalVisible, setLanguageModalVisible] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [roleName, setRoleName] = useState('');
   const [changePasswordModalVisible, setChangePasswordModalVisible] = useState(false);
@@ -18,6 +23,7 @@ export default function ProfileScreen() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const colorScheme = useColorScheme() ?? 'light';
+  const { showAlert, AlertComponent } = useCustomAlert();
   
   // Definimos colores locales si el tema no carga correctamente, o usamos los del tema
   const textColor = Colors[colorScheme]?.text || '#000';
@@ -54,6 +60,11 @@ export default function ProfileScreen() {
 
   const confirmLogout = async () => {
     setModalVisible(false);
+    try {
+      await AsyncStorage.removeItem('menu_cache');
+    } catch (error) {
+      console.error('Error clearing menu cache:', error);
+    }
     await logout();
   };
 
@@ -93,10 +104,10 @@ export default function ProfileScreen() {
 
       const newUri = response.data?.imageUri || uri;
       await updateUserImage(newUri);
-      Alert.alert('Éxito', 'Foto de perfil actualizada.');
+      showAlert(i18n.t('common.success'), i18n.t('profile.photoUpdated'));
     } catch (error) {
       console.error('Error uploading profile image:', error);
-      Alert.alert('Error', 'No se pudo actualizar la foto de perfil.');
+      showAlert(i18n.t('common.error'), i18n.t('profile.photoUpdateError'));
     } finally {
       setIsUploading(false);
     }
@@ -104,12 +115,12 @@ export default function ProfileScreen() {
 
   const handleChangePassword = async () => {
     if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
-      Alert.alert('Error', 'Por favor completa todos los campos.');
+      showAlert(i18n.t('common.error'), i18n.t('common.fillAllFields'));
       return;
     }
 
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      Alert.alert('Error', 'Las contraseñas nuevas no coinciden.');
+      showAlert(i18n.t('common.error'), i18n.t('profile.passwordsDoNotMatch'));
       return;
     }
 
@@ -119,12 +130,12 @@ export default function ProfileScreen() {
         currentPassword: passwordData.currentPassword,
         newPassword: passwordData.newPassword
       });
-      Alert.alert('Éxito', 'Contraseña actualizada correctamente.');
+      showAlert(i18n.t('common.success'), i18n.t('profile.passwordUpdated'));
       setChangePasswordModalVisible(false);
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (error: any) {
       console.error('Error changing password:', error);
-      Alert.alert('Error', 'No se pudo actualizar la contraseña. Verifica tu contraseña actual.');
+      showAlert(i18n.t('common.error'), i18n.t('profile.passwordUpdateError'));
     } finally {
       setIsChangingPassword(false);
     }
@@ -188,9 +199,19 @@ export default function ProfileScreen() {
             styles.changePasswordButton,
             { opacity: pressed ? 0.8 : 1 }
           ]}
+          onPress={() => setLanguageModalVisible(true)}
+        >
+          <Text style={styles.changePasswordText}>Idioma / Language</Text>
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.changePasswordButton,
+            { opacity: pressed ? 0.8 : 1 }
+          ]}
           onPress={() => setChangePasswordModalVisible(true)}
         >
-          <Text style={styles.changePasswordText}>Cambiar Contraseña</Text>
+          <Text style={styles.changePasswordText}>{i18n.t('profile.changePassword')}</Text>
         </Pressable>
 
         <Pressable
@@ -200,7 +221,7 @@ export default function ProfileScreen() {
           ]}
           onPress={handleLogout}
         >
-          <Text style={styles.logoutText}>Cerrar Sesión</Text>
+          <Text style={styles.logoutText}>{i18n.t('profile.logout')}</Text>
         </Pressable>
       </View>
 
@@ -213,14 +234,14 @@ export default function ProfileScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: bgColor }]}>
-            <Text style={[styles.modalTitle, { color: textColor }]}>Cerrar Sesión</Text>
-            <Text style={[styles.modalMessage, { color: subTextColor }]}>¿Estás seguro que deseas salir?</Text>
+            <Text style={[styles.modalTitle, { color: textColor }]}>{i18n.t('profile.logout')}</Text>
+            <Text style={[styles.modalMessage, { color: subTextColor }]}>{i18n.t('profile.logoutConfirmation')}</Text>
             <View style={styles.modalButtons}>
               <Pressable style={[styles.modalButton, styles.cancelButton]} onPress={() => setModalVisible(false)}>
-                <Text style={styles.cancelButtonText}>Cancelar</Text>
+                <Text style={styles.cancelButtonText}>{i18n.t('common.cancel')}</Text>
               </Pressable>
               <Pressable style={[styles.modalButton, styles.confirmButton]} onPress={confirmLogout}>
-                <Text style={styles.confirmButtonText}>Cerrar Sesión</Text>
+                <Text style={styles.confirmButtonText}>{i18n.t('profile.logout')}</Text>
               </Pressable>
             </View>
           </View>
@@ -236,12 +257,12 @@ export default function ProfileScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: bgColor }]}>
-            <Text style={[styles.modalTitle, { color: textColor }]}>Cambiar Contraseña</Text>
+            <Text style={[styles.modalTitle, { color: textColor }]}>{i18n.t('profile.changePassword')}</Text>
             
             <View style={styles.passwordContainer}>
               <TextInput
                 style={styles.passwordInput}
-                placeholder="Contraseña Actual"
+                placeholder={i18n.t('profile.currentPassword')}
                 placeholderTextColor="#A0AEC0"
                 secureTextEntry={!showCurrentPassword}
                 value={passwordData.currentPassword}
@@ -255,7 +276,7 @@ export default function ProfileScreen() {
             <View style={styles.passwordContainer}>
               <TextInput
                 style={styles.passwordInput}
-                placeholder="Nueva Contraseña"
+                placeholder={i18n.t('profile.newPassword')}
                 placeholderTextColor="#A0AEC0"
                 secureTextEntry={!showNewPassword}
                 value={passwordData.newPassword}
@@ -269,7 +290,7 @@ export default function ProfileScreen() {
             <View style={styles.passwordContainer}>
               <TextInput
                 style={styles.passwordInput}
-                placeholder="Confirmar Nueva Contraseña"
+                placeholder={i18n.t('profile.confirmNewPassword')}
                 placeholderTextColor="#A0AEC0"
                 secureTextEntry={!showConfirmPassword}
                 value={passwordData.confirmPassword}
@@ -282,19 +303,25 @@ export default function ProfileScreen() {
 
             <View style={styles.modalButtons}>
               <Pressable style={[styles.modalButton, styles.cancelButton]} onPress={() => setChangePasswordModalVisible(false)}>
-                <Text style={styles.cancelButtonText}>Cancelar</Text>
+                <Text style={styles.cancelButtonText}>{i18n.t('common.cancel')}</Text>
               </Pressable>
               <Pressable 
                 style={[styles.modalButton, styles.saveButton]} 
                 onPress={handleChangePassword}
                 disabled={isChangingPassword}
               >
-                {isChangingPassword ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.saveButtonText}>Guardar</Text>}
+                {isChangingPassword ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.saveButtonText}>{i18n.t('common.save')}</Text>}
               </Pressable>
             </View>
           </View>
         </View>
       </Modal>
+      
+      <LanguageSelector 
+        visible={languageModalVisible} 
+        onClose={() => setLanguageModalVisible(false)} 
+      />
+      <AlertComponent />
     </View>
   );
 }

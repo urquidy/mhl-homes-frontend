@@ -1,13 +1,14 @@
-import React, { useState, useMemo, useContext, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, FlatList, Modal, TextInput, ScrollView, Platform, KeyboardAvoidingView, Alert } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { HeaderActionContext } from './_layout';
+import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useCustomAlert } from '../../components/ui/CustomAlert';
 import i18n from '../../constants/i18n';
-import { useEvents, CalendarEvent } from '../../contexts/EventsContext';
-import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { CalendarEvent, useEvents } from '../../contexts/EventsContext';
 import { useNotifications } from '../../contexts/NotificationsContext';
+import api from '../../services/api';
+import { HeaderActionContext } from './_layout';
 
 // --- Utilidades de Fecha ---
 const daysOfWeek = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -28,6 +29,7 @@ export default function AgendaScreen() {
   const [userSearch, setUserSearch] = useState('');
   const [showUserSuggestions, setShowUserSuggestions] = useState(false);
   const { addNotification } = useNotifications();
+  const [agendaTypes, setAgendaTypes] = useState<any[]>([]);
   
   // Estado para nuevo evento
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -36,6 +38,7 @@ export default function AgendaScreen() {
   const [newEventTime, setNewEventTime] = useState('');
   const [newEventType, setNewEventType] = useState<CalendarEvent['type']>('Meeting');
 
+  const { showAlert, AlertComponent } = useCustomAlert();
   const { setCustomAddAction } = useContext(HeaderActionContext);
 
   // Configurar el botón "+" del Header para abrir el modal de evento
@@ -46,7 +49,7 @@ export default function AgendaScreen() {
         setEditingEventId(null);
         setNewEventTitle('');
         setNewEventDesc('');
-        setNewEventType('Meeting');
+        setNewEventType(agendaTypes.length > 0 ? agendaTypes[0].name : 'Meeting');
         setNewEventTime('09:00');
         setIsModalVisible(true);
         setInvitedUserIds([]);
@@ -54,7 +57,7 @@ export default function AgendaScreen() {
         setShowUserSuggestions(false);
       });
       return () => setCustomAddAction(null);
-    }, [])
+    }, [agendaTypes])
   );
 
   // Efecto para manejar la navegación desde el Dashboard
@@ -79,6 +82,21 @@ export default function AgendaScreen() {
       }
     };
     if (token) fetchUsers();
+  }, [token]);
+
+  // Cargar tipos de agenda desde la API
+  useEffect(() => {
+    if (token) {
+      console.log('Fetching agenda types from API...');
+      api.get('/api/catalogs/type/AGENDA_TYPE')
+        .then(res => {
+          console.log('Agenda types loaded:', res.data);
+          if (Array.isArray(res.data)) {
+            setAgendaTypes(res.data);
+          }
+        })
+        .catch(err => console.error('Error fetching agenda types:', err));
+    }
   }, [token]);
 
   // --- Lógica del Calendario ---
@@ -131,7 +149,7 @@ export default function AgendaScreen() {
 
   const handleSaveEvent = async () => {
     if (!newEventTitle) {
-      Alert.alert('Error', 'El título es obligatorio');
+      showAlert(i18n.t('common.error'), i18n.t('agenda.titleRequired'));
       return;
     }
     const eventData = {
@@ -153,13 +171,13 @@ export default function AgendaScreen() {
       // --- Lógica de Notificaciones ---
       if (invitedUserIds.length > 0) {
         // 1. Agregar notificación al Dashboard (Historial)
-        addNotification(`Has invitado a ${invitedUserIds.length} usuario(s) al evento "${newEventTitle}".`, 'user-plus');
+        addNotification(i18n.t('agenda.invitedUsers', { count: invitedUserIds.length, event: newEventTitle }), 'user-plus');
 
         // 2. Enviar Push Notification a cada usuario invitado
-        invitedUserIds.forEach(uid => sendPushNotification(uid, 'Nueva Invitación', `Has sido invitado a: ${newEventTitle}`));
+        invitedUserIds.forEach(uid => sendPushNotification(uid, i18n.t('agenda.newInvitation'), `${i18n.t('agenda.invitedTo')} ${newEventTitle}`));
       }
     } catch (error) {
-      Alert.alert('Error', 'No se pudo guardar el evento.');
+      showAlert(i18n.t('common.error'), i18n.t('agenda.saveError'));
     }
 
     handleCloseModal();
@@ -171,7 +189,7 @@ export default function AgendaScreen() {
     setNewEventDesc('');
     setNewEventTime('');
     setEditingEventId(null);
-    setNewEventType('Meeting');
+    setNewEventType(agendaTypes.length > 0 ? agendaTypes[0].name : 'Meeting');
     setInvitedUserIds([]);
     setUserSearch('');
     setShowUserSuggestions(false);
@@ -185,11 +203,18 @@ export default function AgendaScreen() {
     // Asumimos que el evento tiene la propiedad invitedUserIds, si no, array vacío
     setInvitedUserIds((event as any).invitedUserIds || []);
     setEditingEventId(event.id);
+
+    // Establecer la fecha seleccionada a la fecha del evento para que no se pierda al editar
+    if (event.date) {
+      const [y, m, d] = event.date.split('-').map(Number);
+      setSelectedDate(new Date(y, m - 1, d));
+    }
+
     setIsModalVisible(true);
   };
 
   const handleDeleteEvent = (id: string) => {
-    Alert.alert(i18n.t('common.delete'), i18n.t('projectDetail.deleteConfirmation'), [
+    showAlert(i18n.t('common.delete'), i18n.t('projectDetail.deleteConfirmation'), [
       { text: i18n.t('common.cancel'), style: 'cancel' },
       { text: i18n.t('common.delete'), style: 'destructive', onPress: () => deleteEvent(id) }
     ]);
@@ -197,6 +222,13 @@ export default function AgendaScreen() {
 
   // Obtener colores por tipo
   const getTypeColor = (type: string) => {
+    const typeObj = agendaTypes.find(t => t.name === type);
+    if (typeObj?.metadata?.primaryColor) {
+      return typeObj.metadata.primaryColor;
+    }
+    if (typeObj?.color) {
+      return typeObj.color;
+    }
     switch (type) {
       case 'Meeting': return '#3182CE'; // Azul
       case 'Inspection': return '#E53E3E'; // Rojo
@@ -290,23 +322,23 @@ export default function AgendaScreen() {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{editingEventId ? 'Editar Evento' : 'Nuevo Evento'}</Text>
+              <Text style={styles.modalTitle}>{editingEventId ? i18n.t('agenda.editEvent') : i18n.t('agenda.newEvent')}</Text>
               <Pressable onPress={handleCloseModal}>
                 <Feather name="x" size={24} color="#4A5568" />
               </Pressable>
             </View>
 
-            <Text style={styles.label}>Título</Text>
+            <Text style={styles.label}>{i18n.t('common.title')}</Text>
             <TextInput 
               style={styles.input} 
-              placeholder="Ej. Reunión de Avance" 
+              placeholder={i18n.t('agenda.titlePlaceholder')}
               value={newEventTitle}
               onChangeText={setNewEventTitle}
             />
 
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Hora</Text>
+                <Text style={styles.label}>{i18n.t('common.time')}</Text>
                 <TextInput 
                   style={styles.input} 
                   placeholder="00:00" 
@@ -315,38 +347,60 @@ export default function AgendaScreen() {
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Fecha</Text>
+                <Text style={styles.label}>{i18n.t('common.date')}</Text>
                 <View style={[styles.input, { justifyContent: 'center', backgroundColor: '#EDF2F7' }]}>
                   <Text style={{ color: '#4A5568' }}>{formatDateKey(selectedDate)}</Text>
                 </View>
               </View>
             </View>
 
-            <Text style={styles.label}>Tipo</Text>
+            <Text style={styles.label}>{i18n.t('common.type')}</Text>
             <View style={styles.typeSelector}>
-              {(['Meeting', 'Inspection', 'Delivery', 'Other'] as const).map(type => (
-                <Pressable 
-                  key={type} 
-                  style={[styles.typeOption, newEventType === type && styles.typeOptionSelected, { borderColor: getTypeColor(type) }]}
-                  onPress={() => setNewEventType(type)}
-                >
-                  <Text style={[styles.typeOptionText, newEventType === type && { color: '#FFF', fontWeight: 'bold' }, { color: getTypeColor(type) }]}>
-                    {type === 'Meeting' ? 'Junta' : type === 'Inspection' ? 'Insp.' : type === 'Delivery' ? 'Entrega' : 'Otro'}
-                  </Text>
-                </Pressable>
-              ))}
+              {agendaTypes.length > 0 ? (
+                agendaTypes.map((typeItem) => {
+                  const color = typeItem.metadata?.primaryColor || '#718096';
+                  const isSelected = newEventType === typeItem.name;
+                  return (
+                    <Pressable 
+                      key={typeItem.name} 
+                      style={[
+                        styles.typeOption, 
+                        isSelected && styles.typeOptionSelected, 
+                        { borderColor: color, backgroundColor: isSelected ? color : '#FFF' }
+                      ]}
+                      onPress={() => setNewEventType(typeItem.name)}
+                    >
+                      <Text style={[styles.typeOptionText, isSelected && { color: '#FFF', fontWeight: 'bold' }, { color: isSelected ? '#FFF' : color }]}>
+                        {typeItem.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })
+              ) : (
+                (['Meeting', 'Inspection', 'Delivery', 'Other'] as const).map(type => (
+                  <Pressable 
+                    key={type} 
+                    style={[styles.typeOption, newEventType === type && styles.typeOptionSelected, { borderColor: getTypeColor(type) }]}
+                    onPress={() => setNewEventType(type)}
+                  >
+                    <Text style={[styles.typeOptionText, newEventType === type && { color: '#FFF', fontWeight: 'bold' }, { color: getTypeColor(type) }]}>
+                      {type === 'Meeting' ? i18n.t('agenda.typeMeeting') : type === 'Inspection' ? i18n.t('agenda.typeInspection') : type === 'Delivery' ? i18n.t('agenda.typeDelivery') : i18n.t('agenda.typeOther')}
+                    </Text>
+                  </Pressable>
+                ))
+              )}
             </View>
 
-            <Text style={styles.label}>Descripción</Text>
+            <Text style={styles.label}>{i18n.t('common.description')}</Text>
             <TextInput 
               style={[styles.input, { height: 80 }]} 
-              placeholder="Detalles adicionales..." 
+              placeholder={i18n.t('agenda.descriptionPlaceholder')}
               multiline
               value={newEventDesc}
               onChangeText={setNewEventDesc}
             />
 
-            <Text style={styles.label}>Invitar Usuarios (Opcional)</Text>
+            <Text style={styles.label}>{i18n.t('agenda.inviteUsers')}</Text>
             
             {/* Chips de usuarios seleccionados */}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
@@ -368,7 +422,7 @@ export default function AgendaScreen() {
             <View style={{ zIndex: 10 }}>
               <TextInput
                 style={styles.input}
-                placeholder="Buscar usuario..."
+                placeholder={i18n.t('common.searchUser')}
                 value={userSearch}
                 onChangeText={(text) => {
                   setUserSearch(text);
@@ -397,7 +451,7 @@ export default function AgendaScreen() {
                       ))}
                     {availableUsers.filter(u => !invitedUserIds.includes(u.id) && (u.username || '').toLowerCase().includes(userSearch.toLowerCase())).length === 0 && (
                       <View style={styles.suggestionItem}>
-                        <Text style={{ color: '#A0AEC0', fontStyle: 'italic' }}>No se encontraron usuarios</Text>
+                        <Text style={{ color: '#A0AEC0', fontStyle: 'italic' }}>{i18n.t('common.noUsersFound')}</Text>
                       </View>
                     )}
                   </ScrollView>
@@ -406,11 +460,12 @@ export default function AgendaScreen() {
             </View>
 
             <Pressable style={styles.saveButton} onPress={handleSaveEvent}>
-              <Text style={styles.saveButtonText}>{editingEventId ? 'Actualizar Evento' : 'Guardar Evento'}</Text>
+              <Text style={styles.saveButtonText}>{editingEventId ? i18n.t('agenda.updateEvent') : i18n.t('agenda.saveEvent')}</Text>
             </Pressable>
           </View>
         </KeyboardAvoidingView>
       </Modal>
+      <AlertComponent />
     </View>
   );
 }

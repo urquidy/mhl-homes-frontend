@@ -1,15 +1,16 @@
-import React, { useState, useMemo, useContext, useCallback, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, LayoutAnimation, Platform, UIManager, TextInput, useWindowDimensions, Modal, Alert, KeyboardAvoidingView, Animated, Linking, Image, ActivityIndicator } from 'react-native';
-import { useProjects } from '../../contexts/ProjectsContext';
-import { useNavigation, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import i18n from '../../constants/i18n';
-import { HeaderActionContext } from './_layout';
-import api from '../../services/api';
-import { Expense, BudgetCategory, ProjectBudget } from '../../types';
-import { useAuth } from '../../contexts/AuthContext';
+import { useFocusEffect, useNavigation } from 'expo-router';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Image, KeyboardAvoidingView, LayoutAnimation, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, UIManager, useWindowDimensions, View } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { useCustomAlert } from '../../components/ui/CustomAlert';
+import i18n from '../../constants/i18n';
+import { useAuth } from '../../contexts/AuthContext';
+import { useProjects } from '../../contexts/ProjectsContext';
+import api from '../../services/api';
+import { BudgetCategory, Expense, ProjectBudget } from '../../types';
+import { HeaderActionContext } from './_layout';
 
 // Habilitar animaciones de layout en Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -126,7 +127,7 @@ const BudgetBarChart = ({ categories }: { categories: BudgetCategory[] }) => {
 
   return (
     <View style={styles.sectionContainer}>
-      <Text style={styles.sectionTitle}>Comparativa Gráfica</Text>
+      <Text style={styles.sectionTitle}>{i18n.t('budgets.chartComparison')}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 20, paddingTop: 30 }}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: chartHeight + 50, paddingLeft: 10 }}>
           {categories.map((cat, index) => {
@@ -180,11 +181,11 @@ const BudgetBarChart = ({ categories }: { categories: BudgetCategory[] }) => {
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 4, marginBottom: 10 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={{ width: 12, height: 12, backgroundColor: '#CBD5E0', marginRight: 6, borderRadius: 3 }} />
-          <Text style={{ fontSize: 12, color: '#718096' }}>Asignado</Text>
+          <Text style={{ fontSize: 12, color: '#718096' }}>{i18n.t('budgets.allocated')}</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={{ width: 12, height: 12, backgroundColor: '#3182CE', marginRight: 6, borderRadius: 3 }} />
-          <Text style={{ fontSize: 12, color: '#718096' }}>Gastado</Text>
+          <Text style={{ fontSize: 12, color: '#718096' }}>{i18n.t('budgets.spent')}</Text>
         </View>
       </View>
     </View>
@@ -502,6 +503,7 @@ const AddExpenseModal = ({ visible, onClose, projects, initialProjectId, onSave,
   const [category, setCategory] = useState('');
   const [attachmentUri, setAttachmentUri] = useState<string | null>(null);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const { showAlert, AlertComponent } = useCustomAlert();
 
   // Actualizar el proyecto seleccionado si cambia la prop initialProjectId
   React.useEffect(() => {
@@ -534,7 +536,7 @@ const AddExpenseModal = ({ visible, onClose, projects, initialProjectId, onSave,
   const pickAttachment = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permissionResult.granted === false) {
-      Alert.alert('Permiso requerido', i18n.t('common.permissionGallery'));
+      showAlert(i18n.t('common.permissionRequired'), i18n.t('common.permissionGallery'));
       return;
     }
 
@@ -550,7 +552,7 @@ const AddExpenseModal = ({ visible, onClose, projects, initialProjectId, onSave,
 
   const handleSave = () => {
     if (!concept || !amount || !category) {
-      Alert.alert('Error', 'Por favor completa todos los campos requeridos.');
+      showAlert(i18n.t('common.error'), i18n.t('common.fillAllFields'));
       return;
     }
     
@@ -580,13 +582,13 @@ const AddExpenseModal = ({ visible, onClose, projects, initialProjectId, onSave,
       >
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{expenseToEdit ? 'Editar Gasto' : 'Agregar Gasto'}</Text>
+            <Text style={styles.modalTitle}>{expenseToEdit ? i18n.t('budgets.editExpense') : i18n.t('budgets.addExpense')}</Text>
             <Pressable onPress={handleClose}>
               <Feather name="x" size={24} color="#4A5568" />
             </Pressable>
           </View>
 
-          <Text style={styles.inputLabel}>Concepto</Text>
+          <Text style={styles.inputLabel}>{i18n.t('budgets.concept')}</Text>
           <TextInput 
             style={styles.modalInput} 
             placeholder="Ej. Cemento, Varilla, Mano de obra..." 
@@ -594,7 +596,7 @@ const AddExpenseModal = ({ visible, onClose, projects, initialProjectId, onSave,
             onChangeText={setConcept}
           />
 
-          <Text style={styles.inputLabel}>Categoría (Partida)</Text>
+          <Text style={styles.inputLabel}>{i18n.t('budgets.category')}</Text>
           
           {/* Selector de Categoría (ComboBox) */}
           <View style={{ zIndex: 10 }}>
@@ -602,7 +604,7 @@ const AddExpenseModal = ({ visible, onClose, projects, initialProjectId, onSave,
               style={[styles.modalInput, styles.selectButton]} 
               onPress={() => setShowCategoryPicker(!showCategoryPicker)}
             >
-              <Text style={{ color: category ? '#2D3748' : '#A0AEC0' }}>{category || 'Seleccionar Categoría'}</Text>
+              <Text style={{ color: category ? '#2D3748' : '#A0AEC0' }}>{category || i18n.t('budgets.selectCategory')}</Text>
               <Feather name={showCategoryPicker ? "chevron-up" : "chevron-down"} size={20} color="#4A5568" />
             </Pressable>
             
@@ -626,7 +628,7 @@ const AddExpenseModal = ({ visible, onClose, projects, initialProjectId, onSave,
             )}
           </View>
 
-          <Text style={styles.inputLabel}>Monto ($)</Text>
+          <Text style={styles.inputLabel}>{i18n.t('budgets.amount')}</Text>
           <TextInput 
             style={styles.modalInput} 
             placeholder="0.00" 
@@ -635,7 +637,7 @@ const AddExpenseModal = ({ visible, onClose, projects, initialProjectId, onSave,
             onChangeText={(text) => setAmount(formatInputCurrency(text))}
           />
 
-          <Text style={styles.inputLabel}>Comprobante (Opcional)</Text>
+          <Text style={styles.inputLabel}>{i18n.t('budgets.receiptOptional')}</Text>
           <Pressable style={styles.uploadButton} onPress={pickAttachment}>
             <Feather name="upload" size={20} color="#4A5568" />
             <Text style={styles.uploadButtonText}>
@@ -646,7 +648,7 @@ const AddExpenseModal = ({ visible, onClose, projects, initialProjectId, onSave,
           {attachmentUri && (
             <View style={styles.attachmentPreview}>
                 <Feather name="image" size={20} color="#3182CE" />
-                <Text style={styles.attachmentText} numberOfLines={1}>Adjunto seleccionado</Text>
+                <Text style={styles.attachmentText} numberOfLines={1}>{i18n.t('budgets.attachmentSelected')}</Text>
                 <Pressable onPress={() => setAttachmentUri(null)}>
                     <Feather name="x" size={20} color="#E53E3E" />
                 </Pressable>
@@ -654,8 +656,9 @@ const AddExpenseModal = ({ visible, onClose, projects, initialProjectId, onSave,
           )}
 
           <Pressable style={styles.saveButton} onPress={handleSave}>
-            <Text style={styles.saveButtonText}>Guardar Gasto</Text>
+            <Text style={styles.saveButtonText}>{i18n.t('budgets.saveExpense')}</Text>
           </Pressable>
+          <AlertComponent />
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -671,6 +674,7 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
   const [totalAmount, setTotalAmount] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [categoryPercentages, setCategoryPercentages] = useState<Record<string, string>>({});
+  const { showAlert, AlertComponent } = useCustomAlert();
 
   const toggleCategory = (catName: string) => {
     if (selectedCategories.includes(catName)) {
@@ -715,7 +719,7 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
     const targets = selectedCategories.filter(cat => !categoryPercentages[cat] || parseFloat(categoryPercentages[cat]) === 0);
 
     if (targets.length === 0) {
-      Alert.alert('Info', remaining > 0 
+      showAlert(i18n.t('common.info'), remaining > 0 
         ? `Queda un ${remaining.toFixed(1)}% por asignar, pero no hay categorías vacías seleccionadas.` 
         : 'El 100% ya está asignado.');
       return;
@@ -742,18 +746,18 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
 
   const handleSave = () => {
     if (!totalAmount) {
-      Alert.alert('Error', 'Por favor ingresa el monto total del presupuesto.');
+      showAlert(i18n.t('common.error'), i18n.t('budgets.enterTotalAmount'));
       return;
     }
     if (selectedCategories.length === 0) {
-      Alert.alert('Error', 'Por favor selecciona al menos una partida para este presupuesto.');
+      showAlert(i18n.t('common.error'), i18n.t('budgets.selectAtLeastOneCategory'));
       return;
     }
     
     // Validar que la suma de porcentajes sea 100%
     const currentTotalPercentage = Object.values(categoryPercentages).reduce((acc, val) => acc + (parseFloat(val) || 0), 0);
     if (Math.abs(currentTotalPercentage - 100) > 0.1) {
-      Alert.alert('Advertencia', `La suma de los porcentajes es ${currentTotalPercentage}%. Debería ser 100%.`);
+      showAlert(i18n.t('common.warning'), `La suma de los porcentajes es ${currentTotalPercentage}%. Debería ser 100%.`);
       return;
     }
 
@@ -779,11 +783,11 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Nuevo Presupuesto</Text>
+            <Text style={styles.modalTitle}>{i18n.t('budgets.newBudget')}</Text>
             <Pressable onPress={handleClose}><Feather name="x" size={24} color="#4A5568" /></Pressable>
           </View>
           
-          <Text style={styles.inputLabel}>Proyecto</Text>
+          <Text style={styles.inputLabel}>{i18n.t('common.project')}</Text>
           {availableProjects.length > 0 ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.projectSelectorContainer}>
               {availableProjects.map(p => (
@@ -793,10 +797,10 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
               ))}
             </ScrollView>
           ) : (
-            <Text style={styles.emptyText}>Todos los proyectos tienen presupuesto asignado.</Text>
+            <Text style={styles.emptyText}>{i18n.t('budgets.allProjectsAssigned')}</Text>
           )}
 
-          <Text style={styles.inputLabel}>Monto Total del Presupuesto ($)</Text>
+          <Text style={styles.inputLabel}>{i18n.t('budgets.totalAmount')}</Text>
           <TextInput 
             style={styles.modalInput} 
             placeholder="0.00" 
@@ -806,12 +810,12 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
           />
 
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-            <Text style={[styles.inputLabel, { marginBottom: 0 }]}>Partidas del Presupuesto</Text>
+            <Text style={[styles.inputLabel, { marginBottom: 0 }]}>{i18n.t('budgets.budgetItems')}</Text>
             <Pressable onPress={handleDistributeRemaining} hitSlop={8}>
-              <Text style={{ color: '#3182CE', fontSize: 12, fontWeight: 'bold' }}>Distribuir Restante</Text>
+              <Text style={{ color: '#3182CE', fontSize: 12, fontWeight: 'bold' }}>{i18n.t('budgets.distributeRemaining')}</Text>
             </Pressable>
           </View>
-          <Text style={styles.helperText}>Selecciona las categorías que aplican a este proyecto:</Text>
+          <Text style={styles.helperText}>{i18n.t('budgets.selectCategories')}</Text>
           <ScrollView style={styles.categoriesList} nestedScrollEnabled={true}>
             {categories.map((cat) => {
               const isSelected = selectedCategories.includes(cat.name);
@@ -835,7 +839,7 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
                   
                   {isSelected && (
                     <View style={styles.percentageRow}>
-                      <Text style={styles.percentageLabel}>Asignar:</Text>
+                      <Text style={styles.percentageLabel}>{i18n.t('budgets.assign')}</Text>
                       <TextInput
                         style={styles.percentageInput}
                         placeholder="0"
@@ -856,8 +860,9 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
           </ScrollView>
 
           <Pressable style={[styles.saveButton, availableProjects.length === 0 && styles.disabledButton]} onPress={handleSave} disabled={availableProjects.length === 0}>
-            <Text style={styles.saveButtonText}>Crear Presupuesto</Text>
+            <Text style={styles.saveButtonText}>{i18n.t('budgets.createBudget')}</Text>
           </Pressable>
+          <AlertComponent />
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -875,7 +880,7 @@ const DeleteConfirmationModal = ({ visible, onClose, onConfirm }: { visible: boo
             <Pressable onPress={onClose}><Feather name="x" size={24} color="#4A5568" /></Pressable>
           </View>
           <Text style={{ fontSize: 16, color: '#4A5568', marginBottom: 24 }}>
-            ¿Estás seguro de que deseas eliminar este gasto? Esta acción no se puede deshacer.
+            {i18n.t('budgets.deleteExpenseConfirmation')}
           </Text>
           <View style={styles.modalButtons}>
             <Pressable style={[styles.modalButton, styles.cancelButton]} onPress={onClose}>
@@ -892,7 +897,7 @@ const DeleteConfirmationModal = ({ visible, onClose, onConfirm }: { visible: boo
 };
 
 // --- Componente Skeleton Loader ---
-const BudgetSkeleton = () => {
+const SkeletonItem = ({ style }: { style: any }) => {
   const opacity = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
@@ -904,10 +909,22 @@ const BudgetSkeleton = () => {
     ).start();
   }, []);
 
+  return <Animated.View style={[{ backgroundColor: '#EDF2F7', borderRadius: 4 }, style, { opacity }]} />;
+};
+
+const BudgetSkeleton = () => {
   return (
     <View>
-      {[1, 2, 3].map((i) => (
-        <Animated.View key={i} style={[styles.skeletonItem, { opacity }]} />
+      {[1, 2, 3, 4].map((i) => (
+        <View key={i} style={styles.projectGroup}>
+          <View style={styles.groupHeader}>
+            <SkeletonItem style={{ width: 20, height: 20, borderRadius: 10, marginRight: 12 }} />
+            <View style={{ flex: 1 }}>
+              <SkeletonItem style={{ width: '50%', height: 20 }} />
+            </View>
+            <SkeletonItem style={{ width: 80, height: 24, borderRadius: 12 }} />
+          </View>
+        </View>
       ))}
     </View>
   );
@@ -920,6 +937,7 @@ export default function BudgetsScreen() {
   const { width } = useWindowDimensions();
   const isSmallScreen = width < 768;
   
+  const [refreshing, setRefreshing] = useState(false);
   // Estado para controlar qué modal se muestra
   const [activeModal, setActiveModal] = useState<'none' | 'createBudget' | 'addExpense'>('none');
   const [selectedProjectForExpense, setSelectedProjectForExpense] = useState<string | null>(null);
@@ -935,6 +953,7 @@ export default function BudgetsScreen() {
   const [expenseToEdit, setExpenseToEdit] = useState<(Expense & { projectId: string }) | null>(null);
   const [expenseToDelete, setExpenseToDelete] = useState<{ id: string, projectId: string } | null>(null);
   const [viewingAttachmentId, setViewingAttachmentId] = useState<string | null>(null);
+  const { showAlert, AlertComponent } = useCustomAlert();
 
   // Cargar catálogo de categorías desde la API
   React.useEffect(() => {
@@ -976,7 +995,7 @@ export default function BudgetsScreen() {
       }
     } catch (error) {
       console.error('Error creating budget:', error);
-      Alert.alert('Error', 'No se pudo crear el presupuesto en el servidor.');
+      showAlert(i18n.t('common.error'), i18n.t('budgets.errorCreatingBudget'));
     }
   };
 
@@ -1058,7 +1077,7 @@ export default function BudgetsScreen() {
 
     } catch (error) {
       console.error('Error saving expense:', error);
-      Alert.alert('Error', 'No se pudo guardar el gasto en el servidor.');
+      showAlert(i18n.t('common.error'), i18n.t('budgets.errorSavingExpense'));
     }
   };
 
@@ -1075,7 +1094,7 @@ export default function BudgetsScreen() {
         await refreshBudgets();
       } catch (error) {
         console.error('Error deleting expense:', error);
-        Alert.alert('Error', 'No se pudo eliminar el gasto.');
+        showAlert(i18n.t('common.error'), i18n.t('budgets.errorDeletingExpense'));
       }
       setExpenseToDelete(null);
     }
@@ -1100,8 +1119,24 @@ export default function BudgetsScreen() {
   // Filtrar proyectos que tienen presupuesto para mostrarlos en la lista
   const visibleProjects = projects.filter(p => budgets && budgets[p.id] !== undefined);
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      if (refreshBudgets) await refreshBudgets();
+    } catch (error) {
+      console.error("Error refreshing budgets:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshBudgets]);
+
   return (
-    <ScrollView style={[styles.container, isSmallScreen && styles.containerSmall]}>
+    <ScrollView 
+      style={[styles.container, isSmallScreen && styles.containerSmall]}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#3182CE']} />
+      }
+    >
       <Text style={styles.title}>{i18n.t('budgets.title')}</Text>
       <Text style={styles.subtitle}>{i18n.t('budgets.subtitle')}</Text>
 
@@ -1131,10 +1166,10 @@ export default function BudgetsScreen() {
         <View style={{ padding: 40, alignItems: 'center', opacity: 0.7 }}>
           <Feather name="clipboard" size={48} color="#CBD5E0" />
           <Text style={{ marginTop: 16, fontSize: 16, color: '#718096', textAlign: 'center' }}>
-            No hay presupuestos activos.
+            {i18n.t('budgets.noActiveBudgets')}
           </Text>
           <Text style={{ fontSize: 14, color: '#A0AEC0', textAlign: 'center', marginTop: 4 }}>
-            Crea uno nuevo usando el botón "+" en la parte superior.
+            {i18n.t('budgets.createOneHint')}
           </Text>
         </View>
       )}
@@ -1176,6 +1211,7 @@ export default function BudgetsScreen() {
         onClose={() => setViewingAttachmentId(null)}
         token={token}
       />
+      <AlertComponent />
     </ScrollView>
   );
 }

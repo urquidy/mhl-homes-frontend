@@ -4,8 +4,8 @@ import * as FileSystem from 'expo-file-system/legacy'; // Importar FileSystem Le
 import * as ImagePicker from 'expo-image-picker';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Image, LayoutAnimation, LayoutChangeEvent, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, UIManager, useWindowDimensions, View } from 'react-native';
+import { default as React, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Image, LayoutAnimation, LayoutChangeEvent, Modal, PanResponder, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, UIManager, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path as SvgPath } from 'react-native-svg';
 import { WebView } from 'react-native-webview';
@@ -87,6 +87,82 @@ const updateProjectWithFile = async (id: string, projectData: any, imageFile: { 
   });
 };
 
+// --- Componente Skeleton (Carga) ---
+const SkeletonItem = ({ style }: { style: any }) => {
+  const opacity = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.7, duration: 800, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  return <Animated.View style={[{ backgroundColor: '#EDF2F7', borderRadius: 4 }, style, { opacity }]} />;
+};
+
+const ProjectDetailSkeleton = () => {
+  const insets = useSafeAreaInsets();
+  
+  return (
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+      <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: insets.bottom + 80 }}>
+        {/* Header Title & Edit Button */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <SkeletonItem style={{ width: '60%', height: 32 }} />
+          <SkeletonItem style={{ width: 32, height: 32, borderRadius: 16 }} />
+        </View>
+        
+        {/* Client */}
+        <SkeletonItem style={{ width: '40%', height: 20, marginBottom: 8 }} />
+        
+        {/* Address */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+          <SkeletonItem style={{ width: 16, height: 16, borderRadius: 8, marginRight: 8 }} />
+          <SkeletonItem style={{ width: '70%', height: 16 }} />
+        </View>
+
+        {/* Status Row */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 32 }}>
+          <SkeletonItem style={{ width: 100, height: 20, marginRight: 12 }} />
+          <SkeletonItem style={{ width: 80, height: 28, borderRadius: 12 }} />
+        </View>
+
+        {/* Progress Bar */}
+        <View style={{ marginBottom: 24 }}>
+          <SkeletonItem style={{ width: '100%', height: 10, borderRadius: 5, marginBottom: 4 }} />
+          <SkeletonItem style={{ width: 100, height: 14, alignSelf: 'flex-end' }} />
+        </View>
+
+        {/* Documents Section */}
+        <View style={{ marginTop: 16 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+            <SkeletonItem style={{ width: 150, height: 24 }} />
+            <SkeletonItem style={{ width: 80, height: 32, borderRadius: 8 }} />
+          </View>
+          {[1, 2].map(i => (
+            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, padding: 12, borderWidth: 1, borderColor: '#EDF2F7', borderRadius: 8 }}>
+              <SkeletonItem style={{ width: 40, height: 40, borderRadius: 8, marginRight: 12 }} />
+              <View style={{ flex: 1 }}>
+                <SkeletonItem style={{ width: '60%', height: 16, marginBottom: 4 }} />
+                <SkeletonItem style={{ width: '30%', height: 12 }} />
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {/* Plan Section */}
+        <View style={{ marginTop: 16 }}>
+          <SkeletonItem style={{ width: 180, height: 24, marginBottom: 12 }} />
+          <SkeletonItem style={{ width: '100%', height: 300, borderRadius: 12 }} />
+        </View>
+      </ScrollView>
+    </View>
+  );
+};
+
 export default function ProjectDetailScreen() {
   // Obtenemos el 'id' de la URL. Ej: /project/1 -> id = '1'
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -117,6 +193,7 @@ export default function ProjectDetailScreen() {
   const [isEvidenceUploading, setIsEvidenceUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
+  const [refreshing, setRefreshing] = useState(false);
   // Estados para Catálogo y Drag & Drop
   const [catalogGroups, setCatalogGroups] = useState<{id: string, name: string, items: {id: string, name: string}[]}[]>([]);
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
@@ -263,15 +340,27 @@ export default function ProjectDetailScreen() {
 
   // Cargar usuarios disponibles para asignar tareas desde la API
   useEffect(() => {
-    const fetchUsers = async () => {
+    const fetchUsersAndRoles = async () => {
       try {
-        const response = await api.get('/api/users');
-        setAvailableUsers(response.data);
+        const usersPromise = api.get('/api/users');
+        const rolesPromise = api.get('/api/roles').catch(() => ({ data: [] }));
+
+        const [usersRes, rolesRes] = await Promise.all([usersPromise, rolesPromise]);
+        
+        const users = usersRes.data || [];
+        const roles = rolesRes.data || [];
+
+        const usersWithRoleNames = users.map((u: any) => {
+          const roleObj = roles.find((r: any) => r.id === u.role);
+          return { ...u, role: roleObj ? roleObj.name : u.role };
+        });
+
+        setAvailableUsers(usersWithRoleNames);
       } catch (error) {
         console.error('Error fetching users:', error);
       }
     };
-    if (token) fetchUsers();
+    if (token) fetchUsersAndRoles();
   }, [token]);
 
   // Cargar Catálogo de Pasos
@@ -652,14 +741,24 @@ export default function ProjectDetailScreen() {
     }
   }, [baseWidth, baseHeight]);
 
-  // Mostrar spinner si se está cargando y aún no tenemos el proyecto
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const promises = [refreshProjects()];
+      if (projectId) {
+        promises.push(fetchProjectChecklist(projectId));
+      }
+      await Promise.all(promises);
+    } catch (error) {
+      console.error("Error refreshing project:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [projectId, refreshProjects, fetchProjectChecklist]);
+
+  // Mostrar Skeleton si se está cargando y aún no tenemos el proyecto
   if (isLoading && !project) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#3182CE" />
-        <Text style={{ marginTop: 16, color: '#718096' }}>Cargando proyecto...</Text>
-      </View>
-    );
+    return <ProjectDetailSkeleton />;
   }
 
   if (!project || !projectId) {
@@ -672,7 +771,6 @@ export default function ProjectDetailScreen() {
 
   const handleToggleItem = (itemId: string) => {
     if (project?.status === 'Completed' || (project?.status as string) === 'COMPLETED') {
-      showAlert("Acción Restringida", "No se puede cambiar el estatus de las tareas en un proyecto completado.");
       return;
     }
     toggleChecklistItem(projectId, itemId);
@@ -680,7 +778,7 @@ export default function ProjectDetailScreen() {
 
   const handleStartProject = () => {
     if ((user?.role as string) !== 'ADMIN') {
-      showAlert("Acceso Denegado", "Solo el administrador puede cambiar el estatus del proyecto.");
+      showAlert(i18n.t('common.accessDenied'), i18n.t('projectDetail.adminOnlyStatus'));
       return;
     }
     setStartModalVisible(true);
@@ -690,9 +788,9 @@ export default function ProjectDetailScreen() {
     if (projectId) {
       try {
         await startProject(projectId);
-        showAlert("Éxito", "El proyecto ha iniciado correctamente.");
+        showAlert(i18n.t('common.success'), i18n.t('projectDetail.projectStarted'));
       } catch (error) {
-        showAlert("Error", "No se pudo iniciar el proyecto.");
+        showAlert(i18n.t('common.error'), i18n.t('projectDetail.startError'));
       }
     }
     setStartModalVisible(false);
@@ -700,25 +798,25 @@ export default function ProjectDetailScreen() {
 
   const handleCompleteProject = async () => {
     if ((user?.role as string) !== 'ADMIN') { // Fix: Ensure user.role is explicitly compared as a string
-      showAlert("Acceso Denegado", "Solo el administrador puede cerrar proyectos.");
+      showAlert(i18n.t('common.accessDenied'), i18n.t('projectDetail.adminOnlyClose'));
       return;
     }
 
     showAlert(
-      "Finalizar Proyecto",
-      "¿Estás seguro de que deseas marcar este proyecto como Completado?",
+      i18n.t('projectDetail.finishProject'),
+      i18n.t('projectDetail.finishConfirmation'),
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: i18n.t('common.cancel'), style: "cancel" },
         {
-          text: "Finalizar",
+          text: i18n.t('common.finish'),
           onPress: async () => {
             try {
               await api.patch(`/api/projects/${projectId}/status`, { status: 'COMPLETED' });
               if (refreshProjects) await refreshProjects();
-              showAlert("Éxito", "Proyecto finalizado correctamente.");
+              showAlert(i18n.t('common.success'), i18n.t('projectDetail.projectFinished'));
             } catch (error) {
               console.error(error);
-              showAlert("Error", "No se pudo finalizar el proyecto.");
+              showAlert(i18n.t('common.error'), i18n.t('projectDetail.finishError'));
             }
           }
         }
@@ -730,20 +828,20 @@ export default function ProjectDetailScreen() {
     if (!hasPermission('PROJECT_CLOSE')) return;
 
     showAlert(
-      "Reabrir Proyecto",
-      "¿Deseas reabrir este proyecto? El estado cambiará a 'En Progreso'.",
+      i18n.t('projectDetail.reopenProject'),
+      i18n.t('projectDetail.reopenConfirmation'),
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: i18n.t('common.cancel'), style: "cancel" },
         {
-          text: "Reabrir",
+          text: i18n.t('common.reopen'),
           onPress: async () => {
             try {
               await api.patch(`/api/projects/${projectId}/status`, { status: 'IN_PROGRESS' });
               if (refreshProjects) await refreshProjects();
-              showAlert("Éxito", "Proyecto reabierto correctamente.");
+              showAlert(i18n.t('common.success'), i18n.t('projectDetail.projectReopened'));
             } catch (error) {
               console.error(error);
-              showAlert("Error", "No se pudo reabrir el proyecto.");
+              showAlert(i18n.t('common.error'), i18n.t('projectDetail.reopenError'));
             }
           }
         }
@@ -754,7 +852,7 @@ export default function ProjectDetailScreen() {
   // --- Funciones para Evidencias (Foto/Video) ---
   const handleAddEvidenceMedia = async (source: 'camera' | 'gallery', cameraType?: 'image' | 'video') => {
     if (project?.status === 'Completed' || (project?.status as string) === 'COMPLETED') {
-      showAlert("Acción Restringida", "No se pueden subir evidencias en un proyecto completado.");
+      showAlert(i18n.t('common.restrictedAction'), i18n.t('projectDetail.completedProjectEvidenceRestriction'));
       return;
     }
     if (!selectedItemId) return;
@@ -794,7 +892,7 @@ export default function ProjectDetailScreen() {
       try {
         await addChecklistEvidence(projectId, selectedItemId, type, asset.uri);
       } catch (error) {
-        showAlert("Error", "No se pudo subir la evidencia.");
+        showAlert(i18n.t('common.error'), i18n.t('projectDetail.evidenceUploadError'));
       } finally {
         setIsEvidenceUploading(false);
       }
@@ -810,7 +908,7 @@ export default function ProjectDetailScreen() {
 
   const handleDeleteItem = () => {
     if (project?.status === 'Completed' || (project?.status as string) === 'COMPLETED') {
-      showAlert("Acción Restringida", "No se pueden eliminar tareas en un proyecto completado.");
+      showAlert(i18n.t('common.restrictedAction'), i18n.t('projectDetail.completedProjectDeleteTaskRestriction'));
       return;
     }
     if (selectedItemId) {
@@ -834,14 +932,14 @@ export default function ProjectDetailScreen() {
 
   const handleDeleteEvidence = (evidenceId: string) => {
     if (project?.status === 'Completed' || (project?.status as string) === 'COMPLETED') {
-      showAlert("Acción Restringida", "No se pueden eliminar evidencias en un proyecto completado.");
+      showAlert(i18n.t('common.restrictedAction'), i18n.t('projectDetail.completedProjectDeleteEvidenceRestriction'));
       return;
     }
     if (!selectedItemId) return;
     
     showAlert(
-      "Eliminar Evidencia",
-      "¿Estás seguro de que deseas eliminar este archivo?",
+      i18n.t('projectDetail.deleteEvidence'),
+      i18n.t('projectDetail.deleteEvidenceConfirmation'),
       [
         { text: i18n.t('common.cancel'), style: 'cancel' },
         { 
@@ -857,17 +955,17 @@ export default function ProjectDetailScreen() {
 
   const handleUploadPlan = () => {
     if (project?.status === 'Completed' || (project?.status as string)  === 'COMPLETED') {
-      showAlert("Acción Restringida", "No se puede modificar el plano en un proyecto completado.");
+      showAlert(i18n.t('common.restrictedAction'), i18n.t('projectDetail.completedProjectPlanRestriction'));
       return;
     }
     if (project?.architecturalPlanUri) {
       showAlert(
-        "Reemplazar Plano",
-        "¿Estás seguro de que deseas reemplazar el plano actual? Esta acción no se puede deshacer.",
+        i18n.t('projectDetail.replacePlan'),
+        i18n.t('projectDetail.replacePlanConfirmation'),
         [
-          { text: "Cancelar", style: 'cancel' },
+          { text: i18n.t('common.cancel'), style: 'cancel' },
           { 
-            text: "Reemplazar", 
+            text: i18n.t('common.replace'), 
             style: 'destructive', 
             onPress: () => { setTimeout(() => startPlanUpload(), 100); }
           }
@@ -937,7 +1035,7 @@ export default function ProjectDetailScreen() {
         setPlanType('image');
       }
       
-      showAlert("Éxito", "Plano subido correctamente.");
+      showAlert(i18n.t('common.success'), i18n.t('projectDetail.planUploaded'));
 
     } catch (error: any) {
       // Verificar si el error fue por cancelación
@@ -947,11 +1045,11 @@ export default function ProjectDetailScreen() {
         console.error("Error uploading plan:", error);
         
         showAlert(
-          "Error de Subida",
-          "No se pudo subir el plano. ¿Deseas reintentar?",
+          i18n.t('projectDetail.uploadError'),
+          i18n.t('projectDetail.uploadErrorRetry'),
           [
-            { text: "Cancelar", style: "cancel" },
-            { text: "Reintentar", onPress: () => uploadSelectedPlan(file) }
+            { text: i18n.t('common.cancel'), style: "cancel" },
+            { text: i18n.t('common.retry'), onPress: () => uploadSelectedPlan(file) }
           ]
         );
       }
@@ -1015,12 +1113,12 @@ export default function ProjectDetailScreen() {
     }
 
     showAlert(
-      "Seleccionar Archivo",
-      "¿Qué tipo de archivo deseas subir?",
+      i18n.t('projectDetail.selectFile'),
+      i18n.t('projectDetail.fileTypeQuestion'),
       [
-        { text: "Imagen", onPress: pickImageForPlan },
-        { text: "PDF", onPress: pickDocumentForPlan },
-        { text: "Cancelar", style: "cancel" }
+        { text: i18n.t('common.image'), onPress: pickImageForPlan },
+        { text: i18n.t('common.pdf'), onPress: pickDocumentForPlan },
+        { text: i18n.t('common.cancel'), style: "cancel" }
       ]
     );
   };
@@ -1051,14 +1149,14 @@ export default function ProjectDetailScreen() {
 
   const saveNewItem = (data: NewTaskData) => {
     if (project?.status === 'Completed' || (project?.status as string) === 'COMPLETED') {
-      showAlert("Acción Restringida", "No se pueden agregar tareas a un proyecto completado.");
+      showAlert(i18n.t('common.restrictedAction'), i18n.t('projectDetail.completedProjectAddTaskRestriction'));
       return;
     }
 
     if (data.text.trim()) {
       // Validación de límites: Verificar que el punto de inserción esté dentro del plano (0-100%)
       if (newItemModal.x < 0 || newItemModal.y < 0 || newItemModal.x > 100 || newItemModal.y > 100) {
-        showAlert("Fuera de Límites", "No se puede crear la tarea fuera del área del plano.");
+        showAlert(i18n.t('projectDetail.outOfBounds'), i18n.t('projectDetail.outOfBoundsMessage'));
         return;
       }
 
@@ -1075,7 +1173,7 @@ export default function ProjectDetailScreen() {
       // Validar que el área completa (x + width, y + height) no exceda los límites
       // Se da un pequeño margen (100.5) por posibles redondeos
       if (data.shape !== 'pencil' && (newItemModal.x + finalWidth > 100.5 || newItemModal.y + finalHeight > 100.5)) {
-        showAlert("Fuera de Límites", "El elemento se sale de los límites del plano. Intenta colocarlo más al centro.");
+        showAlert(i18n.t('projectDetail.outOfBounds'), i18n.t('projectDetail.outOfBoundsMessage'));
         setIsSaving(false);
         return;
       }
@@ -1113,10 +1211,10 @@ export default function ProjectDetailScreen() {
       // Refrescamos la lista global de proyectos para que se refleje el cambio
       if (refreshProjects) await refreshProjects();
       
-      showAlert("Éxito", "Proyecto actualizado correctamente.");
+      showAlert(i18n.t('common.success'), i18n.t('projectDetail.projectUpdated'));
     } catch (error) {
       console.error(error);
-      showAlert("Error", "No se pudo actualizar el proyecto.");
+      showAlert(i18n.t('common.error'), i18n.t('projectDetail.updateError'));
     }
   };
 
@@ -1209,13 +1307,13 @@ export default function ProjectDetailScreen() {
               UTI: viewingMediaType === 'pdf' ? 'com.adobe.pdf' : 'public.image'
             });
           } else {
-            showAlert("Descarga completa", "Guardado en: " + downloadRes.uri);
+            showAlert(i18n.t('common.downloadComplete'), i18n.t('common.savedTo') + downloadRes.uri);
           }
         }
       }
     } catch (error) {
       console.error(error);
-      showAlert("Error", "No se pudo descargar el archivo.");
+      showAlert(i18n.t('common.error'), i18n.t('common.downloadError'));
     }
   };
 
@@ -1236,7 +1334,7 @@ export default function ProjectDetailScreen() {
         const blobUrl = URL.createObjectURL(blob);
         setViewingImageSource({ uri: blobUrl }); // Guardamos la URL local del blob
         setViewingMediaType('pdf');
-      } catch (e) { console.error(e); showAlert("Error", "No se pudo cargar el documento."); }
+      } catch (e) { console.error(e); showAlert(i18n.t('common.error'), i18n.t('common.loadError')); }
       finally { setIsImageLoading(false); }
     } else {
       // MOBILE & IMAGENES: Usamos la fuente directa
@@ -1256,6 +1354,9 @@ export default function ProjectDetailScreen() {
           paddingBottom: insets.bottom + 80 
         }} 
         scrollEnabled={!isInteracting}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#3182CE']} />
+        }
       >
       {/* Usamos Stack.Screen para configurar el título de la cabecera dinámicamente */}
       <Stack.Screen options={{ title: project.name, headerBackTitle: 'Proyectos' }} />
@@ -1269,7 +1370,7 @@ export default function ProjectDetailScreen() {
                 if (hasPermission('PROJECT_CLOSE')) {
                   handleReopenProject();
                 } else {
-                  showAlert("Proyecto Cerrado", "Este proyecto está completado y no se pueden realizar modificaciones.");
+                  showAlert(i18n.t('projectDetail.projectClosed'), i18n.t('projectDetail.projectClosedMessage'));
                 }
               }}
               style={{ marginLeft: 8, backgroundColor: '#FED7D7', padding: 4, borderRadius: 6 }}
@@ -1282,7 +1383,7 @@ export default function ProjectDetailScreen() {
           <Pressable 
             onPress={() => {
               if (project.status === 'Completed' || (project?.status as string) === 'COMPLETED') {
-                showAlert("Proyecto Cerrado", "No se puede editar un proyecto completado.");
+                showAlert(i18n.t('projectDetail.projectClosed'), i18n.t('projectDetail.editClosedProjectRestriction'));
               } else {
                 setIsEditProjectModalVisible(true);
               }
@@ -1323,13 +1424,13 @@ export default function ProjectDetailScreen() {
         {project.status === 'Not Started' && (
           <Pressable onPress={handleStartProject} style={styles.inlineStartButton}>
             <Feather name="play-circle" size={16} color="#38A169" />
-            <Text style={styles.inlineStartButtonText}>Iniciar</Text>
+            <Text style={styles.inlineStartButtonText}>{i18n.t('common.start')}</Text>
           </Pressable>
         )}
         {project.status !== 'Completed' && isAllTasksCompleted && (
           <Pressable onPress={handleCompleteProject} style={[styles.inlineStartButton, { backgroundColor: '#EBF8FF', borderColor: '#3182CE' }]}>
             <Feather name="check-circle" size={16} color="#3182CE" />
-            <Text style={[styles.inlineStartButtonText, { color: '#3182CE' }]}>Finalizar</Text>
+            <Text style={[styles.inlineStartButtonText, { color: '#3182CE' }]}>{i18n.t('common.finish')}</Text>
           </Pressable>
         )}
       </View>
@@ -1343,12 +1444,14 @@ export default function ProjectDetailScreen() {
       </View>
 
       {/* Sección de Documentos del Proyecto */}
-      <ProjectDocuments 
-        projectId={projectId} 
-        userRole={user?.role as string}
-        projectStatus={project?.status}
-        onViewDocument={handleViewDocument as any}
-      />
+      {hasPermission('PROJECT_DOCUMENTS') && (
+        <ProjectDocuments 
+          projectId={projectId} 
+          userRole={user?.role as string}
+          projectStatus={project?.status}
+          onViewDocument={handleViewDocument as any}
+        />
+      )}
 
       {/* Sección del Plano Arquitectónico */}
       <View style={styles.section}>
@@ -1399,8 +1502,8 @@ export default function ProjectDetailScreen() {
               <Feather name="filter" size={16} color="#3182CE" />
               <Text style={styles.filterButtonText}>
                 {selectedCategoryFilter 
-                  ? catalogGroups.find(g => g.id === selectedCategoryFilter)?.name || 'Filtrar'
-                  : 'Filtrar por Categoría'
+                  ? catalogGroups.find(g => g.id === selectedCategoryFilter)?.name || i18n.t('common.filter')
+                  : i18n.t('projectDetail.filterByCategory')
                 }
               </Text>
               {selectedCategoryFilter && (
@@ -1657,12 +1760,12 @@ export default function ProjectDetailScreen() {
               setViewingImageSource(planImageSource);
               setViewingMediaType(planType);
             }}>
-              <Text style={{ color: '#3182CE', fontSize: 14 }}>{planType === 'pdf' ? 'Ver Documento' : i18n.t('projectDetail.viewFullImage')}</Text>
+              <Text style={{ color: '#3182CE', fontSize: 14 }}>{planType === 'pdf' ? i18n.t('projectDetail.viewDocument') : i18n.t('projectDetail.viewFullImage')}</Text>
             </Pressable>
             {hasPermission('PROJECT_UPDATE') && (
               <Pressable onPress={handleUploadPlan} style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Feather name="refresh-cw" size={14} color="#718096" style={{ marginRight: 4 }} />
-                <Text style={{ color: '#718096', fontSize: 14 }}>Reemplazar Plano</Text>
+                <Text style={{ color: '#718096', fontSize: 14 }}>{i18n.t('projectDetail.replacePlan')}</Text>
               </Pressable>
             )}
           </View>
@@ -1696,7 +1799,9 @@ export default function ProjectDetailScreen() {
                   <View>
                     <Text style={[styles.checklistItemText, item.completed && styles.checklistItemTextCompleted]}>{item.text}</Text>
                     {item.assignedTo && (
-                      <Text style={styles.assignedToText}>{i18n.t('projectDetail.assignedTo')}: {item.assignedTo}</Text>
+                      <Text style={styles.assignedToText}>{i18n.t('projectDetail.assignedTo')}: {
+                        availableUsers.find(u => u.id === item.assignedTo)?.username || item.assignedTo
+                      }</Text>
                     )}
                   </View>
                 </Pressable>
@@ -1738,10 +1843,10 @@ export default function ProjectDetailScreen() {
               <View style={{ width: '85%', padding: 24, backgroundColor: '#FFF', borderRadius: 12, alignItems: 'center' }}>
                 <Feather name="file-text" size={48} color="#718096" />
                 <Text style={{ marginTop: 16, marginBottom: 24, textAlign: 'center', color: '#4A5568', fontSize: 16 }}>
-                  La vista previa de PDF requiere un visor externo en Android.
+                  {i18n.t('projectDetail.pdfAndroidMessage')}
                 </Text>
                 <Pressable style={[styles.modalButton, { backgroundColor: '#3182CE', width: '100%', alignItems: 'center' }]} onPress={handleDownloadViewingDoc}>
-                  <Text style={{ color: '#FFF', fontWeight: 'bold' }}>Abrir PDF</Text>
+                  <Text style={{ color: '#FFF', fontWeight: 'bold' }}>{i18n.t('projectDetail.openPdf')}</Text>
                 </Pressable>
               </View>
             ) : (
@@ -1810,16 +1915,16 @@ export default function ProjectDetailScreen() {
       >
         <View style={styles.inputModalContainer}>
           <View style={styles.inputModalContent}>
-            <Text style={styles.inputModalTitle}>Iniciar Proyecto</Text>
+            <Text style={styles.inputModalTitle}>{i18n.t('projects.startTitle')}</Text>
             <Text style={{ fontSize: 16, color: '#4A5568', marginBottom: 24 }}>
-              ¿Estás seguro de que deseas iniciar este proyecto? El estado cambiará a "En Progreso" y se registrará la fecha de inicio.
+              {i18n.t('projects.startConfirmation')}
             </Text>
             <View style={styles.modalButtons}>
               <Pressable style={[styles.modalButton, styles.cancelButton]} onPress={() => setStartModalVisible(false)}>
-                <Text style={{ fontWeight: 'bold', color: '#4A5568' }}>Cancelar</Text>
+                <Text style={{ fontWeight: 'bold', color: '#4A5568' }}>{i18n.t('common.cancel')}</Text>
               </Pressable>
               <Pressable style={[styles.modalButton, { backgroundColor: '#38A169' }]} onPress={confirmStartProject}>
-                <Text style={styles.saveButtonText}>Iniciar</Text>
+                <Text style={styles.saveButtonText}>{i18n.t('common.start')}</Text>
               </Pressable>
             </View>
           </View>
@@ -1869,12 +1974,12 @@ export default function ProjectDetailScreen() {
             </View>
 
           <View style={styles.catalogHeader}>
-            <Text style={styles.catalogTitle}>Catálogo de Pasos</Text>
+            <Text style={styles.catalogTitle}>{i18n.t('projectDetail.stepsCatalog')}</Text>
             <Pressable onPress={() => setIsCatalogOpen(false)}>
               <Feather name="x" size={20} color="#4A5568" />
             </Pressable>
           </View>
-          <Text style={styles.catalogSubtitle}>Arrastra un elemento al plano para agregarlo.</Text>
+          <Text style={styles.catalogSubtitle}>{i18n.t('projectDetail.dragElement')}</Text>
           <ScrollView style={styles.catalogList} showsVerticalScrollIndicator={true}>
             {filteredCatalogGroups.map((group) => (
               <View key={group.id} style={styles.catalogGroup}>
@@ -1904,7 +2009,7 @@ export default function ProjectDetailScreen() {
                 )}
               </View>
             ))}
-            {filteredCatalogGroups.length === 0 && <Text style={{ color: '#A0AEC0', fontStyle: 'italic', padding: 10 }}>No hay elementos disponibles.</Text>}
+            {filteredCatalogGroups.length === 0 && <Text style={{ color: '#A0AEC0', fontStyle: 'italic', padding: 10 }}>{i18n.t('projectDetail.noElements')}</Text>}
           </ScrollView>
         </Animated.View>
         </>
@@ -1927,10 +2032,10 @@ export default function ProjectDetailScreen() {
       >
         <Pressable style={styles.inputModalContainer} onPress={() => setIsFilterModalVisible(false)}>
           <Pressable style={styles.inputModalContent} onPress={() => {}}>
-            <Text style={styles.inputModalTitle}>Filtrar por Categoría</Text>
+            <Text style={styles.inputModalTitle}>{i18n.t('projectDetail.filterByCategory')}</Text>
             <TextInput
               style={styles.input}
-              placeholder="Buscar categoría..."
+              placeholder={i18n.t('projectDetail.searchCategory')}
               value={filterSearchText}
               onChangeText={setFilterSearchText}
             />
@@ -1939,7 +2044,7 @@ export default function ProjectDetailScreen() {
                 style={styles.filterModalItem} 
                 onPress={() => { setSelectedCategoryFilter(null); setIsFilterModalVisible(false); }}
               >
-                <Text style={styles.filterModalItemText}>Todos</Text>
+                <Text style={styles.filterModalItemText}>{i18n.t('common.all')}</Text>
               </Pressable>
               {catalogGroups
                 .filter(g => g.name.toLowerCase().includes(filterSearchText.toLowerCase()))
@@ -1955,7 +2060,7 @@ export default function ProjectDetailScreen() {
                 ))
               }
               {catalogGroups.filter(g => g.name.toLowerCase().includes(filterSearchText.toLowerCase())).length === 0 && (
-                <Text style={{ color: '#A0AEC0', padding: 12, textAlign: 'center' }}>No se encontraron categorías.</Text>
+                <Text style={{ color: '#A0AEC0', padding: 12, textAlign: 'center' }}>{i18n.t('projectDetail.noCategoriesFound')}</Text>
               )}
             </ScrollView>
           </Pressable>

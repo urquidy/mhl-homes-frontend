@@ -1,14 +1,16 @@
 import Header from '@/components/Header';
 import NewProjectModal from '@/components/projects/NewProjectModal';
 import { Feather } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { usePathname, useRouter } from 'expo-router';
 import { Drawer } from 'expo-router/drawer';
 import React, { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import i18n from '../../constants/i18n';
 import { useAuth } from '../../contexts/AuthContext';
 import { EventsProvider } from '../../contexts/EventsContext';
+import { LanguageProvider, useLanguage } from '../../contexts/LanguageContext';
 import { NotificationsProvider } from '../../contexts/NotificationsContext';
 import api from '../../services/api';
 
@@ -26,11 +28,14 @@ export const HeaderActionContext = React.createContext<{
   setCustomAddAction: (action: (() => void) | null) => void;
 }>({ setCustomAddAction: () => {} });
 
-/**
- * Este es el layout principal de la aplicación autenticada.
- * Define un Drawer que contiene el SideMenu y el Header.
- */
-export default function AppLayout() {
+// Contexto para permitir recargar el menú desde otras pantallas (ej. Dashboard)
+export const MenuContext = React.createContext<{
+  reloadMenu: () => Promise<void>;
+}>({ reloadMenu: async () => {} });
+
+// Componente interno que consume el contexto de idioma
+function AppLayoutContent() {
+  const { language } = useLanguage();
   const pathname = usePathname();
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -42,25 +47,125 @@ export default function AppLayout() {
   const [customAddAction, setCustomAddAction] = useState<(() => void) | null>(null);
   const [isNewProjectModalVisible, setIsNewProjectModalVisible] = useState(false);
   const [dynamicMenuItems, setDynamicMenuItems] = useState<MenuItem[]>([]);
+  const [roleName, setRoleName] = useState('');
+  const [isLoadingMenu, setIsLoadingMenu] = useState(true);
+
+  // Función para cargar el menú desde la API
+  const fetchMenu = async () => {
+    if (!token) return;
+    try {
+      const response = await api.get('/api/menu');
+      const menuData = response.data || [];
+      setDynamicMenuItems(menuData);
+      await AsyncStorage.setItem('menu_cache', JSON.stringify(menuData));
+    } catch (err) {
+      console.error("Error fetching menu:", err);
+    }
+  };
 
   // Cargar menú desde la API al iniciar o cambiar token
   useEffect(() => {
-    if (token) {
-      api.get('/api/menu')
-        .then(response => {
-          setDynamicMenuItems(response.data || []);
-        })
-        .catch(err => console.error("Error fetching menu:", err));
-    }
+    const loadInitialMenu = async () => {
+      if (!token) {
+        setIsLoadingMenu(false);
+        return;
+      }
+
+      // 1. Estrategia Stale-while-revalidate: Cargar caché primero
+      try {
+        const cached = await AsyncStorage.getItem('menu_cache');
+        if (cached) {
+          setDynamicMenuItems(JSON.parse(cached));
+          setIsLoadingMenu(false); // Mostrar inmediatamente si hay caché
+        }
+      } catch (e) { /* Ignorar error de lectura */ }
+
+      // 2. Actualizar desde la API en segundo plano
+      await fetchMenu();
+      setIsLoadingMenu(false);
+    };
+
+    loadInitialMenu();
   }, [token]);
+
+  // Resolver nombre del rol (igual que en profile.tsx)
+  useEffect(() => {
+    const resolveRoleName = async () => {
+      if (!user?.role) {
+        setRoleName(user?.permissions?.includes('ROLE_ADMIN') ? 'Admin' : 'User');
+        return;
+      }
+      try {
+        const response = await api.get('/api/roles');
+        const roles = response.data || [];
+        const match = roles.find((r: any) => r.id === user.role);
+        setRoleName(match ? match.name : user.role);
+      } catch (error) {
+        setRoleName(user.role);
+      }
+    };
+
+    if (token) resolveRoleName();
+  }, [user?.role, token]);
+
+  // Validar acceso a rutas según permisos del menú (Protección de Rutas)
+  useEffect(() => {
+    if (isLoadingMenu || !token || dynamicMenuItems.length === 0) return;
+
+    const allowedRoutes = dynamicMenuItems.map(item => item.link);
+    // Normalizar ruta actual (Expo Router usa '/' para index, API usa '/dashboard')
+    let currentRoute = pathname;
+    if (currentRoute === '/') currentRoute = '/dashboard';
+
+    // Rutas siempre permitidas
+    if (currentRoute.includes('/profile')) return;
+
+    // Lista de rutas estáticas conocidas en el sistema
+    const staticRoutes = ['/dashboard', '/projects', '/budgets', '/checklist', '/agenda', '/reports', '/admin'];
+    const isStatic = staticRoutes.includes(currentRoute);
+
+    // 1. Validación de rutas estáticas (Menú principal)
+    if (isStatic) {
+      if (!allowedRoutes.includes(currentRoute)) {
+        // Usuario no tiene permiso -> Redirigir a la primera ruta permitida
+        const firstAllowed = allowedRoutes[0];
+        if (firstAllowed) {
+          const target = firstAllowed === '/dashboard' ? '/' : firstAllowed;
+          router.replace(target as any);
+        }
+      }
+    } else {
+      // 2. Validación de rutas dinámicas (Detalle de Proyecto [id])
+      // Si la ruta no es estática (ej. /123), asumimos que es un detalle de proyecto.
+      // Requerimos que el usuario tenga acceso a '/projects' para ver detalles.
+      const hasProjectAccess = allowedRoutes.includes('/projects');
+      if (!hasProjectAccess) {
+        const firstAllowed = allowedRoutes[0];
+        if (firstAllowed) {
+          const target = firstAllowed === '/dashboard' ? '/' : firstAllowed;
+          router.replace(target as any);
+        }
+      }
+    }
+  }, [pathname, dynamicMenuItems, isLoadingMenu, token]);
 
   const handleAddPress = customAddAction || (() => setIsNewProjectModalVisible(true));
 
+  if (isLoadingMenu) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1A202C' }}>
+        <ActivityIndicator size="large" color="#D4AF37" />
+      </View>
+    );
+  }
+
   return (
     <HeaderActionContext.Provider value={{ setCustomAddAction }}>
+      <MenuContext.Provider value={{ reloadMenu: fetchMenu }}>
       <EventsProvider>
       <NotificationsProvider>
       <Drawer
+        key={language} // Forzar re-render al cambiar idioma
         // Establece el estado inicial del menú.
         // Abierto en pantallas grandes, cerrado en las demás.
         defaultStatus={isLargeScreen ? 'open' : 'closed'}
@@ -74,7 +179,7 @@ export default function AppLayout() {
                 </View>
                 <View style={styles.headerTextContainer}>
                   <Text style={styles.companyName}>{user?.companyName || 'MHL Homes'}</Text>
-                  <Text style={styles.userRole}>{user?.role || (user?.permissions?.includes('ROLE_ADMIN') ? 'Admin' : 'User')}</Text>
+                  <Text style={styles.userRole}>{roleName}</Text>
                 </View>
               </View>
 
@@ -172,7 +277,20 @@ export default function AppLayout() {
       </Modal>
       </NotificationsProvider>
       </EventsProvider>
+      </MenuContext.Provider>
     </HeaderActionContext.Provider>
+  );
+}
+
+/**
+ * Este es el layout principal de la aplicación autenticada.
+ * Define un Drawer que contiene el SideMenu y el Header.
+ */
+export default function AppLayout() {
+  return (
+    <LanguageProvider>
+      <AppLayoutContent />
+    </LanguageProvider>
   );
 }
 
