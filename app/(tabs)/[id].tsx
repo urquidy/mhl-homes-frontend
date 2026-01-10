@@ -1450,6 +1450,7 @@ export default function ProjectDetailScreen() {
           userRole={user?.role as string}
           projectStatus={project?.status}
           onViewDocument={handleViewDocument as any}
+          canEdit={hasPermission('PROJECT_DOCUMENTS')}
         />
       )}
 

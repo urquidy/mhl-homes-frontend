@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, FlatList, Platform, ActivityIndicator, Linking, LayoutAnimation, UIManager } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import api from '../../services/api';
-import i18n from '../../constants/i18n';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, LayoutAnimation, Platform, Pressable, StyleSheet, Text, UIManager, View } from 'react-native';
 import { useCustomAlert } from '../../components/ui/CustomAlert';
+import api from '../../services/api';
 
 interface ProjectDocumentsProps {
   projectId: string;
@@ -13,6 +12,7 @@ interface ProjectDocumentsProps {
   onViewDocument: (uri: string, name: string, type?: string) => void;
   onRefreshProjects?: () => void;
   onRefreshChecklist?: () => void;
+  canEdit?: boolean;
 }
 
 // Habilitar animaciones de layout en Android
@@ -20,7 +20,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-export default function ProjectDocuments({ projectId, userRole, projectStatus, onViewDocument, onRefreshProjects, onRefreshChecklist }: ProjectDocumentsProps) {
+export default function ProjectDocuments({ projectId, userRole, projectStatus, onViewDocument, onRefreshProjects, onRefreshChecklist, canEdit = false }: ProjectDocumentsProps) {
   const [documents, setDocuments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -166,7 +166,7 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
           <Text style={styles.title}>Documentos del Proyecto</Text>
           <Feather name={isExpanded ? "chevron-down" : "chevron-right"} size={24} color="#1A202C" style={{ marginLeft: 8 }} />
         </Pressable>
-        {userRole === 'ADMIN' && (
+        {(userRole === 'ADMIN' || canEdit) && (
           <Pressable style={styles.addButton} onPress={handleUpload} disabled={isUploading}>
             {isUploading ? <ActivityIndicator size="small" color="#3182CE" /> : <Feather name="plus" size={20} color="#3182CE" />}
             <Text style={styles.addText}>{isUploading ? 'Subiendo...' : 'Agregar'}</Text>
@@ -190,7 +190,7 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
                 <Text style={styles.docName} numberOfLines={1}>{doc.name}</Text>
                 <Text style={styles.docDate}>{new Date(doc.date || Date.now()).toLocaleDateString()}</Text>
               </View>
-              {userRole === 'ADMIN' && (
+              {(userRole === 'ADMIN' || canEdit) && (
                 <Pressable style={styles.deleteButton} onPress={() => handleDelete(doc)}>
                   <Feather name="trash-2" size={18} color="#E53E3E" />
                 </Pressable>

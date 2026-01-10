@@ -1,7 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, FlatList, Modal, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, FlatList, Modal, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useCustomAlert } from '../../components/ui/CustomAlert';
 import i18n from '../../constants/i18n';
 import { useAuth } from '../../contexts/AuthContext';
@@ -45,7 +45,7 @@ const ProjectsSkeleton = () => {
 };
 
 export default function ProjectsScreen() {
-  const { projects, deleteProject, startProject, refreshProjects, isLoading } = useProjects();
+  const { projects, deleteProject, startProject, refreshProjects, loadMoreProjects, hasMoreProjects, isLoading } = useProjects();
   const { user } = useAuth();
   const { hasPermission } = usePermission();
   const router = useRouter();
@@ -55,6 +55,7 @@ export default function ProjectsScreen() {
   const [startModalVisible, setStartModalVisible] = useState(false);
   const [projectToStart, setProjectToStart] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchText, setSearchText] = useState('');
   const { showAlert, AlertComponent } = useCustomAlert();
 
   // Filtramos los proyectos activos (excluyendo los completados, si esa es la lógica deseada, o mostrando todos)
@@ -111,13 +112,34 @@ export default function ProjectsScreen() {
     }
   }, [refreshProjects]);
 
+  // Manejar búsqueda
+  const handleSearch = (text: string) => {
+    setSearchText(text);
+    // Debounce opcional o búsqueda al presionar enter podría ir aquí
+    refreshProjects(text);
+  };
+
   if (isLoading && !refreshing && projects.length === 0) {
     return <ProjectsSkeleton />;
   }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{i18n.t('projects.title')}</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>{i18n.t('projects.title')}</Text>
+        
+        {/* Barra de Búsqueda */}
+        <View style={styles.searchContainer}>
+          <Feather name="search" size={20} color="#A0AEC0" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder={i18n.t('common.search') || "Buscar..."}
+            value={searchText}
+            onChangeText={handleSearch}
+          />
+        </View>
+      </View>
+
       <FlatList
         data={activeProjects}
         keyExtractor={(item) => item.id}
@@ -125,6 +147,10 @@ export default function ProjectsScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#3182CE']} />
         }
+        // Paginación
+        onEndReached={loadMoreProjects}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={hasMoreProjects && projects.length > 0 ? <ActivityIndicator style={{ padding: 10 }} color="#3182CE" /> : null}
         renderItem={({ item }) => (
           <Pressable style={styles.card} onPress={() => handlePressProject(item.id)}>
             <View style={styles.cardContent}>
@@ -207,7 +233,8 @@ export default function ProjectsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 24, backgroundColor: '#FFFFFF' },
-  title: { fontSize: 32, fontWeight: 'bold', marginBottom: 24, color: '#1A202C' },
+  header: { marginBottom: 24 },
+  title: { fontSize: 32, fontWeight: 'bold', marginBottom: 16, color: '#1A202C' },
   listContent: { paddingBottom: 24 },
   card: {
     flexDirection: 'row',
@@ -236,6 +263,23 @@ const styles = StyleSheet.create({
   actionButton: {
     padding: 8,
     marginRight: 4,
+  },
+  // Estilos Búsqueda
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F7FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+  },
+  searchIcon: { marginRight: 8 },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: '#2D3748',
   },
   // Estilos del Modal
   modalOverlay: {

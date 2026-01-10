@@ -1,11 +1,11 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect, useRef } from 'react';
-import { AppState, Platform } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
-import { Project, ChecklistItem, ProjectStatus, ProjectBudget } from '../types';
-import { useAuth } from './AuthContext';
-import api from '../services/api';
-import { initSocket, disconnectSocket } from '../services/socket';
+import React, { createContext, ReactNode, useContext, useEffect, useRef, useState } from 'react';
+import { AppState, Platform } from 'react-native';
 import GlobalAlert from '../components/GlobalAlert';
+import api from '../services/api';
+import { disconnectSocket, initSocket } from '../services/socket';
+import { ChecklistItem, Project, ProjectBudget, ProjectStatus } from '../types';
+import { useAuth } from './AuthContext';
 
 // --- Datos Iniciales (los que estaban en index.tsx) ---
 const initialProjects: Project[] = [
@@ -76,7 +76,9 @@ interface ProjectsContextType {
   deleteChecklistEvidence: (projectId: string, checklistId: string, evidenceId: string) => Promise<void>;
   addChecklistComment: (projectId: string, itemId: string, text: string) => Promise<void>;
   deleteChecklistItem: (projectId: string, itemId: string) => Promise<void>;
-  refreshProjects: () => Promise<void>;
+  refreshProjects: (search?: string) => Promise<void>;
+  loadMoreProjects: () => Promise<void>;
+  hasMoreProjects: boolean;
   refreshBudgets: () => Promise<void>;
   fetchProjectChecklist: (projectId: string) => Promise<void>;
   clearProjectChecklist: (projectId: string) => void;
@@ -94,6 +96,9 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [budgets, setBudgets] = useState<Record<string, ProjectBudget>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isBudgetsLoading, setIsBudgetsLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMoreProjects, setHasMoreProjects] = useState(true);
+  const [lastSearch, setLastSearch] = useState('');
 
   // Ref para acceder al estado actual de checklists dentro del intervalo sin reiniciar el efecto
   const checklistsRef = useRef(checklists);
@@ -127,12 +132,17 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
   }, []);
 
   // Función centralizada para refrescar proyectos desde la API
-  const refreshProjects = async () => {
+  const refreshProjects = async (search = '') => {
     if (!token) return;
     setIsLoading(true);
+    setPage(1);
+    setLastSearch(search);
     try {
-      const response = await api.get('/api/projects');
-      const data = response.data;
+      // Enviamos parámetros de paginación y búsqueda
+      const response = await api.get(`/api/projects?page=1&limit=10&search=${encodeURIComponent(search)}`);
+      // Soporte para respuesta paginada { data: [], meta: {} } o array directo []
+      const data = Array.isArray(response.data) ? response.data : (response.data.data || []);
+      
       const mappedProjects: Project[] = data.map((p: any) => ({
         id: p.id,
         name: p.name,
@@ -151,6 +161,8 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
         endDate: p.endDate,
       }));
       setProjects(mappedProjects);
+      // Si devolvió menos de 10, asumimos que no hay más
+      setHasMoreProjects(data.length >= 10);
     } catch (err) {
       console.error('Error fetching projects:', err);
       if (Platform.OS === 'web') {
@@ -158,6 +170,45 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadMoreProjects = async () => {
+    if (!token || !hasMoreProjects || isLoading) return;
+    
+    const nextPage = page + 1;
+    try {
+      const response = await api.get(`/api/projects?page=${nextPage}&limit=10&search=${encodeURIComponent(lastSearch)}`);
+      const data = Array.isArray(response.data) ? response.data : (response.data.data || []);
+      
+      if (data.length === 0) {
+        setHasMoreProjects(false);
+        return;
+      }
+
+      const newProjects: Project[] = data.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        client: p.client,
+        status: (p.status === 'IN_PROGRESS' || p.status === 'In Progress') ? 'In Progress' : 
+                (p.status === 'DELAYED' || p.status === 'Delayed') ? 'Delayed' : 
+                (p.status === 'COMPLETED' || p.status === 'Completed') ? 'Completed' : 
+                (p.status === 'ON_TIME' || p.status === 'On Time') ? 'On Time' : 
+                (p.status === 'NOT_STARTED' || p.status === 'Not Started') ? 'Not Started' : 'In Progress',
+        address: p.address,
+        progress: p.progress,
+        participants: p.participants || [],
+        architecturalPlanUri: p.architecturalPlanUri || p.imageUri,
+        imageUri: p.imageUri,
+        startDate: p.startDate,
+        endDate: p.endDate,
+      }));
+
+      setProjects(prev => [...prev, ...newProjects]);
+      setPage(nextPage);
+      setHasMoreProjects(data.length >= 10);
+    } catch (err) {
+      console.error('Error loading more projects:', err);
     }
   };
 
@@ -706,7 +757,7 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
     projects, addProject, checklists, budgets,
     getProjectById, getChecklistByProjectId, deleteProject, startProject,
     toggleChecklistItem, updateChecklistEvidence, addChecklistItem, updateProjectPlan, refreshBudgets, isBudgetsLoading, deleteChecklistEvidence,
-    addChecklistEvidence, addChecklistComment, deleteChecklistItem, refreshProjects, isLoading, fetchProjectChecklist, clearProjectChecklist
+    addChecklistEvidence, addChecklistComment, deleteChecklistItem, refreshProjects, loadMoreProjects, hasMoreProjects, isLoading, fetchProjectChecklist, clearProjectChecklist
   };
 
   return (

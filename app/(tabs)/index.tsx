@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
     flex: 2, // Ocupa 2/3 del espacio
   },
   fullWidthContent: {
-    flex: 1, // Ocupa todo el ancho en pantallas pequeñas
+    width: '100%', // Ocupa todo el ancho en pantallas pequeñas
   },
   sidebar: {
     flex: 1, // Ocupa 1/3 del espacio

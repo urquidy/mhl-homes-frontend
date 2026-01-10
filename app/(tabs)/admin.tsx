@@ -174,9 +174,10 @@ export default function AdminScreen() {
       setUsers(prev => [...prev, response.data]);
       setEditModalVisible(false);
       showAlert(i18n.t('common.success'), i18n.t('admin.userCreated'));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating user:', error);
-      showAlert(i18n.t('common.error'), i18n.t('admin.errorCreatingUser'));
+      const message = error.response?.data?.message || i18n.t('admin.errorCreatingUser');
+      showAlert(i18n.t('common.error'), message);
     }
   };
 
@@ -190,16 +191,17 @@ export default function AdminScreen() {
       // Enviar roles como array
       if (payload.role) {
         payload.roles = [payload.role];
-        delete payload.role;
+        // delete payload.role;
       }
 
       await api.put(`/api/users/${editingUser.id}`, payload);
       setUsers(prev => prev.map(u => u.id === editingUser.id ? { ...u, ...formData } : u));
       setEditModalVisible(false);
       showAlert(i18n.t('common.success'), i18n.t('admin.userUpdated'));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating user:', error);
-      showAlert(i18n.t('common.error'), i18n.t('admin.errorUpdatingUser'));
+      const message = error.response?.data?.message || i18n.t('admin.errorUpdatingUser');
+      showAlert(i18n.t('common.error'), message);
     }
   };
 
