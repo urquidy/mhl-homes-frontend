@@ -5,13 +5,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { usePathname, useRouter } from 'expo-router';
 import { Drawer } from 'expo-router/drawer';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import i18n from '../../constants/i18n';
 import { useAuth } from '../../contexts/AuthContext';
 import { EventsProvider } from '../../contexts/EventsContext';
 import { LanguageProvider, useLanguage } from '../../contexts/LanguageContext';
 import { NotificationsProvider } from '../../contexts/NotificationsContext';
+import { useTenant } from '../../contexts/TenantContext';
 import api from '../../services/api';
 
 // --- Datos y tipos movidos desde SideMenu.tsx ---
@@ -42,6 +43,7 @@ function AppLayoutContent() {
   const isLargeScreen = width >= 1024;
   const insets = useSafeAreaInsets();
   const { user, token } = useAuth();
+  const { tenant } = useTenant();
   
   // Estado para la acción personalizada del botón "Agregar"
   const [customAddAction, setCustomAddAction] = useState<(() => void) | null>(null);
@@ -172,14 +174,22 @@ function AppLayoutContent() {
         drawerContent={(props) => {
           return (
             // --- Contenido del SideMenu integrado directamente ---
-            <View style={[styles.container, { paddingTop: 15 + insets.top, paddingBottom: 15 + insets.bottom }]}>
+            <View style={[styles.container, { paddingTop: 15 + insets.top, paddingBottom: 15 + insets.bottom, backgroundColor: tenant.secondaryColor || '#1A202C' }]}>
               <View style={styles.header}>
-                <View style={styles.logoPlaceholder}>
-                  <Text style={styles.logoText}>{user?.companyName.charAt(0) || 'M'}</Text>
-                </View>
+                {tenant.logoUri ? (
+                  <Image 
+                    source={{ uri: tenant.logoUri }} 
+                    style={styles.drawerLogo} 
+                    resizeMode="contain" 
+                  />
+                ) : (
+                  <View style={styles.logoPlaceholder}>
+                    <Text style={styles.logoText}>{user?.companyName.charAt(0) || 'M'}</Text>
+                  </View>
+                )}
                 <View style={styles.headerTextContainer}>
-                  <Text style={styles.companyName}>{user?.companyName || 'MHL Homes'}</Text>
-                  <Text style={styles.userRole}>{roleName}</Text>
+                  <Text style={[styles.companyName, { color: tenant.primaryColor }]}>{user?.companyName || 'MHL Homes'}</Text>
+                  <Text style={[styles.userRole, { color: tenant.primaryColor }]}>{roleName}</Text>
                 </View>
               </View>
 
@@ -203,8 +213,8 @@ function AppLayoutContent() {
                     >
                       {({ pressed }) => (
                         <View style={[ styles.navItem, isActive && styles.navItemActive, pressed && styles.navItemPressed ]}>
-                          <Feather name={item.icon as keyof typeof Feather.glyphMap} size={22} color="#D4AF37" />
-                          <Text style={[styles.navText, isActive && styles.navTextActive]}>{i18n.t(item.title)}</Text>
+                          <Feather name={item.icon as keyof typeof Feather.glyphMap} size={22} color={tenant.primaryColor} />
+                          <Text style={[styles.navText, { color: tenant.primaryColor }, isActive && styles.navTextActive]}>{i18n.t(item.title)}</Text>
                         </View>
                       )}
                     </Pressable>
@@ -220,7 +230,7 @@ function AppLayoutContent() {
                     props.navigation.closeDrawer();
                     setIsNewProjectModalVisible(true);
                   }}
-                  style={({ pressed }) => [styles.newProjectButton, pressed && styles.buttonPressed]}>
+                  style={({ pressed }) => [styles.newProjectButton, { backgroundColor: tenant.primaryColor }, pressed && styles.buttonPressed]}>
                   <Feather name="plus-circle" size={20} color="#ffffffff" />
                   <Text style={styles.newProjectButtonText}>{i18n.t('nav.newProject')}</Text>
                 </Pressable>
@@ -319,6 +329,11 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 20,
     fontWeight: 'bold',
+  },
+  drawerLogo: {
+    width: 50,
+    height: 50,
+    marginRight: 12,
   },
   headerTextContainer: {
     flexShrink: 1,

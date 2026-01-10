@@ -1,10 +1,11 @@
+import { useFonts } from 'expo-font';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, View, Image, StyleSheet, Animated } from 'react-native';
-import { useFonts } from 'expo-font';
+import { ActivityIndicator, Animated, Image, StyleSheet, View } from 'react-native';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
-import { ProjectsProvider } from '../contexts/ProjectsContext';
 import { EventsProvider } from '../contexts/EventsContext';
+import { ProjectsProvider } from '../contexts/ProjectsContext';
+import { TenantProvider } from '../contexts/TenantContext';
 
 function InitialLayout() {
   const { user, isLoading } = useAuth();
@@ -67,13 +68,15 @@ function InitialLayout() {
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <ProjectsProvider>
-        <EventsProvider>
-          <InitialLayout />
-        </EventsProvider>
-      </ProjectsProvider>
-    </AuthProvider>
+     <TenantProvider>
+      <AuthProvider>
+        <ProjectsProvider>
+          <EventsProvider>
+            <InitialLayout />
+          </EventsProvider>
+        </ProjectsProvider>
+      </AuthProvider>
+    </TenantProvider>
   );
 }
 

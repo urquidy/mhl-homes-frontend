@@ -13,6 +13,7 @@ import {
   useWindowDimensions
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTenant } from '../../contexts/TenantContext';
 import api from '../../services/api';
 
 export default function LoginScreen() {
@@ -23,6 +24,7 @@ export default function LoginScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { login } = useAuth();
+  const { tenant, isLoading: isTenantLoading } = useTenant();
 
   const handleSignIn = async () => {
     if (!username || !password) {
@@ -119,7 +121,7 @@ export default function LoginScreen() {
     },
     button: {
       height: 50,
-      backgroundColor: Colors[colorScheme].tint,
+      backgroundColor: tenant.primaryColor, // Usar color del tenant
       borderRadius: 10,
       justifyContent: 'center',
       alignItems: 'center',
@@ -135,12 +137,15 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.container}>
+      {isTenantLoading ? (
+        <ActivityIndicator size="large" color={Colors[colorScheme].tint} />
+      ) : (
+        <>
       {/* --- Columna del Logo --- */}
       <View style={styles.logoContainer}>
         <Image
-          // ¡IMPORTANTE! Asegúrate de que tu imagen 'mhl_homes.jpg'
-          // se encuentre en la carpeta 'assets/images'.
-          source={require('@/assets/images/mhl_homes.jpg')}
+          // Usar logo del tenant si existe, sino el default local
+          source={tenant.logoUri ? { uri: tenant.logoUri } : require('@/assets/images/mhl_homes.jpg')}
           style={styles.logo}
           resizeMode="contain"
         />
@@ -149,7 +154,7 @@ export default function LoginScreen() {
       {/* --- Columna del Formulario --- */}
       <View style={styles.formContainer}>
         <View style={styles.formWrapper}>
-          <Text style={styles.title}>Welcome</Text>
+          <Text style={styles.title}>{tenant.loginTitle || `Welcome to ${tenant.name}`}</Text>
 
           <TextInput
             style={styles.input}
@@ -173,7 +178,7 @@ export default function LoginScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.button,
-              { opacity: pressed || isLoading ? 0.8 : 1 },
+              { opacity: pressed || isLoading ? 0.8 : 1, backgroundColor: tenant.primaryColor },
             ]}
             onPress={handleSignIn}
             disabled={isLoading}>
@@ -185,6 +190,8 @@ export default function LoginScreen() {
           </Pressable>
         </View>
       </View>
+        </>
+      )}
     </View>
   );
 }

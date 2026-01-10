@@ -1,6 +1,7 @@
 import { Feather } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import RolesManager from '../../components/admin/RolesManager';
 import { useCustomAlert } from '../../components/ui/CustomAlert';
 import i18n from '../../constants/i18n';
@@ -11,7 +12,7 @@ import api from '../../services/api';
 export default function AdminScreen() {
   const { user } = useAuth();
   const { hasPermission } = usePermission();
-  const [currentView, setCurrentView] = useState<'menu' | 'users' | 'project-steps' | 'roles' | 'agenda-types'>('menu');
+  const [currentView, setCurrentView] = useState<'menu' | 'users' | 'project-steps' | 'roles' | 'agenda-types' | 'site-config'>('menu');
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -35,6 +36,13 @@ export default function AdminScreen() {
   const [agendaTypeModalVisible, setAgendaTypeModalVisible] = useState(false);
   const [agendaTypeFormData, setAgendaTypeFormData] = useState({ name: '', description: '', primaryColor: '#3182CE', icon: 'calendar' });
   const [editingAgendaType, setEditingAgendaType] = useState<any>(null);
+
+  // Estado para Configuración del Sitio (FRONT_CONFIG)
+  const [siteConfigs, setSiteConfigs] = useState<any[]>([]);
+  const [siteConfigModalVisible, setSiteConfigModalVisible] = useState(false);
+  const [siteConfigFormData, setSiteConfigFormData] = useState({ name: '', description: '', primaryColor: '#D4AF37', secondaryColor: '#1A202C', logoUri: '', loginTitle: '' });
+  const [editingSiteConfig, setEditingSiteConfig] = useState<any>(null);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -83,6 +91,18 @@ export default function AdminScreen() {
     }
   };
 
+  const fetchSiteConfigs = async () => {
+    setLoading(true);
+    try {
+      const response = await api.get('/api/catalogs/type/FRONT_CONFIG');
+      setSiteConfigs(response.data || []);
+    } catch (error) {
+      console.error('Error fetching site configs:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (currentView === 'users') {
       fetchUsers();
@@ -91,6 +111,8 @@ export default function AdminScreen() {
       fetchProjectSteps();
     } else if (currentView === 'agenda-types') {
       fetchAgendaTypes();
+    } else if (currentView === 'site-config') {
+      fetchSiteConfigs();
     }
   }, [currentView]);
 
@@ -353,6 +375,133 @@ export default function AdminScreen() {
         }
       }}
     ]);
+  };
+
+  // --- FUNCIONES PARA CONFIGURACIÓN DEL SITIO ---
+  const openCreateSiteConfigModal = () => {
+    setEditingSiteConfig(null);
+    setSiteConfigFormData({ name: '', description: '', primaryColor: '#D4AF37', secondaryColor: '#1A202C', logoUri: '', loginTitle: '' });
+    setSiteConfigModalVisible(true);
+  };
+
+  const openEditSiteConfigModal = (item: any) => {
+    setEditingSiteConfig(item);
+    setSiteConfigFormData({
+      name: item.name,
+      description: item.description || '',
+      primaryColor: item.metadata?.primaryColor || '#D4AF37',
+      secondaryColor: item.metadata?.secondaryColor || '#1A202C',
+      logoUri: item.metadata?.logoUri || '',
+      loginTitle: item.metadata?.loginTitle || ''
+    });
+    setSiteConfigModalVisible(true);
+  };
+
+  const handleSaveSiteConfig = async () => {
+    if (!siteConfigFormData.name.trim()) {
+      showAlert(i18n.t('common.error'), i18n.t('admin.nameRequired'));
+      return;
+    }
+
+    try {
+      const payload = {
+        type: 'FRONT_CONFIG',
+        name: siteConfigFormData.name,
+        description: siteConfigFormData.description,
+        metadata: {
+          primaryColor: siteConfigFormData.primaryColor,
+          secondaryColor: siteConfigFormData.secondaryColor,
+          logoUri: siteConfigFormData.logoUri,
+          loginTitle: siteConfigFormData.loginTitle
+        }
+      };
+
+      if (editingSiteConfig) {
+        await api.put(`/api/catalogs/${editingSiteConfig.id}`, payload);
+        showAlert(i18n.t('common.success'), 'Configuración actualizada');
+      } else {
+        await api.post('/api/catalogs', payload);
+        showAlert(i18n.t('common.success'), 'Configuración creada');
+      }
+      setSiteConfigModalVisible(false);
+      fetchSiteConfigs();
+    } catch (error) {
+      console.error('Error saving site config:', error);
+      showAlert(i18n.t('common.error'), 'Error al guardar configuración');
+    }
+  };
+
+  const handlePickLogo = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3], // Opcional: Ajustar según formato de logo deseado
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      await uploadLogo(result.assets[0].uri);
+    }
+  };
+
+  const uploadLogo = async (uri: string) => {
+    setIsUploadingLogo(true);
+    try {
+      const formData = new FormData();
+      const filename = uri.split('/').pop() || 'logo.jpg';
+      
+      // Validación 1: Extensión del archivo (Primer filtro)
+      const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic'];
+      const ext = filename.split('.').pop()?.toLowerCase();
+      
+      // Solo validamos extensión si existe y no es una URI de datos o blob
+      if (ext && !validExtensions.includes(ext) && !uri.startsWith('data:') && !uri.startsWith('blob:')) {
+        showAlert(i18n.t('common.error'), 'Formato de archivo no válido. Use JPG, PNG o WEBP.');
+        setIsUploadingLogo(false);
+        return;
+      }
+
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+      if (Platform.OS === 'web') {
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        
+        // Validación 2: Tipo MIME real y Tamaño (Solo Web)
+        if (!blob.type.startsWith('image/')) {
+          showAlert(i18n.t('common.error'), 'El archivo seleccionado no es una imagen válida.');
+          setIsUploadingLogo(false);
+          return;
+        }
+        
+        if (blob.size > 5 * 1024 * 1024) { // Límite de 5MB
+          showAlert(i18n.t('common.error'), 'La imagen es demasiado grande (Máx 5MB).');
+          setIsUploadingLogo(false);
+          return;
+        }
+
+        formData.append('file', blob, filename);
+      } else {
+        formData.append('file', { uri, name: filename, type } as any);
+      }
+
+      // Subir a endpoint genérico de archivos
+      const response = await api.post('/api/files', formData, {
+        headers: { 'Content-Type': Platform.OS === 'web' ? undefined : 'multipart/form-data' },
+      });
+
+      // Asumimos que el backend devuelve { uri: '...' } o { id: '...' }
+      const uploadedUri = response.data?.uri || response.data?.id || response.data?.url;
+      if (uploadedUri) {
+        setSiteConfigFormData(prev => ({ ...prev, logoUri: uploadedUri }));
+      }
+    } catch (error) {
+      console.error('Error uploading logo:', error);
+      showAlert(i18n.t('common.error'), 'Error al subir el logo');
+    } finally {
+      setIsUploadingLogo(false);
+    }
   };
 
   const renderUserItem = ({ item }: { item: any }) => {
@@ -702,6 +851,106 @@ export default function AdminScreen() {
     );
   }
 
+  if (currentView === 'site-config') {
+    return (
+      <View style={styles.container}>
+        <View style={styles.headerRow}>
+          <Pressable onPress={() => setCurrentView('menu')} style={styles.backButton}>
+            <Feather name="arrow-left" size={24} color="#4A5568" />
+          </Pressable>
+          <Text style={styles.title}>Configuración del Sitio</Text>
+        </View>
+
+        {loading ? (
+          <ActivityIndicator size="large" color="#3182CE" style={{ marginTop: 20 }} />
+        ) : (
+          <FlatList
+            data={siteConfigs}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.listContent}
+            ListEmptyComponent={<Text style={styles.emptyText}>No hay configuraciones. Crea una para personalizar el tema.</Text>}
+            renderItem={({ item }) => (
+              <View style={styles.userRow}>
+                <View style={[styles.colorPreview, { backgroundColor: item.metadata?.primaryColor || '#CBD5E0' }]} />
+                <View style={styles.userInfo}>
+                  <Text style={styles.userName}>{item.name}</Text>
+                  <Text style={styles.userEmail}>{item.description || 'Sin descripción'}</Text>
+                </View>
+                <View style={styles.actions}>
+                  <Pressable onPress={() => openEditSiteConfigModal(item)} style={styles.actionButton}>
+                    <Feather name="edit-2" size={20} color="#3182CE" />
+                  </Pressable>
+                  <Pressable onPress={() => handleDeleteAgendaType(item.id)} style={[styles.actionButton, { marginLeft: 8 }]}>
+                    <Feather name="trash-2" size={20} color="#E53E3E" />
+                  </Pressable>
+                </View>
+              </View>
+            )}
+          />
+        )}
+
+        <Pressable style={styles.fab} onPress={openCreateSiteConfigModal}>
+          <Feather name="plus" size={24} color="#FFF" />
+        </Pressable>
+
+        <Modal visible={siteConfigModalVisible} transparent={true} animationType="fade" onRequestClose={() => setSiteConfigModalVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{editingSiteConfig ? 'Editar Configuración' : 'Nueva Configuración'}</Text>
+                <Pressable onPress={() => setSiteConfigModalVisible(false)}><Feather name="x" size={24} color="#4A5568" /></Pressable>
+              </View>
+              <Text style={styles.label}>Nombre del Sitio / Marca</Text>
+              <TextInput style={styles.input} value={siteConfigFormData.name} onChangeText={text => setSiteConfigFormData({...siteConfigFormData, name: text})} placeholder="Ej. Constructora Demo" />
+              
+              <Text style={styles.label}>Título Login</Text>
+              <TextInput style={styles.input} value={siteConfigFormData.loginTitle} onChangeText={text => setSiteConfigFormData({...siteConfigFormData, loginTitle: text})} placeholder="Ej. Bienvenido al Portal" />
+
+              <Text style={styles.label}>Logo</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                <TextInput 
+                  style={[styles.input, { flex: 1, marginBottom: 0 }]} 
+                  value={siteConfigFormData.logoUri} 
+                  onChangeText={text => setSiteConfigFormData({...siteConfigFormData, logoUri: text})} 
+                  placeholder="URL o ID del archivo" 
+                />
+                <Pressable 
+                  style={{ backgroundColor: '#EDF2F7', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}
+                  onPress={handlePickLogo}
+                  disabled={isUploadingLogo}
+                >
+                  {isUploadingLogo ? <ActivityIndicator size="small" color="#3182CE" /> : <Feather name="upload" size={20} color="#4A5568" />}
+                </Pressable>
+              </View>
+              {siteConfigFormData.logoUri ? (
+                <View style={{ alignItems: 'center', marginBottom: 16, padding: 8, backgroundColor: '#F7FAFC', borderRadius: 8 }}>
+                  <Image 
+                    source={{ uri: siteConfigFormData.logoUri.startsWith('http') ? siteConfigFormData.logoUri : `${api.defaults.baseURL || ''}/api/files/${siteConfigFormData.logoUri}` }} 
+                    style={{ width: 150, height: 60, resizeMode: 'contain' }} 
+                  />
+                </View>
+              ) : null}
+
+              <Text style={styles.label}>Color Primario</Text>
+              <View style={styles.colorPickerRow}>
+                {['#D4AF37', '#3182CE', '#E53E3E', '#38A169', '#2D3748', '#805AD5', '#DD6B20', '#000000'].map(color => (
+                  <Pressable
+                    key={color}
+                    style={[styles.colorOption, { backgroundColor: color }, siteConfigFormData.primaryColor === color && styles.colorOptionSelected]}
+                    onPress={() => setSiteConfigFormData({...siteConfigFormData, primaryColor: color})}
+                  />
+                ))}
+              </View>
+
+              <Pressable style={styles.saveButton} onPress={handleSaveSiteConfig}><Text style={styles.saveButtonText}>{i18n.t('common.save')}</Text></Pressable>
+            </View>
+          </View>
+        </Modal>
+        <AlertComponent />
+      </View>
+    );
+  }
+
   if (currentView === 'roles') {
     return <RolesManager onBack={() => setCurrentView('menu')} />;
   }
@@ -721,6 +970,17 @@ export default function AdminScreen() {
             <View style={styles.cardContent}>
                 <Text style={styles.cardTitle}>{i18n.t('admin.projectSteps')}</Text>
                 <Text style={styles.cardDescription}>{i18n.t('admin.manageProjectSteps')}</Text>
+            </View>
+            <Feather name="chevron-right" size={24} color="#CBD5E0" />
+        </Pressable>
+
+        <Pressable style={styles.card} onPress={() => setCurrentView('site-config')}>
+            <View style={styles.cardIcon}>
+                <Feather name="layout" size={24} color="#319795" />
+            </View>
+            <View style={styles.cardContent}>
+                <Text style={styles.cardTitle}>Configuración del Sitio</Text>
+                <Text style={styles.cardDescription}>Personalizar colores, logo y textos</Text>
             </View>
             <Feather name="chevron-right" size={24} color="#CBD5E0" />
         </Pressable>

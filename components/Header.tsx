@@ -1,8 +1,9 @@
-import React from 'react';
-import { View, Text, StyleSheet, Pressable, Image, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useDrawerStatus } from '@react-navigation/drawer';
+import { useRouter } from 'expo-router';
+import React from 'react';
+import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useTenant } from '../contexts/TenantContext';
 
 interface HeaderProps {
   userImageUri?: string; // URI para la imagen del usuario, opcional
@@ -13,6 +14,7 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ userImageUri, token, onMenuPress, onAddPress, onProfilePress }) => {
+  const { tenant } = useTenant();
   const router = useRouter();
   // Hook para saber si el menú está abierto. Devuelve 'open' o 'closed'.
   const isDrawerOpen = useDrawerStatus() === 'open';
@@ -23,21 +25,33 @@ const Header: React.FC<HeaderProps> = ({ userImageUri, token, onMenuPress, onAdd
     : require('../assets/images/user.png');
 
   return (
-    <View style={styles.container}>
-      {/* --- Lado Izquierdo: Botón de Menú --- */}
-      {onMenuPress ? (
-        <Pressable onPress={onMenuPress} style={styles.menuButton}>
-          <Feather name="menu" size={24} color="#D4AF37" />
-        </Pressable>
-      ) : <View style={styles.menuButton} /> /* Espaciador para mantener el layout */}
+    <View style={[styles.container, { backgroundColor: tenant.secondaryColor || '#1A202C' }]}>
+      <View style={styles.leftContainer}>
+        {/* --- Lado Izquierdo: Botón de Menú --- */}
+        {onMenuPress ? (
+          <Pressable onPress={onMenuPress} style={styles.menuButton}>
+            <Feather name="menu" size={24} color={tenant.primaryColor} />
+          </Pressable>
+        ) : <View style={styles.menuButton} />}
+      </View>
 
+      {/* --- Centro: Logo del Tenant --- */}
+      <View style={styles.logoContainer}>
+        {tenant.logoUri ? (
+          <Image source={{ uri: tenant.logoUri }} style={styles.headerLogo} resizeMode="contain" />
+        ) : (
+          // Fallback: Nombre del tenant si no hay logo
+          <Text style={[styles.headerTitle, { color: tenant.primaryColor }]}>{tenant.name}</Text>
+        )}
+      </View>
+      
       {/* --- Lado Derecho: Acciones --- */}
       <View style={styles.rightContainer}>
         {/* Botón de Agregar (Visible si se pasa la función onAddPress) */}
         {onAddPress && (
           <Pressable
               onPress={onAddPress}
-              style={({ pressed }) => [styles.newProjectButton, pressed && styles.buttonPressed]}
+              style={({ pressed }) => [styles.newProjectButton, { backgroundColor: tenant.primaryColor }, pressed && styles.buttonPressed]}
             >
               <Feather name="plus" size={20} color="#FFFFFF" />
               {/* Solo mostramos el texto si el menú NO está abierto en web, para ahorrar espacio */}
@@ -81,6 +95,9 @@ const styles = StyleSheet.create({
     padding: 8,
     marginTop: Platform.OS === 'web' ? 0 : 20,
   },
+  leftContainer: {
+    minWidth: 40, // Asegura espacio para equilibrar el layout
+  },
   rightContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -113,6 +130,21 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#E2E8F0',
     marginTop: Platform.OS === 'web' ? 0 : 20,
+  },
+  // Estilos nuevos para el logo central
+  logoContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Platform.OS === 'web' ? 0 : 20,
+  },
+  headerLogo: {
+    width: 140,
+    height: 35,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });
 
