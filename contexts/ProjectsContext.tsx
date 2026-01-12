@@ -7,57 +7,6 @@ import { disconnectSocket, initSocket } from '../services/socket';
 import { ChecklistItem, Project, ProjectBudget, ProjectStatus } from '../types';
 import { useAuth } from './AuthContext';
 
-// --- Datos Iniciales (los que estaban en index.tsx) ---
-const initialProjects: Project[] = [
-  { 
-    id: '1', 
-    name: 'Los Robles Residence', 
-    client: 'Garcia Family', 
-    status: 'In Progress',
-    address: '123 Las Cumbres Ave, Green Hills',
-    progress: 75,
-    participants: ['https://i.pravatar.cc/150?u=1', 'https://i.pravatar.cc/150?u=2', 'https://i.pravatar.cc/150?u=3'],
-    architecturalPlanUri: 'https://images.adsttc.com/media/images/5e1d/0296/3312/fd58/9c00/006d/large_jpg/02_1F.jpg?1578959500'
-  },
-  { 
-    id: '2', 
-    name: 'Zenith Corporate Offices', 
-    client: 'Zenith Inc.', 
-    status: 'Delayed',
-    address: '400 Financial Blvd, Downtown',
-    progress: 45,
-    participants: ['https://i.pravatar.cc/150?u=4', 'https://i.pravatar.cc/150?u=5']
-  },
-  { 
-    id: '3', 
-    name: 'Central Apartment Remodel', 
-    client: 'Ana Martinez', 
-    status: 'In Progress',
-    address: '402 5th of May St, Historic Center',
-    progress: 90,
-    participants: ['https://i.pravatar.cc/150?u=6']
-  },
-  { 
-    id: '4', 
-    name: 'La Pradera Commercial Complex', 
-    client: 'Vista Investments', 
-    status: 'Completed',
-    address: 'National Highway Km 20',
-    progress: 100,
-    participants: ['https://i.pravatar.cc/150?u=7', 'https://i.pravatar.cc/150?u=8', 'https://i.pravatar.cc/150?u=9']
-  },
-  { 
-    id: '5', 
-    name: '"El Refugio" Country House', 
-    client: 'Carlos Sanchez', 
-    status: 'In Progress',
-    address: 'Royal Road s/n, Bravo Valley',
-    progress: 30,
-    participants: ['https://i.pravatar.cc/150?u=10', 'https://i.pravatar.cc/150?u=11']
-  },
-  { id: '6', name: '"Horizon" Apartment Tower', client: 'Urban Construction', status: 'Delayed', address: '88 Sea Ave', progress: 15, participants: ['https://i.pravatar.cc/150?u=12'] },
-];
-
 // --- Creación del Contexto ---
 interface ProjectsContextType {
   projects: Project[];

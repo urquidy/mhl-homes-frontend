@@ -23,7 +23,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 // --- Componente para un solo ítem de la lista ---
-const ProjectListItem: React.FC<{ item: Project }> = ({ item }) => {
+const ProjectListItem = React.forwardRef<View, { item: Project } & React.ComponentProps<typeof Pressable>>(({ item, ...props }, ref) => {
   const statusInfo = {
     'Not Started': { color: '#718096', label: i18n.t('dashboard.status.notStarted') || 'Not Started' },
     'In Progress': { color: '#3182CE', label: i18n.t('dashboard.status.inProgress') },
@@ -35,7 +35,7 @@ const ProjectListItem: React.FC<{ item: Project }> = ({ item }) => {
   const currentStatus = statusInfo[item.status as keyof typeof statusInfo] || statusInfo['In Progress'];
 
   return (
-    <Pressable>
+    <Pressable ref={ref} {...props}>
       <View style={styles.projectCard}>
         {/* Cabecera: Nombre y Tag de Estado */}
         <View style={styles.cardHeader}>
@@ -87,7 +87,7 @@ const ProjectListItem: React.FC<{ item: Project }> = ({ item }) => {
       </View>
     </Pressable>
   );
-};
+});
 
 // --- Componente Animado para Ítem de Notificación ---
 const AnimatedNotificationItem: React.FC<{ 
@@ -128,7 +128,6 @@ const AnimatedNotificationItem: React.FC<{
           />
         )}
         <View style={{ flex: 1 }}>
-          {notif.title ? <Text style={[styles.sidebarText, { fontWeight: 'bold', marginBottom: 2, flex: 0 }]}>{notif.title}</Text> : null}
           <Text style={[styles.sidebarText, !notif.read && { fontWeight: '600', color: '#2D3748' }, { flex: 0 }]}>
             {isProcessing ? i18n.t('common.loading') : notif.text}
           </Text>

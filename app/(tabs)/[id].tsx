@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path as SvgPath } from 'react-native-svg';
 import { WebView } from 'react-native-webview';
 import AspectRatioModal from '../../components/project-detail/AspectRatioModal';
+import DocumentUploadModal from '../../components/project-detail/DocumentUploadModal';
 import EditProjectModal from '../../components/project-detail/EditProjectModal';
 import EvidenceUploadModal from '../../components/project-detail/EvidenceUploadModal';
 import HistoryModal from '../../components/project-detail/HistoryModal';
@@ -247,6 +248,50 @@ export default function ProjectDetailScreen() {
   const [isAddGroupModalVisible, setIsAddGroupModalVisible] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [uploadMode, setUploadMode] = useState<'replace' | 'append' | 'newGroup'>('replace');
+  
+  // Estados para Documentos
+  const [isDocModalVisible, setIsDocModalVisible] = useState(false);
+  const [docCategories, setDocCategories] = useState<{id: string, name: string}[]>([]);
+  const [docsLastUpdate, setDocsLastUpdate] = useState(Date.now());
+
+  // Fetch Document Categories
+  useEffect(() => {
+    if (token) {
+      api.get('/api/catalogs/type/DOCUMENT_CATEGORY')
+        .then(res => setDocCategories(res.data || []))
+        .catch(err => console.error('Error fetching doc categories:', err));
+    }
+  }, [token]);
+
+  const handleDocumentUpload = async (data: { name: string; category: string; file: any }) => {
+    // Preparar FormData para subida
+    const formData = new FormData();
+    
+    // Append file
+    if (Platform.OS === 'web' && data.file.file) {
+        formData.append('file', data.file.file, data.file.name);
+    } else {
+        formData.append('file', {
+            uri: data.file.uri,
+            name: data.file.name,
+            type: data.file.mimeType || 'application/pdf',
+        } as any);
+    }
+
+    // Append metadata
+    formData.append('name', data.name);
+    // Buscar el nombre de la categoría usando el ID seleccionado para enviarlo como texto
+    const categoryName = docCategories.find(c => c.id === data.category)?.name || data.category;
+    formData.append('category', categoryName);
+
+    await api.post(`/api/projects/${projectId}/attachment`, formData, {
+        headers: { 'Content-Type': Platform.OS === 'web' ? undefined : 'multipart/form-data' }
+    });
+    
+    setDocsLastUpdate(Date.now());
+    showAlert(i18n.t('common.success'), i18n.t('documents.success'));
+  };
+
   const uploadModeRef = useRef<'replace' | 'append' | 'newGroup'>('replace');
   const { showAlert, AlertComponent } = useCustomAlert();
   const [pan, setPan] = useState({ x: 0, y: 0 }); // Estado para la posición (Pan)
@@ -1647,6 +1692,9 @@ export default function ProjectDetailScreen() {
           projectStatus={project?.status}
           onViewDocument={handleViewDocument as any}
           canEdit={hasPermission('PROJECT_DOCUMENTS')}
+          onAddDocument={() => setIsDocModalVisible(true)}
+          lastUpdate={docsLastUpdate}
+          categories={docCategories}
         />
       )}
 
@@ -2216,6 +2264,14 @@ export default function ProjectDetailScreen() {
         onClose={() => setIsHistoryModalVisible(false)}
         isLoading={isLoadingHistory}
         auditLogs={auditLogs}
+      />
+
+      {/* Modal de Subida de Documentos */}
+      <DocumentUploadModal
+        visible={isDocModalVisible}
+        onClose={() => setIsDocModalVisible(false)}
+        onUpload={handleDocumentUpload}
+        categories={docCategories}
       />
 
       {/* Modal de Carga de Evidencia */}

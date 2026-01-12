@@ -1,7 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, LayoutAnimation, Platform, Pressable, StyleSheet, Text, UIManager, View } from 'react-native';
+import { ActivityIndicator, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, UIManager, View } from 'react-native';
 import { useCustomAlert } from '../../components/ui/CustomAlert';
 import i18n from '../../constants/i18n';
 import api from '../../services/api';
@@ -14,6 +14,9 @@ interface ProjectDocumentsProps {
   onRefreshProjects?: () => void;
   onRefreshChecklist?: () => void;
   canEdit?: boolean;
+  onAddDocument?: () => void;
+  lastUpdate?: number;
+  categories?: { id: string; name: string }[];
 }
 
 // Habilitar animaciones de layout en Android
@@ -21,7 +24,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-export default function ProjectDocuments({ projectId, userRole, projectStatus, onViewDocument, onRefreshProjects, onRefreshChecklist, canEdit = false }: ProjectDocumentsProps) {
+export default function ProjectDocuments({ projectId, userRole, projectStatus, onViewDocument, onRefreshProjects, onRefreshChecklist, canEdit = false, onAddDocument, lastUpdate, categories = [] }: ProjectDocumentsProps) {
   const [documents, setDocuments] = useState<any[]>([]);
   const [allDocuments, setAllDocuments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -31,6 +34,7 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const LIMIT = 5;
+  const [selectedCategory, setSelectedCategory] = useState('ALL');
 
   const toggleExpand = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -63,14 +67,13 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
         type: file.fileType,
         date: file.date,
         source: file.source || 'PROJECT',
-        sourceId: file.sourceId
+        sourceId: file.sourceId,
+        category: file.category
       }));
       
       setAllDocuments(mappedDocuments);
-      // Paginación local inicial
-      setDocuments(mappedDocuments.slice(0, LIMIT));
-      setHasMore(mappedDocuments.length > LIMIT);
-      setPage(1);
+      // La paginación y filtrado se manejan en el useEffect de abajo
+      setPage(1); 
     } catch (error) {
       console.log('Error fetching documents:', error);
       // Mock data si falla la API para demostración
@@ -80,16 +83,22 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
     }
   }, [projectId]);
 
+  // Efecto para Filtrado y Paginación
+  useEffect(() => {
+    const filtered = allDocuments.filter(doc => 
+      selectedCategory === 'ALL' || doc.category === selectedCategory
+    );
+    setDocuments(filtered.slice(0, page * LIMIT));
+    setHasMore(filtered.length > page * LIMIT);
+  }, [allDocuments, selectedCategory, page]);
+
   useEffect(() => {
     fetchDocuments();
-  }, [fetchDocuments]);
+  }, [fetchDocuments, lastUpdate]);
 
   const handleLoadMore = () => {
     const nextPage = page + 1;
-    const nextDocs = allDocuments.slice(0, nextPage * LIMIT);
-    setDocuments(nextDocs);
     setPage(nextPage);
-    setHasMore(allDocuments.length > nextDocs.length);
   };
 
   const handleUpload = async () => {
@@ -191,7 +200,7 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
           <Feather name={isExpanded ? "chevron-down" : "chevron-right"} size={24} color="#1A202C" style={{ marginLeft: 8 }} />
         </Pressable>
         {(userRole === 'ADMIN' || canEdit) && (
-          <Pressable style={styles.addButton} onPress={handleUpload} disabled={isUploading}>
+          <Pressable style={styles.addButton} onPress={onAddDocument || handleUpload} disabled={isUploading}>
             {isUploading ? <ActivityIndicator size="small" color="#3182CE" /> : <Feather name="plus" size={20} color="#3182CE" />}
             <Text style={styles.addText}>{isUploading ? i18n.t('documents.uploading') : i18n.t('projectDetail.add')}</Text>
           </Pressable>
@@ -200,6 +209,29 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
 
       {isExpanded && (
         <>
+          {/* Filtros por Categoría */}
+          {categories.length > 0 && (
+            <View style={styles.filterContainer}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 4 }}>
+                <Pressable 
+                  style={[styles.filterChip, selectedCategory === 'ALL' && styles.filterChipActive]}
+                  onPress={() => { setSelectedCategory('ALL'); setPage(1); }}
+                >
+                  <Text style={[styles.filterChipText, selectedCategory === 'ALL' && styles.filterChipTextActive]}>{i18n.t('common.all')}</Text>
+                </Pressable>
+                {categories.map(cat => (
+                  <Pressable 
+                    key={cat.id}
+                    style={[styles.filterChip, selectedCategory === cat.name && styles.filterChipActive]}
+                    onPress={() => { setSelectedCategory(cat.name); setPage(1); }}
+                  >
+                    <Text style={[styles.filterChipText, selectedCategory === cat.name && styles.filterChipTextActive]}>{cat.name}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
           {documents.length === 0 && !isLoading ? (
             <Text style={styles.emptyText}>{i18n.t('documents.empty')}</Text>
           ) : (
@@ -242,6 +274,11 @@ const styles = StyleSheet.create({
   addButton: { flexDirection: 'row', alignItems: 'center', padding: 8, backgroundColor: '#EBF8FF', borderRadius: 8 },
   addText: { marginLeft: 6, color: '#3182CE', fontWeight: '600', fontSize: 14, fontFamily: 'Inter-SemiBold' },
   emptyText: { color: '#A0AEC0', fontStyle: 'italic', textAlign: 'center', padding: 20, fontFamily: 'Inter-Regular' },
+  filterContainer: { marginBottom: 12, flexDirection: 'row' },
+  filterChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: '#EDF2F7', marginRight: 8 },
+  filterChipActive: { backgroundColor: '#3182CE' },
+  filterChipText: { fontSize: 12, color: '#4A5568' },
+  filterChipTextActive: { color: '#FFF', fontWeight: 'bold' },
   list: { gap: 8 },
   docItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F7FAFC', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#EDF2F7' },
   docIcon: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center', backgroundColor: '#E2E8F0', borderRadius: 8, marginRight: 12 },

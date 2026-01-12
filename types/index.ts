@@ -63,6 +63,7 @@ export interface ChecklistItem {
   color?: string; // Color personalizado para el trazo
   categoryId: string; // ID de la categoría de checklist
   stepId?: string; // ID del paso al que pertenece
+  blueprintId?: string; // ID del blueprint al que pertenece
 }
 
 // --- Tipos para Presupuestos ---
