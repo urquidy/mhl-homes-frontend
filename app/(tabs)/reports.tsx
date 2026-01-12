@@ -48,10 +48,10 @@ export default function ReportsScreen() {
       
       return `
         <div style="margin-top: 20px;">
-          <h4>${p.name} - Gastos ($${totalExpenses.toLocaleString()})</h4>
+          <h4>${p.name} - ${i18n.t('reports.expenses')} ($${totalExpenses.toLocaleString()})</h4>
           <table>
             <thead>
-              <tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Monto</th></tr>
+              <tr><th>${i18n.t('common.date')}</th><th>${i18n.t('budgets.concept')}</th><th>${i18n.t('budgets.category')}</th><th>${i18n.t('budgets.amount')}</th></tr>
             </thead>
             <tbody>
               ${expenses.map(e => `
@@ -83,27 +83,27 @@ export default function ReportsScreen() {
           </style>
         </head>
         <body>
-          <h1>Reporte General de Proyectos</h1>
-          <p>Fecha de generación: ${new Date().toLocaleDateString()}</p>
+          <h1>${i18n.t('reports.title')}</h1>
+          <p>${i18n.t('reports.generatedDate')} ${new Date().toLocaleDateString()}</p>
           
           <div class="card">
-            <h3>Resumen Ejecutivo</h3>
-            <div class="stat-row"><span class="label">Total Proyectos:</span> <span class="value">${totalProjects}</span></div>
-            <div class="stat-row"><span class="label">Activos:</span> <span class="value">${activeProjects}</span></div>
-            <div class="stat-row"><span class="label">Retrasados:</span> <span class="value">${delayedProjects}</span></div>
-            <div class="stat-row"><span class="label">Completados:</span> <span class="value">${completedProjects}</span></div>
-            <div class="stat-row"><span class="label">Tasa Global de Tareas:</span> <span class="value">${taskCompletionRate}%</span></div>
+            <h3>${i18n.t('reports.executiveSummary')}</h3>
+            <div class="stat-row"><span class="label">${i18n.t('reports.totalProjects')}:</span> <span class="value">${totalProjects}</span></div>
+            <div class="stat-row"><span class="label">${i18n.t('reports.active')}:</span> <span class="value">${activeProjects}</span></div>
+            <div class="stat-row"><span class="label">${i18n.t('reports.delayed')}:</span> <span class="value">${delayedProjects}</span></div>
+            <div class="stat-row"><span class="label">${i18n.t('dashboard.status.completed')}:</span> <span class="value">${completedProjects}</span></div>
+            <div class="stat-row"><span class="label">${i18n.t('reports.globalTaskRate')}</span> <span class="value">${taskCompletionRate}%</span></div>
           </div>
 
-          <h3>Detalle de Proyectos</h3>
+          <h3>${i18n.t('reports.projectDetails')}</h3>
           <table>
             <thead>
               <tr>
-                <th>Proyecto</th>
-                <th>Cliente</th>
-                <th>Estado</th>
-                <th>Progreso</th>
-                <th>Dirección</th>
+                <th>${i18n.t('common.project')}</th>
+                <th>${i18n.t('projectDetail.client')}</th>
+                <th>${i18n.t('common.status')}</th>
+                <th>${i18n.t('common.progress')}</th>
+                <th>${i18n.t('newProject.addressLabel')}</th>
               </tr>
             </thead>
             <tbody>
@@ -119,7 +119,7 @@ export default function ReportsScreen() {
             </tbody>
           </table>
 
-          <h3>Desglose de Gastos por Presupuesto</h3>
+          <h3>${i18n.t('reports.budgetBreakdown')}</h3>
           ${budgetSectionHtml}
         </body>
       </html>

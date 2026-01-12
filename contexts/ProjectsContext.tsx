@@ -68,15 +68,17 @@ interface ProjectsContextType {
   getChecklistByProjectId: (projectId: string) => ChecklistItem[];
   toggleChecklistItem: (projectId: string, itemId: string) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
+  restoreProject: (id: string) => Promise<void>;
   startProject: (id: string) => Promise<void>;
   updateChecklistEvidence: (projectId: string, itemId: string, uri: string) => void;
-  addChecklistItem: (projectId: string, text: string, x?: number, y?: number, width?: number, height?: number, assignedTo?: string, shape?: 'rectangle' | 'circle' | 'pencil' | 'pin', deadline?: string, path?: string, color?: string, stepId?: string, categoryId?: string) => Promise<void>;
+  addChecklistItem: (projectId: string, text: string, x?: number, y?: number, width?: number, height?: number, assignedTo?: string, shape?: 'rectangle' | 'circle' | 'pencil' | 'pin', deadline?: string, path?: string, color?: string, stepId?: string, categoryId?: string, blueprintId?: string) => Promise<void>;
   updateProjectPlan: (projectId: string, uri: string) => void;
   addChecklistEvidence: (projectId: string, itemId: string, type: 'image' | 'video', uri: string) => Promise<void>;
   deleteChecklistEvidence: (projectId: string, checklistId: string, evidenceId: string) => Promise<void>;
   addChecklistComment: (projectId: string, itemId: string, text: string) => Promise<void>;
   deleteChecklistItem: (projectId: string, itemId: string) => Promise<void>;
-  refreshProjects: (search?: string) => Promise<void>;
+  addProjectBlueprint: (projectId: string, file: any, groupName: string, replace?: boolean) => Promise<void>;
+  refreshProjects: (search?: string, active?: boolean, clearList?: boolean) => Promise<void>;
   loadMoreProjects: () => Promise<void>;
   hasMoreProjects: boolean;
   refreshBudgets: () => Promise<void>;
@@ -99,6 +101,7 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [page, setPage] = useState(1);
   const [hasMoreProjects, setHasMoreProjects] = useState(true);
   const [lastSearch, setLastSearch] = useState('');
+  const [lastActive, setLastActive] = useState(true);
 
   // Ref para acceder al estado actual de checklists dentro del intervalo sin reiniciar el efecto
   const checklistsRef = useRef(checklists);
@@ -132,14 +135,22 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
   }, []);
 
   // Función centralizada para refrescar proyectos desde la API
-  const refreshProjects = async (search = '') => {
+  const refreshProjects = async (search = '', active = true, clearList = false) => {
     if (!token) return;
     setIsLoading(true);
+    if (clearList) setProjects([]); // Limpiar lista para evitar mostrar datos stale durante la transición
     setPage(1);
     setLastSearch(search);
+    setLastActive(active);
     try {
       // Enviamos parámetros de paginación y búsqueda
-      const response = await api.get(`/api/projects?page=1&limit=10&search=${encodeURIComponent(search)}`);
+      let endpoint = `/api/projects?page=1&limit=10&search=${encodeURIComponent(search)}`;
+      if (active) {
+        endpoint += '&deleted=false';
+      } else {
+        endpoint += '&deleted=true';
+      }
+      const response = await api.get(endpoint);
       // Soporte para respuesta paginada { data: [], meta: {} } o array directo []
       const data = Array.isArray(response.data) ? response.data : (response.data.data || []);
       
@@ -159,6 +170,8 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
         imageUri: p.imageUri,
         startDate: p.startDate,
         endDate: p.endDate,
+        blueprints: p.blueprints,
+        createdAt: p.createdAt,
       }));
       setProjects(mappedProjects);
       // Si devolvió menos de 10, asumimos que no hay más
@@ -178,7 +191,13 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
     
     const nextPage = page + 1;
     try {
-      const response = await api.get(`/api/projects?page=${nextPage}&limit=10&search=${encodeURIComponent(lastSearch)}`);
+      let endpoint = `/api/projects?page=${nextPage}&limit=10&search=${encodeURIComponent(lastSearch)}`;
+      if (lastActive) {
+        endpoint += '&active=true';
+      } else {
+        endpoint += '&deleted=true';
+      }
+      const response = await api.get(endpoint);
       const data = Array.isArray(response.data) ? response.data : (response.data.data || []);
       
       if (data.length === 0) {
@@ -202,6 +221,8 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
         imageUri: p.imageUri,
         startDate: p.startDate,
         endDate: p.endDate,
+        blueprints: p.blueprints,
+        createdAt: p.createdAt,
       }));
 
       setProjects(prev => [...prev, ...newProjects]);
@@ -378,6 +399,7 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
         color: item.color,
         stepId: item.stepId,
         categoryId: item.categoryId,
+        blueprintId: item.blueprintId,
         evidence: (item.evidences || item.evidence || []).map((e: any) => ({
           id: e.id,
           uri: e.uri,
@@ -447,6 +469,30 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
   };
 
+  const addProjectBlueprint = async (projectId: string, file: any, groupName: string, replace: boolean = false) => {
+    if (!token) return;
+    const formData = new FormData();
+    
+    if (Platform.OS === 'web' && file.blob) {
+        formData.append('file', file.blob, file.name);
+    } else {
+        formData.append('file', {
+            uri: file.uri,
+            name: file.name,
+            type: file.type,
+        } as any);
+    }
+
+    try {
+        await api.post(`/api/projects/${projectId}/blueprints?groupName=${encodeURIComponent(groupName)}&replace=${replace}`, formData, {
+            headers: { 'Content-Type': Platform.OS === 'web' ? undefined : 'multipart/form-data' }
+        });
+    } catch (error) {
+        console.error('Error adding blueprint:', error);
+        throw error;
+    }
+  };
+
   const deleteProject = async (id: string) => {
     if (!token) return;
 
@@ -461,6 +507,17 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
       });
     } catch (error) {
       console.error('Error deleting project:', error);
+      throw error;
+    }
+  };
+
+  const restoreProject = async (id: string) => {
+    if (!token) return;
+    try {
+      await api.patch(`/api/projects/${id}/restore`);
+      setProjects(prev => prev.filter(p => p.id !== id));
+    } catch (error) {
+      console.error('Error restoring project:', error);
       throw error;
     }
   };
@@ -559,7 +616,7 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
     }));
   };
 
-  const addChecklistItem = async (projectId: string, text: string, x?: number, y?: number, width?: number, height?: number, assignedTo?: string, shape?: 'rectangle' | 'circle' | 'pencil' | 'pin', deadline?: string, path?: string, color?: string, stepId?: string, categoryId?: string) => {
+  const addChecklistItem = async (projectId: string, text: string, x?: number, y?: number, width?: number, height?: number, assignedTo?: string, shape?: 'rectangle' | 'circle' | 'pencil' | 'pin', deadline?: string, path?: string, color?: string, stepId?: string, categoryId?: string, blueprintId?: string) => {
     if (!token) return;
 
     const localId = Date.now().toString();
@@ -580,7 +637,8 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
       path: path || null,
       color: color || null,
       stepId: stepId || null,
-      categoryId: categoryId || null
+      categoryId: categoryId || null,
+      blueprintId: blueprintId || null
     };
 
     try {
@@ -595,7 +653,7 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
         y: data.y,
         evidenceUri: data.evidenceUri,
         // Mantenemos los datos locales que la API básica no devolvió para que la UI no se rompa
-        width, height, assignedTo, shape: shape || 'rectangle', path, deadline, color, stepId: data.stepId || stepId, categoryId: data.categoryId || categoryId,
+        width, height, assignedTo, shape: shape || 'rectangle', path, deadline, color, stepId: data.stepId || stepId, categoryId: data.categoryId || categoryId, blueprintId: data.blueprintId || blueprintId,
         evidence: [],
         comments: [],
       };
@@ -755,8 +813,8 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   const value = {
     projects, addProject, checklists, budgets,
-    getProjectById, getChecklistByProjectId, deleteProject, startProject,
-    toggleChecklistItem, updateChecklistEvidence, addChecklistItem, updateProjectPlan, refreshBudgets, isBudgetsLoading, deleteChecklistEvidence,
+    getProjectById, getChecklistByProjectId, deleteProject, restoreProject, startProject,
+    toggleChecklistItem, updateChecklistEvidence, addChecklistItem, updateProjectPlan, refreshBudgets, isBudgetsLoading, deleteChecklistEvidence, addProjectBlueprint,
     addChecklistEvidence, addChecklistComment, deleteChecklistItem, refreshProjects, loadMoreProjects, hasMoreProjects, isLoading, fetchProjectChecklist, clearProjectChecklist
   };
 

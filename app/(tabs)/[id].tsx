@@ -165,14 +165,14 @@ const ProjectDetailSkeleton = () => {
 
 export default function ProjectDetailScreen() {
   // Obtenemos el 'id' de la URL. Ej: /project/1 -> id = '1'
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, taskId } = useLocalSearchParams<{ id: string; taskId?: string }>();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
-  const { getProjectById, getChecklistByProjectId, toggleChecklistItem, updateChecklistEvidence, addChecklistItem, updateProjectPlan, addChecklistEvidence, deleteChecklistEvidence, addChecklistComment, deleteChecklistItem, startProject, isLoading, fetchProjectChecklist, clearProjectChecklist, refreshProjects } = useProjects();
+  const { getProjectById, getChecklistByProjectId, toggleChecklistItem, updateChecklistEvidence, addChecklistItem, updateProjectPlan, addChecklistEvidence, deleteChecklistEvidence, addChecklistComment, deleteChecklistItem, startProject, isLoading, fetchProjectChecklist, clearProjectChecklist, refreshProjects, addProjectBlueprint } = useProjects();
   const { user, token } = useAuth();
   const { hasPermission } = usePermission();
 
-  const projectId = Array.isArray(id) ? id[0] : id;
+  const projectId = Array.isArray(id) ? id[0] : (id ?? '');
   const project = projectId ? getProjectById(projectId) : undefined;
   const checklistItems = projectId ? getChecklistByProjectId(projectId) : [];
 
@@ -186,9 +186,43 @@ export default function ProjectDetailScreen() {
   const [viewingMediaType, setViewingMediaType] = useState<'image' | 'pdf'>('image');
   const [availableUsers, setAvailableUsers] = useState<any[]>([]);
 
+  // Cargar usuarios disponibles para los modales (Editar Proyecto, Nueva Tarea)
+  useEffect(() => {
+    const fetchUsersAndRoles = async () => {
+      if (!token) return;
+      try {
+        const [usersRes, rolesRes] = await Promise.all([
+          api.get('/api/users'),
+          api.get('/api/roles')
+        ]);
+        const users = usersRes.data || [];
+        const roles = rolesRes.data || [];
+        setAvailableUsers(users.map((u: any) => ({
+          ...u,
+          role: roles.find((r: any) => r.id === u.role)?.name || u.role
+        })));
+      } catch (error) {
+        console.error('Error fetching users/roles:', error);
+      }
+    };
+    fetchUsersAndRoles();
+  }, [token]);
+
+  const [blueprintPages, setBlueprintPages] = useState<any[]>([]);
+  const [currentPage, setCurrentPage] = useState(0);
+  
+  // Estados para Grupos de Planos
+  const [blueprintGroups, setBlueprintGroups] = useState<Record<string, any[]>>({});
+  const [groupNames, setGroupNames] = useState<string[]>([]);
+  const [selectedGroup, setSelectedGroup] = useState<string>(i18n.t('common.architectural'));
+
+  // Cache para las imágenes de los planos (evitar recargas al paginar)
+  const blueprintCache = useRef<Record<string, { source: any, type: 'image' | 'pdf', aspectRatio?: number }>>({});
+
   // Estados para el progreso de subida
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState('');
   const [isImageLoading, setIsImageLoading] = useState(false);
   const [isEvidenceUploading, setIsEvidenceUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -210,12 +244,17 @@ export default function ProjectDetailScreen() {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [isEditProjectModalVisible, setIsEditProjectModalVisible] = useState(false);
+  const [isAddGroupModalVisible, setIsAddGroupModalVisible] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [uploadMode, setUploadMode] = useState<'replace' | 'append' | 'newGroup'>('replace');
+  const uploadModeRef = useRef<'replace' | 'append' | 'newGroup'>('replace');
   const { showAlert, AlertComponent } = useCustomAlert();
   const [pan, setPan] = useState({ x: 0, y: 0 }); // Estado para la posición (Pan)
   const [isInteracting, setIsInteracting] = useState(false); // Estado para bloquear el scroll principal
   const [containerWidth, setContainerWidth] = useState(0);
   const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(null);
 
+  const initialTaskHandled = useRef(false);
   // Animación para la altura del panel del catálogo
   const panelHeight = useRef(new Animated.Value(250)).current;
   const lastPanelHeight = useRef(250);
@@ -253,13 +292,101 @@ export default function ProjectDetailScreen() {
     }
   };
 
+  // Fetch de Blueprints (Páginas convertidas)
+  const fetchBlueprints = useCallback(async () => {
+    if (!projectId || !token) return;
+    try {
+      const response = await api.get(`/api/projects/${projectId}`);
+      const data = response.data || {};
+      
+      if (data.blueprints && Array.isArray(data.blueprints) && data.blueprints.length > 0) {
+        // Agrupar por groupName
+        const groups: Record<string, any[]> = {};
+        const names: Set<string> = new Set();
+        const defaultName = i18n.t('common.architectural');
+
+        data.blueprints.forEach((bp: any) => {
+          let gName = bp.groupName;
+          // Normalizar MAIN_BLUEPRINT o null al nombre por defecto (Arquitectónico)
+          if (!gName || gName === 'MAIN_BLUEPRINT') {
+            gName = defaultName;
+          }
+          if (!groups[gName]) {
+            groups[gName] = [];
+            names.add(gName);
+          }
+          groups[gName].push(bp);
+        });
+
+        // Ordenar páginas dentro de cada grupo
+        Object.keys(groups).forEach(key => {
+          groups[key].sort((a: any, b: any) => (a.pageNumber || 0) - (b.pageNumber || 0));
+        });
+
+        setBlueprintGroups(groups);
+        // Asegurar que "Arquitectónico" esté primero si existe
+        const sortedNames = Array.from(names).sort((a, b) => a === defaultName ? -1 : b === defaultName ? 1 : a.localeCompare(b));
+        setGroupNames(sortedNames);
+      } else {
+        setBlueprintGroups({});
+        setGroupNames([]);
+        setBlueprintPages([]);
+      }
+    } catch (error) {
+      console.error("Error fetching blueprints:", error);
+    }
+  }, [projectId, token]);
+
+  useEffect(() => {
+    fetchBlueprints();
+  }, [fetchBlueprints]);
+
+  // Actualizar páginas cuando cambia el grupo seleccionado
+  useEffect(() => {
+    if (blueprintGroups[selectedGroup]) {
+      setBlueprintPages(blueprintGroups[selectedGroup]);
+      setCurrentPage(0); // Resetear a página 1 al cambiar de grupo
+    } else if (groupNames.length > 0) {
+      // Si el grupo seleccionado no existe (ej. borrado o cambio de idioma), ir al primero
+      setSelectedGroup(groupNames[0]);
+    } else {
+      setBlueprintPages([]);
+    }
+  }, [selectedGroup, blueprintGroups, groupNames]);
+
+  // Efecto para abrir tarea específica desde notificación
+  useEffect(() => {
+    if (taskId && checklistItems.length > 0 && !initialTaskHandled.current) {
+      const task = checklistItems.find(t => t.id === taskId);
+      if (task) {
+        if (task.blueprintId && blueprintPages.length > 0) {
+          const pageIndex = blueprintPages.findIndex(p => p.id === task.blueprintId);
+          if (pageIndex !== -1 && pageIndex !== currentPage) setCurrentPage(pageIndex);
+        }
+        setSelectedItemId(taskId);
+        initialTaskHandled.current = true;
+      }
+    }
+  }, [taskId, checklistItems, blueprintPages]);
+
   // Cargar la imagen del plano con manejo especial para Web (Blob) y Mobile (Headers)
   useEffect(() => {
     const loadPlanImage = async () => {
-      const uri = project?.architecturalPlanUri;
+      // Priorizar páginas del blueprint si existen, sino usar el plan original
+      let uri = blueprintPages.length > 0 ? blueprintPages[currentPage]?.uri : project?.architecturalPlanUri;
+
       if (!uri) {
         setPlanImageSource(null);
         return;
+      }
+
+      // 1. Verificar Caché: Si ya tenemos esta URI procesada, la usamos directo
+      if (blueprintCache.current[uri]) {
+        const cached = blueprintCache.current[uri];
+        setPlanImageSource(cached.source);
+        setPlanType(cached.type);
+        if (cached.aspectRatio) setImageAspectRatio(cached.aspectRatio);
+        return; // Salimos para no activar el spinner ni hacer fetch
       }
 
       setIsImageLoading(true);
@@ -290,31 +417,53 @@ export default function ProjectDetailScreen() {
           if (response.ok) {
             const blob = await response.blob();
             const blobUrl = URL.createObjectURL(blob);
-            setPlanImageSource({ uri: blobUrl });
+            const source = { uri: blobUrl };
             
+            let type: 'image' | 'pdf' = 'image';
+            let ratio = 1.5;
+
             if (blob.type === 'application/pdf') {
-              setPlanType('pdf');
-              setImageAspectRatio(1.5); // Aspect ratio por defecto para PDF (aprox. carta/oficio horizontal)
+              type = 'pdf';
+              ratio = 1.5;
             } else {
-              setPlanType('image');
-            // En Web calculamos el aspect ratio aquí porque onLoad no trae 'source'
-            Image.getSize(blobUrl, (width, height) => {
-              if (height > 0) setImageAspectRatio(width / height);
-            }, (err) => console.error("Error getting image size:", err));
-            } // <--- ESTA LLAVE FALTABA
+              type = 'image';
+              // En Web calculamos el aspect ratio aquí
+              Image.getSize(blobUrl, (width, height) => {
+                if (height > 0) {
+                  ratio = width / height;
+                  setImageAspectRatio(ratio);
+                  // Actualizar caché con el ratio real cuando esté listo
+                  if (blueprintCache.current[uri]) blueprintCache.current[uri].aspectRatio = ratio;
+                }
+              }, (err) => console.error("Error getting image size:", err));
+            }
+
+            setPlanImageSource(source);
+            setPlanType(type);
+            if (type === 'pdf') setImageAspectRatio(ratio);
+            
+            // Guardar en caché
+            blueprintCache.current[uri] = { source, type, aspectRatio: type === 'pdf' ? 1.5 : undefined };
           }
         } catch (e) { console.error("Error loading plan:", e); } finally {
           setIsImageLoading(false);
         }
       } else {
-        setPlanImageSource({ uri: finalUri, headers: { Authorization: `Bearer ${token}` } });
+        const source = { uri: finalUri, headers: { Authorization: `Bearer ${token}` } };
+        setPlanImageSource(source);
+        
+        let type: 'image' | 'pdf' = 'image';
         // Detectar PDF por extensión en Native
         if (finalUri.toLowerCase().endsWith('.pdf')) {
-          setPlanType('pdf');
-          setImageAspectRatio(1.5); // Aspect ratio por defecto para PDF
+          type = 'pdf';
+          setImageAspectRatio(1.5);
         } else {
-          setPlanType('image');
+          type = 'image';
         }
+        setPlanType(type);
+
+        // Guardar en caché (Native maneja su propio caché de disco, aquí guardamos la configuración)
+        blueprintCache.current[uri] = { source, type, aspectRatio: type === 'pdf' ? 1.5 : undefined };
       }
     };
     
@@ -322,10 +471,10 @@ export default function ProjectDetailScreen() {
 
     // Limpiar la imagen al desmontar o cambiar de proyecto para evitar que se vea la anterior
     return () => {
-      setPlanImageSource(null);
+      // NO limpiamos setPlanImageSource(null) para evitar parpadeo al cambiar de página
       setIsImageLoading(false);
     };
-  }, [project?.architecturalPlanUri, token]);
+  }, [project?.architecturalPlanUri, token, blueprintPages, currentPage]);
 
   // Cargar Checklist del Proyecto al entrar
   useEffect(() => {
@@ -338,30 +487,6 @@ export default function ProjectDetailScreen() {
     };
   }, [projectId, token]);
 
-  // Cargar usuarios disponibles para asignar tareas desde la API
-  useEffect(() => {
-    const fetchUsersAndRoles = async () => {
-      try {
-        const usersPromise = api.get('/api/users');
-        const rolesPromise = api.get('/api/roles').catch(() => ({ data: [] }));
-
-        const [usersRes, rolesRes] = await Promise.all([usersPromise, rolesPromise]);
-        
-        const users = usersRes.data || [];
-        const roles = rolesRes.data || [];
-
-        const usersWithRoleNames = users.map((u: any) => {
-          const roleObj = roles.find((r: any) => r.id === u.role);
-          return { ...u, role: roleObj ? roleObj.name : u.role };
-        });
-
-        setAvailableUsers(usersWithRoleNames);
-      } catch (error) {
-        console.error('Error fetching users:', error);
-      }
-    };
-    if (token) fetchUsersAndRoles();
-  }, [token]);
 
   // Cargar Catálogo de Pasos
   useEffect(() => {
@@ -405,9 +530,19 @@ export default function ProjectDetailScreen() {
 
   // Items filtrados por categoría seleccionada (para el mapa y la lista)
   const filteredChecklistItems = useMemo(() => {
-    if (!selectedCategoryFilter) return checklistItems;
-    return checklistItems.filter(item => item.categoryId === selectedCategoryFilter);
-  }, [checklistItems, selectedCategoryFilter]);
+    let items = checklistItems;
+
+    // Filtrar por página del plano (si existen blueprints paginados)
+    if (blueprintPages.length > 0) {
+      const currentBpId = blueprintPages[currentPage]?.id;
+      if (currentBpId) {
+        items = items.filter(item => item.blueprintId === currentBpId);
+      }
+    }
+
+    if (selectedCategoryFilter) items = items.filter(item => item.categoryId === selectedCategoryFilter);
+    return items;
+  }, [checklistItems, selectedCategoryFilter, blueprintPages, currentPage]);
 
   // Helper para obtener color de categoría
   const getCategoryColor = (categoryId?: string) => {
@@ -744,7 +879,7 @@ export default function ProjectDetailScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      const promises = [refreshProjects()];
+      const promises = [refreshProjects(), fetchBlueprints()];
       if (projectId) {
         promises.push(fetchProjectChecklist(projectId));
       }
@@ -777,7 +912,7 @@ export default function ProjectDetailScreen() {
   };
 
   const handleStartProject = () => {
-    if ((user?.role as string) !== 'ADMIN') {
+    if (!hasPermission('PROJECT_UPDATE')) {
       showAlert(i18n.t('common.accessDenied'), i18n.t('projectDetail.adminOnlyStatus'));
       return;
     }
@@ -797,7 +932,7 @@ export default function ProjectDetailScreen() {
   };
 
   const handleCompleteProject = async () => {
-    if ((user?.role as string) !== 'ADMIN') { // Fix: Ensure user.role is explicitly compared as a string
+    if (!hasPermission('PROJECT_CLOSE')) {
       showAlert(i18n.t('common.accessDenied'), i18n.t('projectDetail.adminOnlyClose'));
       return;
     }
@@ -958,21 +1093,36 @@ export default function ProjectDetailScreen() {
       showAlert(i18n.t('common.restrictedAction'), i18n.t('projectDetail.completedProjectPlanRestriction'));
       return;
     }
-    if (project?.architecturalPlanUri) {
+    
+    const defaultName = i18n.t('common.architectural');
+    const isCustomGroup = selectedGroup !== defaultName;
+    const hasPages = blueprintPages.length > 0 || (selectedGroup === defaultName && project?.architecturalPlanUri);
+
+    if (hasPages) {
+      const options: any[] = [
+        { text: i18n.t('common.cancel'), style: 'cancel' }
+      ];
+
+      if (isCustomGroup) {
+        options.push({
+          text: i18n.t('common.addPage'),
+          onPress: () => { setTimeout(() => startPlanUpload('append'), 100); }
+        });
+      }
+
+      options.push({ 
+        text: i18n.t('common.replace'), 
+        style: 'destructive', 
+        onPress: () => { setTimeout(() => startPlanUpload('replace'), 100); }
+      });
+
       showAlert(
-        i18n.t('projectDetail.replacePlan'),
-        i18n.t('projectDetail.replacePlanConfirmation'),
-        [
-          { text: i18n.t('common.cancel'), style: 'cancel' },
-          { 
-            text: i18n.t('common.replace'), 
-            style: 'destructive', 
-            onPress: () => { setTimeout(() => startPlanUpload(), 100); }
-          }
-        ]
+        i18n.t('common.managePlan'),
+        i18n.t('common.managePlanMessage'),
+        options
       );
     } else {
-      startPlanUpload();
+      startPlanUpload('replace');
     }
   };
 
@@ -980,6 +1130,7 @@ export default function ProjectDetailScreen() {
   const uploadSelectedPlan = async (file: { uri: string, name: string, type: string, blob?: any }) => {
     setIsUploading(true);
     setUploadProgress(0);
+    setUploadStatus(i18n.t('common.preparing'));
 
     // Permitir que la UI se actualice (muestre el spinner) antes de procesar la imagen
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -991,26 +1142,6 @@ export default function ProjectDetailScreen() {
     try {
       const { uri, name, type } = file;
       
-      // Construir payload básico del proyecto para el PUT
-      const statusMap: Record<string, string> = {
-        'Not Started': 'NOT_STARTED',
-        'In Progress': 'IN_PROGRESS',
-        'Delayed': 'DELAYED',
-        'On Time': 'ON_TIME',
-        'Completed': 'COMPLETED'
-      };
-
-      const projectPayload = {
-        name: project!.name,
-        client: project!.client,
-        address: project!.address,
-        startDate: project!.startDate,
-        endDate: project!.endDate,
-        status: statusMap[project!.status] || project!.status,
-        progress: project!.progress,
-        participants: [] // Enviamos vacío para evitar conflictos de mapeo
-      };
-
       let imageFile: { uri: string, name: string, type: string, blob?: Blob } | { uri: string, name: string, type: string };
 
       if (Platform.OS === 'web') {
@@ -1021,11 +1152,57 @@ export default function ProjectDetailScreen() {
         imageFile = { uri, name, type };
       }
 
-      const response = await updateProjectWithFile(projectId, projectPayload, imageFile, (p) => setUploadProgress(p), controller.signal);
+      // Lógica de decisión: PUT (Main) vs POST (Add/Update Group)
+      const defaultName = i18n.t('common.architectural');
       
-      // Usar la URI retornada por el servidor si existe, sino la local
-      const newUri = response.data?.architecturalPlanUri || response.data?.imageUri || uri;
-      updateProjectPlan(projectId, newUri);
+      if (uploadModeRef.current === 'newGroup') {
+        // CASO B: Agregar Nuevo Grupo
+        await addProjectBlueprint(projectId, imageFile, newGroupName, false);
+        setUploadStatus(i18n.t('common.saving'));
+        setUploadProgress(100);
+        
+        // Seleccionar el nuevo grupo
+        setSelectedGroup(newGroupName);
+        setNewGroupName('');
+      } else if (selectedGroup === defaultName) {
+        // CASO A: Actualizar Main (Arquitectónico) -> PUT
+        const statusMap: Record<string, string> = {
+          'Not Started': 'NOT_STARTED',
+          'In Progress': 'IN_PROGRESS',
+          'Delayed': 'DELAYED',
+          'On Time': 'ON_TIME',
+          'Completed': 'COMPLETED'
+        };
+
+        const projectPayload = {
+          name: project!.name,
+          client: project!.client,
+          address: project!.address,
+          startDate: project!.startDate,
+          endDate: project!.endDate,
+          status: statusMap[project!.status] || project!.status,
+          progress: project!.progress,
+          participants: [] 
+        };
+
+        const response = await updateProjectWithFile(projectId, projectPayload, imageFile, (p) => {
+          setUploadProgress(p);
+          if (p >= 100) setUploadStatus(i18n.t('common.saving'));
+          else setUploadStatus(i18n.t('common.uploading'));
+        }, controller.signal);
+        
+        // Actualizar URI local si es necesario (aunque fetchBlueprints lo hará)
+        const newUri = response.data?.architecturalPlanUri || response.data?.imageUri || uri;
+        updateProjectPlan(projectId, newUri);
+      } else {
+        // CASO C: Actualizar Grupo Secundario -> POST con replace según modo
+        const shouldReplace = uploadModeRef.current === 'replace';
+        await addProjectBlueprint(projectId, imageFile, selectedGroup, shouldReplace);
+        setUploadStatus(i18n.t('common.saving'));
+        setUploadProgress(100);
+      }
+      
+      await fetchBlueprints(); // Refrescar blueprints por si se generaron nuevas páginas
       
       // Actualizar vista localmente para feedback inmediato
       setPlanImageSource({ uri });
@@ -1056,6 +1233,7 @@ export default function ProjectDetailScreen() {
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
+      setUploadStatus('');
       abortControllerRef.current = null;
     }
   };
@@ -1075,6 +1253,13 @@ export default function ProjectDetailScreen() {
     
     if (!result.canceled) {
       const asset = result.assets[0];
+
+      // Validación de tamaño: 50MB
+      if (asset.fileSize && asset.fileSize > 50 * 1024 * 1024) {
+        showAlert(i18n.t('common.error'), i18n.t('common.imageSizeLimit'));
+        return;
+      }
+
       const filename = asset.uri.split('/').pop() || 'plan.jpg';
       const match = /\.(\w+)$/.exec(filename);
       const type = match ? `image/${match[1]}` : 'image/jpeg';
@@ -1093,6 +1278,13 @@ export default function ProjectDetailScreen() {
       if (result.canceled) return;
 
       const asset = result.assets[0];
+
+      // Validación de tamaño: 50MB
+      if (asset.size && asset.size > 50 * 1024 * 1024) {
+        showAlert(i18n.t('common.error'), i18n.t('common.pdfSizeLimit'));
+        return;
+      }
+
       uploadSelectedPlan({
         uri: asset.uri,
         name: asset.name,
@@ -1105,7 +1297,9 @@ export default function ProjectDetailScreen() {
   };
 
   // Lógica interna para seleccionar y subir (Menú de opciones)
-  const startPlanUpload = () => {
+  const startPlanUpload = (mode: 'replace' | 'append' | 'newGroup' = 'replace') => {
+    setUploadMode(mode);
+    uploadModeRef.current = mode; // Actualizar ref inmediatamente para uso síncrono en callbacks
     if (Platform.OS === 'web') {
       // En web usamos DocumentPicker que permite seleccionar cualquier archivo
       pickDocumentForPlan();
@@ -1178,7 +1372,9 @@ export default function ProjectDetailScreen() {
         return;
       }
 
-      addChecklistItem(projectId, data.text, newItemModal.x, newItemModal.y, finalWidth, finalHeight, data.assignedTo, data.shape, data.deadline || undefined, data.shape === 'pencil' ? currentPencilPath : undefined, data.shape === 'pencil' ? pencilColor : undefined, data.stepId || undefined, data.categoryId || undefined)
+      const currentBlueprintId = blueprintPages.length > 0 ? blueprintPages[currentPage]?.id : undefined;
+
+      addChecklistItem(projectId, data.text, newItemModal.x, newItemModal.y, finalWidth, finalHeight, data.assignedTo, data.shape, data.deadline || undefined, data.shape === 'pencil' ? currentPencilPath : undefined, data.shape === 'pencil' ? pencilColor : undefined, data.stepId || undefined, data.categoryId || undefined, currentBlueprintId)
         .then(() => {
           setCurrentPencilPath('');
           setCurrentPencilPathDisplay('');
@@ -1457,6 +1653,30 @@ export default function ProjectDetailScreen() {
       {/* Sección del Plano Arquitectónico */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{i18n.t('projectDetail.interactivePlan')}</Text>
+        
+        {/* Tabs de Grupos de Planos */}
+        <View style={styles.groupTabsContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 40 }}>
+            {groupNames.map(name => (
+              <Pressable 
+                key={name} 
+                style={[styles.groupTab, selectedGroup === name && styles.groupTabActive]}
+                onPress={() => setSelectedGroup(name)}
+              >
+                <Text style={[styles.groupTabText, selectedGroup === name && styles.groupTabTextActive]}>{name}</Text>
+              </Pressable>
+            ))}
+            {hasPermission('PROJECT_UPDATE') && (
+              <Pressable 
+                style={[styles.groupTab, { backgroundColor: '#EBF8FF', borderColor: '#BEE3F8' }]}
+                onPress={() => setIsAddGroupModalVisible(true)}
+              >
+                <Feather name="plus" size={16} color="#3182CE" />
+              </Pressable>
+            )}
+          </ScrollView>
+        </View>
+
         {project.architecturalPlanUri ? (
           <>
           <View style={styles.drawingControls}>
@@ -1744,6 +1964,29 @@ export default function ProjectDetailScreen() {
               </View>
             )}
 
+            {/* Controles de Paginación de Planos */}
+            {blueprintPages.length > 1 && (
+              <View style={styles.paginationControls}>
+                <Pressable 
+                  onPress={() => setCurrentPage(p => Math.max(0, p - 1))} 
+                  disabled={currentPage === 0}
+                  style={[styles.pageButton, currentPage === 0 && styles.pageButtonDisabled]}
+                >
+                  <Feather name="chevron-left" size={24} color={currentPage === 0 ? "#A0AEC0" : "#4A5568"} />
+                </Pressable>
+                <Text style={styles.pageText}>
+                  {currentPage + 1} / {blueprintPages.length}
+                </Text>
+                <Pressable 
+                  onPress={() => setCurrentPage(p => Math.min(blueprintPages.length - 1, p + 1))} 
+                  disabled={currentPage === blueprintPages.length - 1}
+                  style={[styles.pageButton, currentPage === blueprintPages.length - 1 && styles.pageButtonDisabled]}
+                >
+                  <Feather name="chevron-right" size={24} color={currentPage === blueprintPages.length - 1 ? "#A0AEC0" : "#4A5568"} />
+                </Pressable>
+              </View>
+            )}
+
             {/* Controles de Zoom Flotantes */}
             <View style={styles.zoomControls}>
               <Pressable onPress={() => handleZoom(1.2)} style={styles.zoomButton}>
@@ -1906,6 +2149,25 @@ export default function ProjectDetailScreen() {
         onUpdate={handleUpdateProjectDetails}
       />
 
+      {/* Modal para Agregar Nuevo Grupo de Planos */}
+      <Modal
+        visible={isAddGroupModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsAddGroupModalVisible(false)}
+      >
+        <View style={styles.inputModalContainer}>
+          <View style={styles.inputModalContent}>
+            <Text style={styles.inputModalTitle}>{i18n.t('common.newPlanGroup')}</Text>
+            <Text style={styles.label}>{i18n.t('common.groupName')}</Text>
+            <TextInput style={styles.input} value={newGroupName} onChangeText={setNewGroupName} placeholder="Ej. Eléctrico, Hidráulico..." />
+            <View style={styles.modalButtons}>
+              <Pressable style={[styles.modalButton, styles.cancelButton]} onPress={() => setIsAddGroupModalVisible(false)}><Text>{i18n.t('common.cancel')}</Text></Pressable>
+              <Pressable style={[styles.modalButton, styles.saveButton]} onPress={() => { setIsAddGroupModalVisible(false); setTimeout(() => startPlanUpload('newGroup'), 100); }} disabled={!newGroupName.trim()}><Text style={styles.saveButtonText}>{i18n.t('common.confirm')}</Text></Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Modal de Confirmación de Inicio */}
       <Modal
@@ -1944,6 +2206,7 @@ export default function ProjectDetailScreen() {
       <PlanUploadModal
         visible={isUploading}
         progress={uploadProgress}
+        status={uploadStatus}
         onCancel={handleCancelUpload}
       />
 
@@ -2129,6 +2392,17 @@ const styles = StyleSheet.create({
   zoomButton: { padding: 10, alignItems: 'center', justifyContent: 'center' },
   zoomDivider: { height: 1, backgroundColor: '#E2E8F0', width: '100%' },
 
+  groupTabsContainer: { flexDirection: 'row', marginBottom: 12 },
+  groupTab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F7FAFC', borderWidth: 1, borderColor: '#E2E8F0', marginRight: 8, alignItems: 'center', justifyContent: 'center' },
+  groupTabActive: { backgroundColor: '#3182CE', borderColor: '#3182CE' },
+  groupTabText: { fontSize: 14, color: '#718096', fontWeight: '600' },
+  groupTabTextActive: { color: '#FFF' },
+
+  paginationControls: { position: 'absolute', bottom: 16, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, shadowColor: "#000", shadowOffset: {width: 0, height: 2}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3, zIndex: 20 },
+  pageButton: { padding: 4 },
+  pageButtonDisabled: { opacity: 0.3 },
+  pageText: { marginHorizontal: 12, fontSize: 14, fontWeight: '600', color: '#2D3748' },
+
   mapPin: { position: 'absolute', width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginLeft: -12, marginTop: -12, borderWidth: 2, borderColor: '#FFF', shadowColor: "#000", shadowOffset: {width: 0, height: 2}, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5 },
   mapArea: { position: 'absolute', borderWidth: 2, borderRadius: 12 }, // Área dibujada (círculo/rectángulo redondeado)
   drawingOverlay: { position: 'absolute', borderWidth: 2, borderColor: '#3182CE', backgroundColor: 'rgba(49, 130, 206, 0.3)', borderRadius: 12 },
@@ -2277,5 +2551,6 @@ const styles = StyleSheet.create({
   inputModalContent: { width: '85%', maxWidth: 400, backgroundColor: '#FFF', padding: 20, borderRadius: 12, elevation: 5 },
   inputModalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16 },
   input: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 16, backgroundColor: '#FFF' },
+  label: { fontSize: 14, fontWeight: '600', color: '#4A5568', marginBottom: 8 },
   modalButtons: { flexDirection: 'row', justifyContent: 'flex-end' },
 });

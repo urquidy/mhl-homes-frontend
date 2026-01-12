@@ -178,7 +178,7 @@ export default function ProfileScreen() {
         </Pressable>
         <View style={styles.nameContainer}>
           <Text style={[styles.username, { color: textColor, marginBottom: 0 }]}>
-            {user?.username || 'Usuario'}
+            {user?.username || i18n.t('common.username')}
           </Text>
           {(user?.permissions?.includes('ROLE_ADMIN')) && (
             <FontAwesome5 name="crown" size={18} color="#D4AF37" style={{ marginLeft: 8 }} />
@@ -201,7 +201,7 @@ export default function ProfileScreen() {
           ]}
           onPress={() => setLanguageModalVisible(true)}
         >
-          <Text style={styles.changePasswordText}>Idioma / Language</Text>
+          <Text style={styles.changePasswordText}>{i18n.t('profile.language')}</Text>
         </Pressable>
 
         <Pressable

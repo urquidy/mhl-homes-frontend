@@ -1,16 +1,15 @@
 
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, Platform, Image, ScrollView, Linking, Modal, ActivityIndicator, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useProjects } from '../../contexts/ProjectsContext';
-import * as ImagePicker from 'expo-image-picker';
-import * as DocumentPicker from 'expo-document-picker';
 import { Feather } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import MapView from './MapComponent';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Image, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import i18n from '../../constants/i18n';
-import { useAuth } from '../../contexts/AuthContext';
+import { useProjects } from '../../contexts/ProjectsContext';
 import api from '../../services/api';
+import MapView from './MapComponent';
 
 // --- Utilidades para el Calendario ---
 const daysOfWeek = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -202,10 +201,10 @@ export default function NewProjectModal({ onClose }: NewProjectModalProps) {
 
     if (!result.canceled) {
       const asset = result.assets[0];
-      const MAX_SIZE_BYTES = 5 * 1024 * 1024; // Límite de 5MB
+      const MAX_SIZE_BYTES = 50 * 1024 * 1024; // Límite de 50MB
 
       if (asset.fileSize && asset.fileSize > MAX_SIZE_BYTES) {
-        alert('La imagen seleccionada es demasiado grande. El límite es de 5MB.');
+        alert('La imagen seleccionada es demasiado grande. El límite es de 50MB.');
         return;
       }
 
@@ -233,10 +232,10 @@ export default function NewProjectModal({ onClose }: NewProjectModalProps) {
       if (result.canceled) return;
 
       const asset = result.assets[0];
-      const MAX_SIZE_BYTES = 5 * 1024 * 1024;
+      const MAX_SIZE_BYTES = 50 * 1024 * 1024; // Límite de 50MB
 
       if (asset.size && asset.size > MAX_SIZE_BYTES) {
-        alert('El archivo es demasiado grande. El límite es de 5MB.');
+        alert('El archivo es demasiado grande. El límite es de 50MB.');
         return;
       }
 

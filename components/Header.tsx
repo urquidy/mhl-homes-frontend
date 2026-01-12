@@ -1,8 +1,10 @@
-import React from 'react';
-import { View, Text, StyleSheet, Pressable, Image, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useDrawerStatus } from '@react-navigation/drawer';
+import { useRouter } from 'expo-router';
+import React from 'react';
+import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import i18n from '../constants/i18n';
+import api from '../services/api';
 
 interface HeaderProps {
   userImageUri?: string; // URI para la imagen del usuario, opcional
@@ -18,9 +20,27 @@ const Header: React.FC<HeaderProps> = ({ userImageUri, token, onMenuPress, onAdd
   const isDrawerOpen = useDrawerStatus() === 'open';
 
   // Construir fuente de imagen con headers si es necesario
-  const imageSource = userImageUri
-    ? { uri: userImageUri, headers: token ? { Authorization: `Bearer ${token}` } : undefined }
-    : require('../assets/images/user.png');
+  const getImageSource = () => {
+    if (!userImageUri) return require('../assets/images/user.png');
+
+    // Si es una URL completa o local, usarla tal cual
+    if (userImageUri.startsWith('http') || userImageUri.startsWith('file') || userImageUri.startsWith('content') || userImageUri.startsWith('blob')) {
+      return { 
+        uri: userImageUri, 
+        headers: (userImageUri.startsWith('http') && token) ? { Authorization: `Bearer ${token}` } : undefined 
+      };
+    }
+
+    // Construir URL para ID de archivo o ruta relativa
+    const defaultBaseURL = process.env.EXPO_PUBLIC_API_URL || (Platform.OS === 'web' ? 'http://localhost:8080' : 'http://192.168.100.59:8080');
+    const baseURL = api.defaults.baseURL || defaultBaseURL;
+    
+    const finalUri = userImageUri.includes('/') 
+      ? `${baseURL}${userImageUri.startsWith('/') ? '' : '/'}${userImageUri}` 
+      : `${baseURL}/api/files/${userImageUri}`;
+
+    return { uri: finalUri, headers: token ? { Authorization: `Bearer ${token}` } : undefined };
+  };
 
   return (
     <View style={styles.container}>
@@ -41,14 +61,14 @@ const Header: React.FC<HeaderProps> = ({ userImageUri, token, onMenuPress, onAdd
             >
               <Feather name="plus" size={20} color="#FFFFFF" />
               {/* Solo mostramos el texto si el menú NO está abierto en web, para ahorrar espacio */}
-              {(Platform.OS === 'web' && isDrawerOpen) && <Text style={styles.newProjectButtonText}>New Project</Text>}
+              {(Platform.OS === 'web' && isDrawerOpen) && <Text style={styles.newProjectButtonText}>{i18n.t('nav.newProject')}</Text>}
           </Pressable>
         )}
 
         {/* Avatar del Usuario */}
         <Pressable onPress={onProfilePress}>
           <Image
-            source={imageSource}
+            source={getImageSource()}
             style={styles.userAvatar}
           />
         </Pressable>

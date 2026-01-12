@@ -3,6 +3,7 @@
 import { Feather } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import i18n from '../../constants/i18n';
 
 interface AuditLog {
   action: string;
@@ -32,7 +33,7 @@ export default function HistoryModal({ visible, onClose, isLoading, auditLogs }:
       <View style={styles.inputModalContainer}>
         <View style={styles.inputModalContent}>
           <View style={styles.header}>
-            <Text style={styles.inputModalTitle}>Historial de Estado</Text>
+            <Text style={styles.inputModalTitle}>{i18n.t('history.title')}</Text>
             <Pressable onPress={onClose}>
               <Feather name="x" size={24} color="#4A5568" />
             </Pressable>
@@ -42,10 +43,10 @@ export default function HistoryModal({ visible, onClose, isLoading, auditLogs }:
           <View style={styles.filterContainer}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               {[
-                { key: 'ALL', label: 'Todos' },
-                { key: 'STATUS_CHANGE', label: 'Estado' },
-                { key: 'UPDATE', label: 'Edición' },
-                { key: 'CREATE', label: 'Creación' },
+                { key: 'ALL', label: i18n.t('history.filterAll') },
+                { key: 'STATUS_CHANGE', label: i18n.t('history.filterStatus') },
+                { key: 'UPDATE', label: i18n.t('history.filterUpdate') },
+                { key: 'CREATE', label: i18n.t('history.filterCreate') },
               ].map((filter) => (
                 <Pressable 
                   key={filter.key}
@@ -73,17 +74,17 @@ export default function HistoryModal({ visible, onClose, isLoading, auditLogs }:
                     case 'CREATE':
                       iconName = 'plus-circle';
                       iconColor = '#38A169';
-                      actionLabel = 'Creación';
+                      actionLabel = i18n.t('history.actionCreate');
                       break;
                     case 'UPDATE':
                       iconName = 'edit-2';
                       iconColor = '#3182CE';
-                      actionLabel = 'Actualización';
+                      actionLabel = i18n.t('history.actionUpdate');
                       break;
                     case 'STATUS_CHANGE':
                       iconName = 'refresh-cw';
                       iconColor = '#DD6B20';
-                      actionLabel = 'Cambio de Estado';
+                      actionLabel = i18n.t('history.actionStatusChange');
                       break;
                   }
 
@@ -96,13 +97,13 @@ export default function HistoryModal({ visible, onClose, isLoading, auditLogs }:
                         </View>
                         <Text style={styles.logDate}>{new Date(item.timestamp).toLocaleDateString()} {new Date(item.timestamp).toLocaleTimeString()}</Text>
                       </View>
-                      <Text style={styles.logUser}>Por: {item.username || 'Sistema'}</Text>
+                      <Text style={styles.logUser}>{i18n.t('history.by')} {item.username || i18n.t('history.system')}</Text>
                       {item.description && <Text style={styles.logDescription}>"{item.description}"</Text>}
                     </View>
                   );
                 })
             ) : (
-              <Text style={styles.emptyText}>No hay historial disponible.</Text>
+              <Text style={styles.emptyText}>{i18n.t('history.empty')}</Text>
             )}
           </ScrollView>
         </View>

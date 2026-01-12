@@ -1,11 +1,11 @@
-import React, { useState, useLayoutEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, LayoutAnimation, Platform, UIManager, ActivityIndicator } from 'react-native';
-import { useProjects } from '../../contexts/ProjectsContext';
 import { Feather } from '@expo/vector-icons';
-import { Link, useNavigation, useFocusEffect } from 'expo-router';
+import { Link, useFocusEffect, useNavigation } from 'expo-router';
+import React, { useCallback, useLayoutEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, UIManager, View } from 'react-native';
 import i18n from '../../constants/i18n';
-import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { useProjects } from '../../contexts/ProjectsContext';
+import api from '../../services/api';
 
 // Habilitar animaciones de layout en Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -119,7 +119,7 @@ export default function ChecklistScreen() {
       
       {!loading && myTasks.length === 0 && (
         <Text style={{ textAlign: 'center', color: '#718096', marginTop: 20, fontStyle: 'italic' }}>
-          No tienes tareas asignadas pendientes.
+          {i18n.t('checklist.myTasksEmpty')}
         </Text>
       )}
     </ScrollView>

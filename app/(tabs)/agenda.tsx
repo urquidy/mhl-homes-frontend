@@ -11,8 +11,20 @@ import api from '../../services/api';
 import { HeaderActionContext } from './_layout';
 
 // --- Utilidades de Fecha ---
-const daysOfWeek = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const getDaysOfWeek = () => {
+  const locale = i18n.locale.split('-')[0];
+  const translations = i18n.translations;
+  // @ts-ignore
+  const agenda = translations[locale]?.agenda || translations['en']?.agenda;
+  return (agenda?.daysShort || []) as string[];
+};
+const getMonthNames = () => {
+  const locale = i18n.locale.split('-')[0];
+  const translations = i18n.translations;
+  // @ts-ignore
+  const agenda = translations[locale]?.agenda || translations['en']?.agenda;
+  return (agenda?.months || []) as string[];
+};
 
 const getDaysInMonth = (month: number, year: number) => new Date(year, month + 1, 0).getDate();
 const getFirstDayOfMonth = (month: number, year: number) => new Date(year, month, 1).getDay();
@@ -65,7 +77,7 @@ export default function AgendaScreen() {
     if (date) {
       // Parsear YYYY-MM-DD asegurando zona horaria local
       const [y, m, d] = date.split('-').map(Number);
-      const targetDate = new Date(y, m - 1, d);
+      const targetDate = new Date(y, m - 1, d); // Corrected: m-1 for month index
       setCurrentDate(targetDate); // Mover calendario al mes correcto
       setSelectedDate(targetDate); // Seleccionar el día
     }
@@ -73,15 +85,23 @@ export default function AgendaScreen() {
 
   // Cargar usuarios disponibles
   useEffect(() => {
-    const fetchUsers = async () => {
+    const fetchUsersAndRoles = async () => {
       try {
-        const response = await api.get('/api/users');
-        setAvailableUsers(response.data);
+        const [usersRes, rolesRes] = await Promise.all([
+          api.get('/api/users'),
+          api.get('/api/roles')
+        ]);
+        const users = usersRes.data || [];
+        const roles = rolesRes.data || [];
+        setAvailableUsers(users.map((u: any) => ({
+          ...u,
+          role: roles.find((r: any) => r.id === u.role)?.name || u.role
+        })));
       } catch (error) {
-        console.error('Error fetching users:', error);
+        console.error('Error fetching users/roles:', error);
       }
     };
-    if (token) fetchUsers();
+    if (token) fetchUsersAndRoles();
   }, [token]);
 
   // Cargar tipos de agenda desde la API
@@ -245,7 +265,7 @@ export default function AgendaScreen() {
         <Pressable onPress={() => changeMonth(-1)} style={styles.navButton}>
           <Feather name="chevron-left" size={24} color="#4A5568" />
         </Pressable>
-        <Text style={styles.monthTitle}>{monthNames[month]} {year}</Text>
+        <Text style={styles.monthTitle}>{getMonthNames()[month]} {year}</Text>
         <Pressable onPress={() => changeMonth(1)} style={styles.navButton}>
           <Feather name="chevron-right" size={24} color="#4A5568" />
         </Pressable>
@@ -253,7 +273,7 @@ export default function AgendaScreen() {
 
       {/* --- Grid de Días de la Semana --- */}
       <View style={styles.weekDaysRow}>
-        {daysOfWeek.map(day => (
+        {getDaysOfWeek().map((day: string) => (
           <Text key={day} style={styles.weekDayText}>{day}</Text>
         ))}
       </View>

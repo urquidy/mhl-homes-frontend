@@ -8,60 +8,34 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useProjects } from '../../contexts/ProjectsContext';
 import { usePermission } from '../../hooks/usePermission';
 
-// --- Componente Skeleton (Carga) ---
-const SkeletonItem = ({ style }: { style: any }) => {
-  const opacity = useRef(new Animated.Value(0.3)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.7, duration: 800, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
-      ])
-    ).start();
-  }, []);
-
-  return <Animated.View style={[{ backgroundColor: '#EDF2F7', borderRadius: 4 }, style, { opacity }]} />;
-};
-
-const ProjectsSkeleton = () => {
-  return (
-    <View style={styles.container}>
-      <SkeletonItem style={{ width: 200, height: 32, marginBottom: 24 }} />
-      {[1, 2, 3, 4].map(i => (
-        <View key={i} style={styles.card}>
-          <View style={{ flex: 1 }}>
-            <SkeletonItem style={{ width: 150, height: 20, marginBottom: 8 }} />
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <SkeletonItem style={{ width: 16, height: 16, borderRadius: 8, marginRight: 6 }} />
-              <SkeletonItem style={{ width: 200, height: 14 }} />
-            </View>
-          </View>
-          <SkeletonItem style={{ width: 24, height: 24, borderRadius: 12 }} />
-        </View>
-      ))}
-    </View>
-  );
-};
-
 export default function ProjectsScreen() {
-  const { projects, deleteProject, startProject, refreshProjects, loadMoreProjects, hasMoreProjects, isLoading } = useProjects();
+  const { projects, deleteProject, restoreProject, startProject, refreshProjects, loadMoreProjects, hasMoreProjects, isLoading } = useProjects();
   const { user } = useAuth();
   const { hasPermission } = usePermission();
   const router = useRouter();
   
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
+  const [restoreModalVisible, setRestoreModalVisible] = useState(false);
+  const [projectToRestore, setProjectToRestore] = useState<string | null>(null);
   const [startModalVisible, setStartModalVisible] = useState(false);
   const [projectToStart, setProjectToStart] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [searchTimer, setSearchTimer] = useState<any>(null);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
   const { showAlert, AlertComponent } = useCustomAlert();
 
   // Filtramos los proyectos activos (excluyendo los completados, si esa es la lógica deseada, o mostrando todos)
   // Asumiremos que "Activos" son todos los que no están archivados/borrados. 
   // Si quieres excluir 'Completado', descomenta el filtro.
-  const activeProjects = projects; // .filter(p => p.status !== 'Completed');
+  const activeProjects = projects.filter(p => {
+    const term = searchText.toLowerCase();
+    return p.name.toLowerCase().includes(term) ||
+           (p.client && p.client.toLowerCase().includes(term)) ||
+           (p.address && p.address.toLowerCase().includes(term));
+  }); // .filter(p => p.status !== 'Completed');
 
   const handleDelete = (id: string) => {
     setProjectToDelete(id);
@@ -78,6 +52,27 @@ export default function ProjectsScreen() {
     }
     setDeleteModalVisible(false);
     setProjectToDelete(null);
+  };
+
+  const handleRestore = (id: string) => {
+    setProjectToRestore(id);
+    setRestoreModalVisible(true);
+  };
+
+  const confirmRestore = async () => {
+    if (projectToRestore) {
+      try {
+        await restoreProject(projectToRestore);
+        showAlert(i18n.t('common.success'), i18n.t('projects.projectRestored'));
+        // Redirigir a la lista de proyectos activos
+        setShowDeleted(false);
+        refreshProjects(searchText, true, true); // Limpiar lista al cambiar de contexto
+      } catch (error) {
+        showAlert(i18n.t('common.error'), i18n.t('projects.restoreError'));
+      }
+    }
+    setRestoreModalVisible(false);
+    setProjectToRestore(null);
   };
 
   const handleStart = (id: string) => {
@@ -104,42 +99,87 @@ export default function ProjectsScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      if (refreshProjects) await refreshProjects();
+      if (refreshProjects) await refreshProjects(searchText, !showDeleted, false); // No limpiar en pull-to-refresh para mantener UX suave
     } catch (error) {
       console.error("Error refreshing projects:", error);
     } finally {
       setRefreshing(false);
     }
-  }, [refreshProjects]);
+  }, [refreshProjects, searchText, showDeleted]);
 
   // Manejar búsqueda
   const handleSearch = (text: string) => {
     setSearchText(text);
-    // Debounce opcional o búsqueda al presionar enter podría ir aquí
-    refreshProjects(text);
+    
+    if (searchTimer) clearTimeout(searchTimer);
+    const timer = setTimeout(() => {
+      refreshProjects(text, !showDeleted, true); // Limpiar al buscar para feedback visual claro
+    }, 500);
+    setSearchTimer(timer);
   };
 
-  if (isLoading && !refreshing && projects.length === 0) {
-    return <ProjectsSkeleton />;
-  }
+  const toggleShowDeleted = () => {
+    const newValue = !showDeleted;
+    setShowDeleted(newValue);
+    refreshProjects(searchText, !newValue, true); // Limpiar lista al cambiar filtro (Activos <-> Eliminados)
+  };
+
+  const isNewProject = (dateString?: string) => {
+    if (!dateString) return false;
+    const created = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - created.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays <= 7;
+  };
+
+  useEffect(() => {
+    if (!isLoading) {
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }).start();
+    } else if (projects.length === 0 && !refreshing) {
+      fadeAnim.setValue(0);
+    }
+  }, [isLoading, projects.length, refreshing]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, showDeleted && styles.containerDeleted]}>
       <View style={styles.header}>
-        <Text style={styles.title}>{i18n.t('projects.title')}</Text>
+        <Text style={styles.title}>{showDeleted ? i18n.t('projects.deletedProjects') : i18n.t('projects.title')}</Text>
         
         {/* Barra de Búsqueda */}
         <View style={styles.searchContainer}>
           <Feather name="search" size={20} color="#A0AEC0" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder={i18n.t('common.search') || "Buscar..."}
+            placeholder={i18n.t('common.search')}
             value={searchText}
             onChangeText={handleSearch}
           />
+          {hasPermission('PROJECT_DELETE') && (
+            <Pressable 
+              onPress={toggleShowDeleted} 
+              style={[styles.filterButton, showDeleted && styles.filterButtonActive]}
+            >
+              <Feather 
+                name={showDeleted ? "arrow-left" : "trash-2"} 
+                size={20} 
+                color={showDeleted ? "#FFFFFF" : "#718096"} 
+              />
+            </Pressable>
+          )}
         </View>
       </View>
 
+      {isLoading && !refreshing && projects.length === 0 ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#3182CE" />
+        </View>
+      ) : (
+      <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
       <FlatList
         data={activeProjects}
         keyExtractor={(item) => item.id}
@@ -154,7 +194,14 @@ export default function ProjectsScreen() {
         renderItem={({ item }) => (
           <Pressable style={styles.card} onPress={() => handlePressProject(item.id)}>
             <View style={styles.cardContent}>
-              <Text style={styles.projectName}>{item.name}</Text>
+              <View style={styles.nameRow}>
+                <Text style={styles.projectName}>{item.name}</Text>
+                {isNewProject((item as any).createdAt) && (
+                  <View style={styles.newBadge}>
+                    <Text style={styles.newBadgeText}>{i18n.t('common.new')}</Text>
+                  </View>
+                )}
+              </View>
               <View style={styles.addressContainer}>
                 <Feather name="map-pin" size={14} color="#718096" />
                 <Text style={styles.addressText}>{item.address || i18n.t('projects.noAddress')}</Text>
@@ -162,15 +209,23 @@ export default function ProjectsScreen() {
             </View>
             
             <View style={styles.actions}>
-              {item.status === 'Not Started' && (
-                <Pressable onPress={() => handleStart(item.id)} style={styles.actionButton} hitSlop={10}>
-                  <Feather name="play-circle" size={20} color="#38A169" />
+              {showDeleted ? (
+                <Pressable onPress={() => handleRestore(item.id)} style={styles.actionButton} hitSlop={10}>
+                  <Feather name="refresh-ccw" size={20} color="#38A169" />
                 </Pressable>
-              )}
-              {hasPermission('PROJECT_DELETE') && (
-                <Pressable onPress={() => handleDelete(item.id)} style={styles.deleteButton} hitSlop={10}>
-                  <Feather name="trash-2" size={20} color="#E53E3E" />
-                </Pressable>
+              ) : (
+                <>
+                  {item.status === 'Not Started' && (
+                    <Pressable onPress={() => handleStart(item.id)} style={styles.actionButton} hitSlop={10}>
+                      <Feather name="play-circle" size={20} color="#38A169" />
+                    </Pressable>
+                  )}
+                  {hasPermission('PROJECT_DELETE') && (
+                    <Pressable onPress={() => handleDelete(item.id)} style={styles.deleteButton} hitSlop={10}>
+                      <Feather name="trash-2" size={20} color="#E53E3E" />
+                    </Pressable>
+                  )}
+                </>
               )}
               <Feather name="chevron-right" size={24} color="#CBD5E0" />
             </View>
@@ -180,6 +235,8 @@ export default function ProjectsScreen() {
           <Text style={styles.emptyText}>{i18n.t('projects.noProjects')}</Text>
         }
       />
+      </Animated.View>
+      )}
 
       {/* Modal de Confirmación de Eliminación */}
       <Modal
@@ -226,6 +283,29 @@ export default function ProjectsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Modal de Confirmación de Restauración */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={restoreModalVisible}
+        onRequestClose={() => setRestoreModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{i18n.t('projects.restoreTitle')}</Text>
+            <Text style={styles.modalMessage}>{i18n.t('projects.restoreConfirmation')}</Text>
+            <View style={styles.modalButtons}>
+              <Pressable style={[styles.modalBtn, styles.modalCancelBtn]} onPress={() => setRestoreModalVisible(false)}>
+                <Text style={styles.modalBtnText}>{i18n.t('common.cancel')}</Text>
+              </Pressable>
+              <Pressable style={[styles.modalBtn, styles.modalStartBtn]} onPress={confirmRestore}>
+                <Text style={styles.modalDeleteBtnText}>{i18n.t('common.confirm')}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
       <AlertComponent />
     </View>
   );
@@ -233,6 +313,7 @@ export default function ProjectsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 24, backgroundColor: '#FFFFFF' },
+  containerDeleted: { backgroundColor: '#FFF5F5' },
   header: { marginBottom: 24 },
   title: { fontSize: 32, fontWeight: 'bold', marginBottom: 16, color: '#1A202C' },
   listContent: { paddingBottom: 24 },
@@ -248,7 +329,10 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   cardContent: { flex: 1 },
-  projectName: { fontSize: 18, fontWeight: 'bold', color: '#2D3748', marginBottom: 4 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  projectName: { fontSize: 18, fontWeight: 'bold', color: '#2D3748', flexShrink: 1 },
+  newBadge: { backgroundColor: '#3182CE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 },
+  newBadgeText: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
   addressContainer: { flexDirection: 'row', alignItems: 'center' },
   addressText: { fontSize: 14, color: '#718096', marginLeft: 6 },
   emptyText: { textAlign: 'center', color: '#718096', marginTop: 20, fontSize: 16 },
@@ -280,6 +364,14 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 16,
     color: '#2D3748',
+  },
+  filterButton: {
+    padding: 8,
+    marginLeft: 8,
+    borderRadius: 8,
+  },
+  filterButtonActive: {
+    backgroundColor: '#E53E3E',
   },
   // Estilos del Modal
   modalOverlay: {

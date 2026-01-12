@@ -3,6 +3,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, LayoutAnimation, Platform, Pressable, StyleSheet, Text, UIManager, View } from 'react-native';
 import { useCustomAlert } from '../../components/ui/CustomAlert';
+import i18n from '../../constants/i18n';
 import api from '../../services/api';
 
 interface ProjectDocumentsProps {
@@ -22,10 +23,14 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 export default function ProjectDocuments({ projectId, userRole, projectStatus, onViewDocument, onRefreshProjects, onRefreshChecklist, canEdit = false }: ProjectDocumentsProps) {
   const [documents, setDocuments] = useState<any[]>([]);
+  const [allDocuments, setAllDocuments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const { showAlert, AlertComponent } = useCustomAlert();
   const [isExpanded, setIsExpanded] = useState(true);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const LIMIT = 5;
 
   const toggleExpand = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -42,7 +47,14 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
       
       // La API devuelve un objeto agrupado por fechas { "YYYY-MM-DD": [...] } o un array
       // Aplanamos los valores para obtener una lista única de archivos
-      const filesList = Array.isArray(data) ? data : Object.values(data).flat();
+      let filesList: any[] = [];
+      if (data.data && Array.isArray(data.data)) {
+         filesList = data.data; // Respuesta paginada estándar { data: [...], meta: ... }
+      } else if (Array.isArray(data)) {
+         filesList = data;
+      } else {
+         filesList = Object.values(data).flat();
+      }
       
       const mappedDocuments = filesList.map((file: any) => ({
         id: file.attachmentId || file.id || file.url.split('/').pop(), // Usamos attachmentId si existe
@@ -54,7 +66,11 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
         sourceId: file.sourceId
       }));
       
-      setDocuments(mappedDocuments);
+      setAllDocuments(mappedDocuments);
+      // Paginación local inicial
+      setDocuments(mappedDocuments.slice(0, LIMIT));
+      setHasMore(mappedDocuments.length > LIMIT);
+      setPage(1);
     } catch (error) {
       console.log('Error fetching documents:', error);
       // Mock data si falla la API para demostración
@@ -68,9 +84,17 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
     fetchDocuments();
   }, [fetchDocuments]);
 
+  const handleLoadMore = () => {
+    const nextPage = page + 1;
+    const nextDocs = allDocuments.slice(0, nextPage * LIMIT);
+    setDocuments(nextDocs);
+    setPage(nextPage);
+    setHasMore(allDocuments.length > nextDocs.length);
+  };
+
   const handleUpload = async () => {
     if (projectStatus === 'Completed' || projectStatus === 'COMPLETED') {
-      showAlert("Acción Restringida", "No se pueden subir documentos en un proyecto completado.");
+      showAlert(i18n.t('documents.restricted'), i18n.t('documents.restrictedMessage'));
       return;
     }
     try {
@@ -100,11 +124,11 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
         headers: { 'Content-Type': Platform.OS === 'web' ? undefined : 'multipart/form-data' }
       });
 
-      showAlert("Éxito", "Documento subido correctamente.");
+      showAlert(i18n.t('common.success'), i18n.t('documents.success'));
       fetchDocuments();
     } catch (error) {
       console.error(error);
-      showAlert("Error", "No se pudo subir el documento.");
+      showAlert(i18n.t('common.error'), i18n.t('documents.error'));
     } finally {
       setIsUploading(false);
     }
@@ -112,16 +136,16 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
 
   const handleDelete = (doc: any) => {
     if (projectStatus === 'Completed' || projectStatus === 'COMPLETED') {
-      showAlert("Acción Restringida", "No se pueden eliminar documentos en un proyecto completado.");
+      showAlert(i18n.t('documents.restricted'), i18n.t('documents.deleteRestricted'));
       return;
     }
     showAlert(
-      "Eliminar Documento",
-      "¿Estás seguro?",
+      i18n.t('documents.deleteTitle'),
+      i18n.t('documents.deleteMessage'),
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: i18n.t('common.cancel'), style: "cancel" },
         { 
-          text: "Eliminar", 
+          text: i18n.t('common.delete'), 
           style: "destructive", 
           onPress: async () => {
             try {
@@ -144,7 +168,7 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
               fetchDocuments();
             } catch (error) {
               console.error(error);
-              showAlert("Error", "No se pudo eliminar.");
+              showAlert(i18n.t('common.error'), i18n.t('documents.deleteError'));
             }
           }
         }
@@ -163,42 +187,49 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
     <View style={styles.container}>
       <View style={styles.header}>
         <Pressable onPress={toggleExpand} style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-          <Text style={styles.title}>Documentos del Proyecto</Text>
+          <Text style={styles.title}>{i18n.t('documents.title')}</Text>
           <Feather name={isExpanded ? "chevron-down" : "chevron-right"} size={24} color="#1A202C" style={{ marginLeft: 8 }} />
         </Pressable>
         {(userRole === 'ADMIN' || canEdit) && (
           <Pressable style={styles.addButton} onPress={handleUpload} disabled={isUploading}>
             {isUploading ? <ActivityIndicator size="small" color="#3182CE" /> : <Feather name="plus" size={20} color="#3182CE" />}
-            <Text style={styles.addText}>{isUploading ? 'Subiendo...' : 'Agregar'}</Text>
+            <Text style={styles.addText}>{isUploading ? i18n.t('documents.uploading') : i18n.t('projectDetail.add')}</Text>
           </Pressable>
         )}
       </View>
 
       {isExpanded && (
-        isLoading ? (
-        <ActivityIndicator style={{ marginTop: 20 }} />
-      ) : documents.length === 0 ? (
-        <Text style={styles.emptyText}>No hay documentos adjuntos.</Text>
-      ) : (
-        <View style={styles.list}>
-          {documents.map((doc) => (
-            <Pressable key={doc.id} style={styles.docItem} onPress={() => onViewDocument(doc.uri, doc.name, doc.type)}>
-              <View style={styles.docIcon}>
-                <Feather name={getIcon(doc.type)} size={24} color="#4A5568" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.docName} numberOfLines={1}>{doc.name}</Text>
-                <Text style={styles.docDate}>{new Date(doc.date || Date.now()).toLocaleDateString()}</Text>
-              </View>
-              {(userRole === 'ADMIN' || canEdit) && (
-                <Pressable style={styles.deleteButton} onPress={() => handleDelete(doc)}>
-                  <Feather name="trash-2" size={18} color="#E53E3E" />
+        <>
+          {documents.length === 0 && !isLoading ? (
+            <Text style={styles.emptyText}>{i18n.t('documents.empty')}</Text>
+          ) : (
+            <View style={styles.list}>
+              {documents.map((doc) => (
+                <Pressable key={doc.id} style={styles.docItem} onPress={() => onViewDocument(doc.uri, doc.name, doc.type)}>
+                  <View style={styles.docIcon}>
+                    <Feather name={getIcon(doc.type)} size={24} color="#4A5568" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.docName} numberOfLines={1}>{doc.name}</Text>
+                    <Text style={styles.docDate}>{new Date(doc.date || Date.now()).toLocaleDateString()}</Text>
+                  </View>
+                  {(userRole === 'ADMIN' || canEdit) && (
+                    <Pressable style={styles.deleteButton} onPress={() => handleDelete(doc)}>
+                      <Feather name="trash-2" size={18} color="#E53E3E" />
+                    </Pressable>
+                  )}
                 </Pressable>
-              )}
+              ))}
+            </View>
+          )}
+          
+          {hasMore && (
+            <Pressable style={styles.loadMoreButton} onPress={handleLoadMore} disabled={isLoading}>
+              {isLoading ? <ActivityIndicator size="small" color="#3182CE" /> : <Text style={styles.loadMoreText}>{i18n.t('documents.loadMore')}</Text>}
             </Pressable>
-          ))}
-        </View>
-      ))}
+          )}
+        </>
+      )}
       <AlertComponent />
     </View>
   );
@@ -217,4 +248,15 @@ const styles = StyleSheet.create({
   docName: { fontSize: 16, color: '#2D3748', fontWeight: '500', fontFamily: 'Inter-Medium' },
   docDate: { fontSize: 12, color: '#718096', fontFamily: 'Inter-Regular' },
   deleteButton: { padding: 8 },
+  loadMoreButton: {
+    padding: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F7FAFC',
+    borderRadius: 8,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  loadMoreText: { color: '#3182CE', fontWeight: '600', fontSize: 14 },
 });
