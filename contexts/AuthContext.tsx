@@ -1,6 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
+import api from '../services/api';
 import { User, UserRole } from '../types';
 
 interface AuthContextType {
@@ -10,6 +11,7 @@ interface AuthContextType {
   login: (userData: { id: string; username: string; email: string; role: UserRole; imageUri?: string; permissions?: string[]; companyName?: string }, token: string, refreshToken: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUserImage: (uri: string) => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -96,8 +98,42 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const refreshUser = async () => {
+    if (!user || !token) return;
+
+    try {
+      // Asumimos que el backend puede devolver los datos completos del usuario,
+      // incluyendo la lista de permisos actualizada.
+      const response = await api.get(`/api/auth/me`);
+      const freshUserData = response.data;
+      
+      const refreshedUser: User = {
+        id: freshUserData.id,
+        username: freshUserData.username,
+        email: freshUserData.email,
+        role: freshUserData.role,
+        permissions: freshUserData.permissions || [],
+        companyName: freshUserData.companyName || user.companyName,
+        imageUri: freshUserData.imageUri || user.imageUri,
+      };
+      
+      setUser(refreshedUser);
+
+      if (Platform.OS === 'web') {
+        localStorage.setItem('user', JSON.stringify(refreshedUser));
+      } else {
+        await SecureStore.setItemAsync('user', JSON.stringify(refreshedUser));
+      }
+    } catch (error: any) {
+      console.error('Error refreshing user session:', error);
+      if (error.response?.status === 401) {
+        logout();
+      }
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, logout, updateUserImage }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, logout, updateUserImage, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

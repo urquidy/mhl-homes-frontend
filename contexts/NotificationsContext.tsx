@@ -1,8 +1,9 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback, useMemo } from 'react';
+import i18n from '@/constants/i18n';
 import { Feather } from '@expo/vector-icons';
+import React, { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import api from '../services/api';
-import { useAuth } from './AuthContext';
 import { initSocket } from '../services/socket';
+import { useAuth } from './AuthContext';
 
 export interface AppNotification {
   id: string;
@@ -14,6 +15,8 @@ export interface AppNotification {
   type?: 'INFO' | 'WARNING' | 'ERROR' | 'SUCCESS';
   category?: 'PROJECT' | 'AGENDA' | 'CHECKLIST' | 'BUDGET';
   referenceId?: string;
+  projectId?: string;
+  metadata?: any;
 }
 
 export type NotificationFilter = 'ALL' | 'UNREAD' | 'READ' | 'PROJECT' | 'AGENDA' | 'CHECKLIST' | 'BUDGET';
@@ -43,32 +46,50 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
   const [isLoading, setIsLoading] = useState(false);
   const ITEMS_PER_PAGE = 5;
 
+  const processNotificationData = useCallback((n: any): AppNotification => {
+    let text = n.message || n.text || n.body;
+    let title = n.title;
+
+    if (n.translationKey) {
+      const params: Record<string, any> = {};
+      if (n.translationParams && Array.isArray(n.translationParams)) {
+        n.translationParams.forEach((val: any, index: number) => {
+          params[String(index)] = val;
+        });
+      }
+      text = i18n.t(`notifications.${n.translationKey}`, { defaultValue: text, ...params });
+    }
+
+    return {
+      id: n.id,
+      icon: (() => {
+        switch (n.type) {
+          case 'WARNING': return 'alert-triangle';
+          case 'ERROR': return 'alert-circle';
+          case 'SUCCESS': return 'check-circle';
+          case 'INFO': return 'info';
+          default: return 'bell';
+        }
+      })(),
+      text: text,
+      date: n.createdAt || n.date,
+      read: n.read || n.isRead || false,
+      title: title,
+      type: n.type,
+      category: n.category,
+      referenceId: n.referenceId,
+      projectId: n.projectId,
+      metadata: n.metadata
+    };
+  }, []);
+
   const refreshNotifications = useCallback(async () => {
     if (!token) return;
     setIsLoading(true);
     try {
       const response = await api.get('/api/notifications');
       // Mapeamos la respuesta del backend a nuestra estructura local
-      const mappedNotifications: AppNotification[] = response.data.map((n: any) => ({
-        id: n.id,
-        // Asignamos icono según los tipos definidos: INFO, WARNING, ERROR, SUCCESS
-        icon: (() => {
-          switch (n.type) {
-            case 'WARNING': return 'alert-triangle';
-            case 'ERROR': return 'alert-circle';
-            case 'SUCCESS': return 'check-circle';
-            case 'INFO': return 'info';
-            default: return 'bell';
-          }
-        })(),
-        text: n.message || n.text || n.body, // Priorizamos 'message' del JSON
-        date: n.createdAt || n.date,
-        read: n.read || n.isRead || false,
-        title: n.title,
-        type: n.type,
-        category: n.category,
-        referenceId: n.referenceId
-      }));
+      const mappedNotifications: AppNotification[] = response.data.map(processNotificationData);
       
       // Fusión inteligente: Mantenemos el historial de la API y agregamos cualquier 
       // notificación nueva que haya llegado por socket mientras se hacía la petición.
@@ -83,7 +104,7 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
     } finally {
       setIsLoading(false);
     }
-  }, [token]);
+  }, [token, processNotificationData]);
 
   // Cargar notificaciones al iniciar o cambiar de usuario
   useEffect(() => {
@@ -118,25 +139,7 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
       console.log("Destinatario:", data.recipientId);
       
       const processNotification = () => {
-        const newNotif: AppNotification = {
-          id: data.id || Date.now().toString(),
-          icon: (() => {
-            switch (data.type) {
-              case 'WARNING': return 'alert-triangle';
-              case 'ERROR': return 'alert-circle';
-              case 'SUCCESS': return 'check-circle';
-              case 'INFO': return 'info';
-              default: return 'bell';
-            }
-          })(),
-          text: data.message || data.text || data.body,
-          date: data.createdAt || data.date || new Date().toISOString(),
-          read: false,
-          title: data.title,
-          type: data.type,
-          category: data.category,
-          referenceId: data.referenceId
-        };
+        const newNotif = processNotificationData(data);
         setNotifications(prev => [newNotif, ...prev]);
       };
 
@@ -157,7 +160,7 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
       socket.off('disconnect');
       socket.off('notification', handleNotification);
     };
-  }, [token, user, refreshNotifications]);
+  }, [token, user, refreshNotifications, processNotificationData]);
 
   const addNotification = (text: string, icon: keyof typeof Feather.glyphMap = 'bell') => {
     const newNotif: AppNotification = {

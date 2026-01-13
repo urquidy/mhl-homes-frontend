@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import i18n from '../../constants/i18n';
 
 interface AspectRatioModalProps {
   visible: boolean;
@@ -33,8 +34,8 @@ export default function AspectRatioModal({ visible, onClose, currentAspectRatio,
     >
       <View style={styles.inputModalContainer}>
         <View style={styles.inputModalContent}>
-          <Text style={styles.inputModalTitle}>Ajustar Proporción (PDF)</Text>
-          <Text style={{ marginBottom: 16, color: '#718096' }}>Si el PDF se ve deformado, selecciona una proporción diferente:</Text>
+          <Text style={styles.inputModalTitle}>{i18n.t('aspectRatio.title')}</Text>
+          <Text style={{ marginBottom: 16, color: '#718096' }}>{i18n.t('aspectRatio.instruction')}</Text>
           
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
             {[
@@ -55,7 +56,7 @@ export default function AspectRatioModal({ visible, onClose, currentAspectRatio,
             ))}
           </View>
 
-          <Text style={{ marginBottom: 8, fontWeight: '600', color: '#4A5568' }}>Personalizado:</Text>
+          <Text style={{ marginBottom: 8, fontWeight: '600', color: '#4A5568' }}>{i18n.t('aspectRatio.custom')}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24 }}>
              <TextInput 
                 style={[styles.input, { marginBottom: 0, flex: 1 }]} 
@@ -69,12 +70,12 @@ export default function AspectRatioModal({ visible, onClose, currentAspectRatio,
                style={[styles.modalButton, { backgroundColor: '#3182CE', marginLeft: 8 }]}
                onPress={handleApplyCustom}
              >
-               <Text style={{ color: '#FFF' }}>Aplicar</Text>
+               <Text style={{ color: '#FFF' }}>{i18n.t('aspectRatio.apply')}</Text>
              </Pressable>
           </View>
 
           <Pressable style={[styles.modalButton, styles.cancelButton, { width: '100%', marginLeft: 0 }]} onPress={onClose}>
-            <Text style={{ fontWeight: 'bold', color: '#4A5568', textAlign: 'center' }}>Cerrar</Text>
+            <Text style={{ fontWeight: 'bold', color: '#4A5568', textAlign: 'center' }}>{i18n.t('aspectRatio.close')}</Text>
           </Pressable>
         </View>
       </View>

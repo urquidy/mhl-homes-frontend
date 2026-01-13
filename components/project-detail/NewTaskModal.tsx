@@ -51,7 +51,7 @@ export default function NewTaskModal({ visible, onClose, onSave, isSaving, catal
       setShowStepSelector(false);
       setShowUserSuggestions(false);
     }
-  }, [visible, initialData]);
+  }, [visible]);
 
   const handleSave = () => {
     onSave({
@@ -65,12 +65,12 @@ export default function NewTaskModal({ visible, onClose, onSave, isSaving, catal
   };
 
   const getSelectedStepName = () => {
-    if (!stepId) return 'Seleccionar Categoría/Paso...';
+    if (!stepId) return i18n.t('newTask.selectStep');
     for (const group of catalogGroups) {
       const step = group.items.find((i: any) => i.id === stepId);
       if (step) return `${group.name} > ${step.name}`;
     }
-    return 'Paso seleccionado';
+    return i18n.t('newTask.stepSelected');
   };
 
   return (
@@ -183,7 +183,7 @@ export default function NewTaskModal({ visible, onClose, onSave, isSaving, catal
                   ))}
                   {availableUsers.filter((u: any) => (u.username || '').toLowerCase().includes(assignedTo.toLowerCase())).length === 0 && (
                     <View style={styles.suggestionItem}>
-                      <Text style={[styles.suggestionText, { color: '#A0AEC0', fontStyle: 'italic' }]}>No users found</Text>
+                      <Text style={[styles.suggestionText, { color: '#A0AEC0', fontStyle: 'italic' }]}>{i18n.t('common.noUsersFound')}</Text>
                     </View>
                   )}
                 </ScrollView>
@@ -193,12 +193,12 @@ export default function NewTaskModal({ visible, onClose, onSave, isSaving, catal
 
           {/* Deadline Selector */}
           <View style={{ marginBottom: 16 }}>
-            <Text style={styles.label}>Fecha Límite (Opcional)</Text>
+            <Text style={styles.label}>{i18n.t('newTask.deadline')}</Text>
             <Pressable 
               style={[styles.input, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 0 }]}
               onPress={() => setShowCalendar(true)}
             >
-              <Text style={{ color: deadline ? '#2D3748' : '#A0AEC0' }}>{deadline || 'Seleccionar fecha'}</Text>
+              <Text style={{ color: deadline ? '#2D3748' : '#A0AEC0' }}>{deadline || i18n.t('newTask.selectDate')}</Text>
               <Feather name="calendar" size={20} color="#718096" />
             </Pressable>
           </View>

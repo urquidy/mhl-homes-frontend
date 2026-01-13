@@ -1,13 +1,15 @@
 import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import i18n from '../../constants/i18n';
 
 interface PlanUploadModalProps {
   visible: boolean;
   progress: number;
+  status?: string;
   onCancel: () => void;
 }
 
-export default function PlanUploadModal({ visible, progress, onCancel }: PlanUploadModalProps) {
+export default function PlanUploadModal({ visible, progress, status, onCancel }: PlanUploadModalProps) {
   return (
     <Modal
       visible={visible}
@@ -17,15 +19,15 @@ export default function PlanUploadModal({ visible, progress, onCancel }: PlanUpl
     >
       <View style={styles.container}>
         <View style={styles.content}>
-          <Text style={styles.title}>Subiendo Plano</Text>
+          <Text style={styles.title}>{i18n.t('upload.planTitle')}</Text>
           <Text style={styles.progressText}>
-            Por favor espere... {progress}%
+            {status || i18n.t('upload.wait')} {progress}%
           </Text>
           <View style={styles.progressBarContainer}>
             <View style={[styles.progressBarFill, { width: `${progress}%` }]} />
           </View>
           <Pressable style={styles.cancelButton} onPress={onCancel}>
-            <Text style={styles.cancelButtonText}>Cancelar Subida</Text>
+            <Text style={styles.cancelButtonText}>{i18n.t('upload.cancel')}</Text>
           </Pressable>
         </View>
       </View>

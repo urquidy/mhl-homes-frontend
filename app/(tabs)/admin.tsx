@@ -12,7 +12,7 @@ import api from '../../services/api';
 export default function AdminScreen() {
   const { user } = useAuth();
   const { hasPermission } = usePermission();
-  const [currentView, setCurrentView] = useState<'menu' | 'users' | 'project-steps' | 'roles' | 'agenda-types' | 'site-config'>('menu');
+  const [currentView, setCurrentView] = useState<'menu' | 'users' | 'project-steps' | 'roles' | 'agenda-types' | 'document-categories' | 'site-config'>('menu');
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -36,6 +36,12 @@ export default function AdminScreen() {
   const [agendaTypeModalVisible, setAgendaTypeModalVisible] = useState(false);
   const [agendaTypeFormData, setAgendaTypeFormData] = useState({ name: '', description: '', primaryColor: '#3182CE', icon: 'calendar' });
   const [editingAgendaType, setEditingAgendaType] = useState<any>(null);
+
+  // Estado para Categorías de Documentos (Catálogo Genérico)
+  const [documentCategories, setDocumentCategories] = useState<any[]>([]);
+  const [docCategoryModalVisible, setDocCategoryModalVisible] = useState(false);
+  const [docCategoryFormData, setDocCategoryFormData] = useState({ name: '', description: '' });
+  const [editingDocCategory, setEditingDocCategory] = useState<any>(null);
 
   // Estado para Configuración del Sitio (FRONT_CONFIG)
   const [siteConfigs, setSiteConfigs] = useState<any[]>([]);
@@ -91,6 +97,18 @@ export default function AdminScreen() {
     }
   };
 
+  const fetchDocumentCategories = async () => {
+    setLoading(true);
+    try {
+      const response = await api.get('/api/catalogs/type/DOCUMENT_CATEGORY');
+      setDocumentCategories(response.data || []);
+    } catch (error) {
+      console.error('Error fetching document categories:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const fetchSiteConfigs = async () => {
     setLoading(true);
     try {
@@ -111,6 +129,8 @@ export default function AdminScreen() {
       fetchProjectSteps();
     } else if (currentView === 'agenda-types') {
       fetchAgendaTypes();
+    } else if (currentView === 'document-categories') {
+      fetchDocumentCategories();
     } else if (currentView === 'site-config') {
       fetchSiteConfigs();
     }
@@ -196,9 +216,10 @@ export default function AdminScreen() {
       setUsers(prev => [...prev, response.data]);
       setEditModalVisible(false);
       showAlert(i18n.t('common.success'), i18n.t('admin.userCreated'));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating user:', error);
-      showAlert(i18n.t('common.error'), i18n.t('admin.errorCreatingUser'));
+      const message = error.response?.data?.message || i18n.t('admin.errorCreatingUser');
+      showAlert(i18n.t('common.error'), message);
     }
   };
 
@@ -212,16 +233,17 @@ export default function AdminScreen() {
       // Enviar roles como array
       if (payload.role) {
         payload.roles = [payload.role];
-        delete payload.role;
+        // delete payload.role;
       }
 
       await api.put(`/api/users/${editingUser.id}`, payload);
       setUsers(prev => prev.map(u => u.id === editingUser.id ? { ...u, ...formData } : u));
       setEditModalVisible(false);
       showAlert(i18n.t('common.success'), i18n.t('admin.userUpdated'));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating user:', error);
-      showAlert(i18n.t('common.error'), i18n.t('admin.errorUpdatingUser'));
+      const message = error.response?.data?.message || i18n.t('admin.errorUpdatingUser');
+      showAlert(i18n.t('common.error'), message);
     }
   };
 
@@ -372,6 +394,67 @@ export default function AdminScreen() {
         } catch (error) {
           console.error('Error deleting agenda type:', error);
           showAlert(i18n.t('common.error'), i18n.t('admin.errorDeletingAgendaType'));
+        }
+      }}
+    ]);
+  };
+
+  // --- FUNCIONES PARA CATEGORÍAS DE DOCUMENTOS ---
+  const openCreateDocCategoryModal = () => {
+    setEditingDocCategory(null);
+    setDocCategoryFormData({ name: '', description: '' });
+    setDocCategoryModalVisible(true);
+  };
+
+  const openEditDocCategoryModal = (item: any) => {
+    setEditingDocCategory(item);
+    setDocCategoryFormData({
+      name: item.name,
+      description: item.description || '',
+    });
+    setDocCategoryModalVisible(true);
+  };
+
+  const handleSaveDocCategory = async () => {
+    if (!docCategoryFormData.name.trim()) {
+      showAlert(i18n.t('common.error'), i18n.t('admin.nameRequired'));
+      return;
+    }
+
+    try {
+      const payload = {
+        type: 'DOCUMENT_CATEGORY',
+        name: docCategoryFormData.name,
+        description: docCategoryFormData.description,
+        metadata: {} // No metadata needed for this type
+      };
+
+      if (editingDocCategory) {
+        await api.put(`/api/catalogs/${editingDocCategory.id}`, payload);
+        showAlert(i18n.t('common.success'), i18n.t('admin.elementUpdated'));
+      } else {
+        await api.post('/api/catalogs', payload);
+        showAlert(i18n.t('common.success'), i18n.t('admin.elementCreated'));
+      }
+      setDocCategoryModalVisible(false);
+      fetchDocumentCategories();
+    } catch (error) {
+      console.error('Error saving document category:', error);
+      showAlert(i18n.t('common.error'), i18n.t('admin.errorSavingElement'));
+    }
+  };
+
+  const handleDeleteDocCategory = (id: string) => {
+    showAlert(i18n.t('admin.deleteElement'), i18n.t('admin.deleteConfirmation'), [
+      { text: i18n.t('common.cancel'), style: 'cancel' },
+      { text: i18n.t('common.delete'), style: 'destructive', onPress: async () => {
+        try {
+          await api.delete(`/api/catalogs/${id}`);
+          fetchDocumentCategories();
+          showAlert(i18n.t('common.success'), i18n.t('admin.elementDeleted'));
+        } catch (error) {
+          console.error('Error deleting document category:', error);
+          showAlert(i18n.t('common.error'), i18n.t('admin.errorDeletingElement'));
         }
       }}
     ]);
@@ -670,15 +753,21 @@ export default function AdminScreen() {
                     </View>
                   </View>
                   <View style={styles.treeNodeActions}>
+                    {hasPermission('CATALOG_MANAGE') && (
                     <Pressable onPress={() => openCreateStepModal(category.id)} style={styles.actionButton}>
                       <Feather name="plus" size={18} color="#38A169" />
                     </Pressable>
+                    )}
+                    {hasPermission('CATALOG_UPDATE') && (
                     <Pressable onPress={() => openEditStepModal(category)} style={styles.actionButton}>
                       <Feather name="edit-2" size={18} color="#3182CE" />
                     </Pressable>
+                    )}
+                    {hasPermission('CATALOG_DELETE') && (
                     <Pressable onPress={() => handleDeleteStep(category.id)} style={styles.actionButton}>
                       <Feather name="trash-2" size={18} color="#E53E3E" />
                     </Pressable>
+                    )}
                   </View>
                 </View>
 
@@ -690,12 +779,16 @@ export default function AdminScreen() {
                       <Text style={styles.treeChildTitle} numberOfLines={1}>{step.name}</Text>
                     </View>
                     <View style={styles.treeNodeActions}>
+                      {hasPermission('CATALOG_UPDATE') && (
                       <Pressable onPress={() => openEditStepModal(step)} style={styles.actionButton}>
                         <Feather name="edit-2" size={16} color="#718096" />
                       </Pressable>
+                      )}
+                      {hasPermission('CATALOG_DELETE') && (
                       <Pressable onPress={() => handleDeleteStep(step.id)} style={styles.actionButton}>
                         <Feather name="trash-2" size={16} color="#E53E3E" />
                       </Pressable>
+                      )}
                     </View>
                   </View>
                 ))}
@@ -705,9 +798,11 @@ export default function AdminScreen() {
           </ScrollView>
         )}
 
+        {hasPermission('CATALOG_MANAGE') && (
         <Pressable style={styles.fab} onPress={() => openCreateStepModal(null)}>
           <Feather name="plus" size={24} color="#FFF" />
         </Pressable>
+        )}
 
         {/* Modal Crear/Editar Paso */}
         <Modal
@@ -788,21 +883,27 @@ export default function AdminScreen() {
                   <Text style={styles.userEmail}>{item.description}</Text>
                 </View>
                 <View style={styles.actions}>
+                  {hasPermission('CATALOG_UPDATE') && (
                   <Pressable onPress={() => openEditAgendaTypeModal(item)} style={styles.actionButton}>
                     <Feather name="edit-2" size={20} color="#3182CE" />
                   </Pressable>
+                  )}
+                  {hasPermission('CATALOG_DELETE') && (
                   <Pressable onPress={() => handleDeleteAgendaType(item.id)} style={[styles.actionButton, { marginLeft: 8 }]}>
                     <Feather name="trash-2" size={20} color="#E53E3E" />
                   </Pressable>
+                  )}
                 </View>
               </View>
             )}
           />
         )}
 
+        {hasPermission('CATALOG_MANAGE') && (
         <Pressable style={styles.fab} onPress={openCreateAgendaTypeModal}>
           <Feather name="plus" size={24} color="#FFF" />
         </Pressable>
+        )}
 
         <Modal visible={agendaTypeModalVisible} transparent={true} animationType="fade" onRequestClose={() => setAgendaTypeModalVisible(false)}>
           <View style={styles.modalOverlay}>
@@ -843,6 +944,77 @@ export default function AdminScreen() {
               </View>
 
               <Pressable style={styles.saveButton} onPress={handleSaveAgendaType}><Text style={styles.saveButtonText}>{i18n.t('common.save')}</Text></Pressable>
+            </View>
+          </View>
+        </Modal>
+        <AlertComponent />
+      </View>
+    );
+  }
+
+  if (currentView === 'document-categories') {
+    return (
+      <View style={styles.container}>
+        <View style={styles.headerRow}>
+          <Pressable onPress={() => setCurrentView('menu')} style={styles.backButton}>
+            <Feather name="arrow-left" size={24} color="#4A5568" />
+          </Pressable>
+          <Text style={styles.title}>{i18n.t('admin.documentCategories')}</Text>
+        </View>
+
+        {loading ? (
+          <ActivityIndicator size="large" color="#3182CE" style={{ marginTop: 20 }} />
+        ) : (
+          <FlatList
+            data={documentCategories}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.listContent}
+            ListEmptyComponent={<Text style={styles.emptyText}>{i18n.t('admin.noDocumentCategories')}</Text>}
+            renderItem={({ item }) => (
+              <View style={styles.userRow}>
+                <View style={[styles.colorPreview, { backgroundColor: '#718096', justifyContent: 'center', alignItems: 'center' }]}>
+                  <Feather name="file-text" size={14} color="#FFF" />
+                </View>
+                <View style={styles.userInfo}>
+                  <Text style={styles.userName}>{item.name}</Text>
+                  <Text style={styles.userEmail}>{item.description}</Text>
+                </View>
+                <View style={styles.actions}>
+                  {hasPermission('CATALOG_UPDATE') && (
+                  <Pressable onPress={() => openEditDocCategoryModal(item)} style={styles.actionButton}>
+                    <Feather name="edit-2" size={20} color="#3182CE" />
+                  </Pressable>
+                  )}
+                  {hasPermission('CATALOG_DELETE') && (
+                  <Pressable onPress={() => handleDeleteDocCategory(item.id)} style={[styles.actionButton, { marginLeft: 8 }]}>
+                    <Feather name="trash-2" size={20} color="#E53E3E" />
+                  </Pressable>
+                  )}
+                </View>
+              </View>
+            )}
+          />
+        )}
+
+        {hasPermission('CATALOG_MANAGE') && (
+        <Pressable style={styles.fab} onPress={openCreateDocCategoryModal}>
+          <Feather name="plus" size={24} color="#FFF" />
+        </Pressable>
+        )}
+
+        <Modal visible={docCategoryModalVisible} transparent={true} animationType="fade" onRequestClose={() => setDocCategoryModalVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{editingDocCategory ? i18n.t('admin.editDocCategory') : i18n.t('admin.newDocCategory')}</Text>
+                <Pressable onPress={() => setDocCategoryModalVisible(false)}><Feather name="x" size={24} color="#4A5568" /></Pressable>
+              </View>
+              <Text style={styles.label}>{i18n.t('common.name')}</Text>
+              <TextInput style={styles.input} value={docCategoryFormData.name} onChangeText={text => setDocCategoryFormData({...docCategoryFormData, name: text})} />
+              <Text style={styles.label}>{i18n.t('common.description')}</Text>
+              <TextInput style={styles.input} value={docCategoryFormData.description} onChangeText={text => setDocCategoryFormData({...docCategoryFormData, description: text})} />
+              
+              <Pressable style={styles.saveButton} onPress={handleSaveDocCategory}><Text style={styles.saveButtonText}>{i18n.t('common.save')}</Text></Pressable>
             </View>
           </View>
         </Modal>
@@ -960,6 +1132,7 @@ export default function AdminScreen() {
       <Text style={styles.title}>{i18n.t('nav.administrator')}</Text>
       <Text style={styles.subtitle}>{i18n.t('admin.subtitle')}</Text>
 
+      {hasPermission('CATALOG_MANAGE') && (
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{i18n.t('admin.catalogs')}</Text>
         
@@ -995,7 +1168,19 @@ export default function AdminScreen() {
             </View>
             <Feather name="chevron-right" size={24} color="#CBD5E0" />
         </Pressable>
+
+        <Pressable style={styles.card} onPress={() => setCurrentView('document-categories')}>
+            <View style={styles.cardIcon}>
+                <Feather name="archive" size={24} color="#319795" />
+            </View>
+            <View style={styles.cardContent}>
+                <Text style={styles.cardTitle}>{i18n.t('admin.documentCategories')}</Text>
+                <Text style={styles.cardDescription}>{i18n.t('admin.manageDocumentCategories')}</Text>
+            </View>
+            <Feather name="chevron-right" size={24} color="#CBD5E0" />
+        </Pressable>
       </View>
+      )}
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{i18n.t('admin.rolesPermissions')}</Text>

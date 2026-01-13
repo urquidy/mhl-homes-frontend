@@ -23,7 +23,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 // --- Componente para un solo ítem de la lista ---
-const ProjectListItem: React.FC<{ item: Project }> = ({ item }) => {
+const ProjectListItem = React.forwardRef<View, { item: Project } & React.ComponentProps<typeof Pressable>>(({ item, ...props }, ref) => {
   const statusInfo = {
     'Not Started': { color: '#718096', label: i18n.t('dashboard.status.notStarted') || 'Not Started' },
     'In Progress': { color: '#3182CE', label: i18n.t('dashboard.status.inProgress') },
@@ -35,7 +35,7 @@ const ProjectListItem: React.FC<{ item: Project }> = ({ item }) => {
   const currentStatus = statusInfo[item.status as keyof typeof statusInfo] || statusInfo['In Progress'];
 
   return (
-    <Pressable>
+    <Pressable ref={ref} {...props}>
       <View style={styles.projectCard}>
         {/* Cabecera: Nombre y Tag de Estado */}
         <View style={styles.cardHeader}>
@@ -87,14 +87,15 @@ const ProjectListItem: React.FC<{ item: Project }> = ({ item }) => {
       </View>
     </Pressable>
   );
-};
+});
 
 // --- Componente Animado para Ítem de Notificación ---
 const AnimatedNotificationItem: React.FC<{ 
   notif: AppNotification; 
   onPress: (n: AppNotification) => void;
   index: number;
-}> = ({ notif, onPress, index }) => {
+  isProcessing?: boolean;
+}> = ({ notif, onPress, index, isProcessing }) => {
   // Valores iniciales: Opacidad 0 y desplazado -20px hacia arriba
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-20)).current;
@@ -115,16 +116,21 @@ const AnimatedNotificationItem: React.FC<{
 
   return (
     <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-      <Pressable style={styles.notificationItem} onPress={() => onPress(notif)}>
-        <Feather 
-          name={notif.icon} 
-          size={20} 
-          color={notif.read ? "#A0AEC0" : "#3182CE"} 
-          style={styles.sidebarIcon} 
-        />
+      <Pressable style={styles.notificationItem} onPress={() => !isProcessing && onPress(notif)}>
+        {isProcessing ? (
+          <ActivityIndicator size="small" color="#3182CE" style={styles.sidebarIcon} />
+        ) : (
+          <Feather 
+            name={notif.icon} 
+            size={20} 
+            color={notif.read ? "#A0AEC0" : "#3182CE"} 
+            style={styles.sidebarIcon} 
+          />
+        )}
         <View style={{ flex: 1 }}>
-          {notif.title ? <Text style={[styles.sidebarText, { fontWeight: 'bold', marginBottom: 2, flex: 0 }]}>{notif.title}</Text> : null}
-          <Text style={[styles.sidebarText, !notif.read && { fontWeight: '600', color: '#2D3748' }, { flex: 0 }]}>{notif.text}</Text>
+          <Text style={[styles.sidebarText, !notif.read && { fontWeight: '600', color: '#2D3748' }, { flex: 0 }]}>
+            {isProcessing ? i18n.t('common.loading') : notif.text}
+          </Text>
         </View>
       </Pressable>
     </Animated.View>
@@ -143,20 +149,46 @@ const Notifications: React.FC<{
   isLoading: boolean
 }> = ({ notifications, onMarkAsRead, onMarkAllRead, filter, setFilter, loadMore, hasMore, isLoading }) => {
   const router = useRouter();
+  const [processingNotifId, setProcessingNotifId] = useState<string | null>(null);
 
   // Animar cambios en la lista (ej. al cargar más)
   useEffect(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
   }, [notifications]);
 
-  const handlePress = (notif: AppNotification) => {
+  const handlePress = async (notif: AppNotification) => {
+    if (processingNotifId) return; // Evitar múltiples clics
+
     if (!notif.read) onMarkAsRead(notif.id);
 
     if (notif.category && notif.referenceId) {
       switch (notif.category) {
         case 'PROJECT':
-        case 'CHECKLIST': // Asumimos que referenceId es el ID del proyecto para checklist también
           router.push({ pathname: '/(tabs)/[id]', params: { id: notif.referenceId } });
+          break;
+        case 'CHECKLIST': // Asumimos que referenceId es el ID del proyecto para checklist también
+          let pId = notif.projectId || notif.metadata?.projectId;
+          
+          // Si no tenemos el ID del proyecto, intentamos obtenerlo consultando la tarea
+          if (!pId && notif.referenceId) {
+            setProcessingNotifId(notif.id);
+            try {
+              const response = await api.get(`/api/checklist/${notif.referenceId}`);
+              if (response.data && response.data.projectId) {
+                pId = response.data.projectId;
+              }
+            } catch (error) {
+              console.error("Error fetching task details for navigation:", error);
+            } finally {
+              setProcessingNotifId(null);
+            }
+          }
+
+          if (pId && notif.category === 'CHECKLIST') {
+            router.push({ pathname: '/(tabs)/[id]', params: { id: pId, taskId: notif.referenceId } });
+          } else {
+            router.push({ pathname: '/(tabs)/[id]', params: { id: notif.referenceId } });
+          }
           break;
         case 'AGENDA':
           // Si referenceId es una fecha YYYY-MM-DD, la pasamos como parámetro
@@ -181,7 +213,7 @@ const Notifications: React.FC<{
         <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>{i18n.t('dashboard.notifications')}</Text>
         {notifications.some(n => !n.read) && (
           <Pressable onPress={onMarkAllRead}>
-            <Text style={{ fontSize: 12, color: '#3182CE', fontWeight: '600' }}>Marcar leídas</Text>
+            <Text style={{ fontSize: 12, color: '#3182CE', fontWeight: '600' }}>{i18n.t('common.markAsRead')}</Text>
           </Pressable>
         )}
       </View>
@@ -192,19 +224,25 @@ const Notifications: React.FC<{
       </View>
 
       {notifications.map((notif, index) => (
-        <AnimatedNotificationItem key={notif.id} notif={notif} onPress={handlePress} index={index} />
+        <AnimatedNotificationItem 
+          key={notif.id} 
+          notif={notif} 
+          onPress={handlePress} 
+          index={index} 
+          isProcessing={processingNotifId === notif.id}
+        />
       ))}
       
       {isLoading && <ActivityIndicator size="small" color="#3182CE" style={{ marginVertical: 10 }} />}
 
       {hasMore && !isLoading && (
         <Pressable onPress={loadMore} style={{ padding: 12, alignItems: 'center', backgroundColor: '#F7FAFC', borderRadius: 8, marginTop: 8 }}>
-          <Text style={{ color: '#3182CE', fontWeight: '600', fontSize: 14 }}>Cargar más notificaciones</Text>
+          <Text style={{ color: '#3182CE', fontWeight: '600', fontSize: 14 }}>{i18n.t('common.loadMoreNotifications')}</Text>
         </Pressable>
       )}
 
       {notifications.length === 0 && !isLoading && (
-        <Text style={{ color: '#A0AEC0', fontStyle: 'italic', fontSize: 14, textAlign: 'center', marginTop: 10 }}>No hay notificaciones.</Text>
+        <Text style={{ color: '#A0AEC0', fontStyle: 'italic', fontSize: 14, textAlign: 'center', marginTop: 10 }}>{i18n.t('common.noNotifications')}</Text>
       )}
     </View>
   );
@@ -356,7 +394,7 @@ export default function DashboardScreen() {
       notifs.unshift({
         id: 'alert-overdue',
         icon: 'alert-triangle',
-        text: `¡Atención! Tienes ${overdueTasksCount} tarea(s) vencida(s).`,
+        text: `${i18n.t('common.attention')} ${i18n.t('common.overdueTasksAlert', { count: overdueTasksCount })}`,
         date: new Date().toISOString(),
         read: false,
       });
@@ -479,7 +517,7 @@ const styles = StyleSheet.create({
     flex: 2, // Ocupa 2/3 del espacio
   },
   fullWidthContent: {
-    flex: 1, // Ocupa todo el ancho en pantallas pequeñas
+    width: '100%', // Ocupa todo el ancho en pantallas pequeñas
   },
   sidebar: {
     flex: 1, // Ocupa 1/3 del espacio

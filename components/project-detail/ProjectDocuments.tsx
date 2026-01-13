@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, FlatList, Platform, ActivityIndicator, Linking, LayoutAnimation, UIManager } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import api from '../../services/api';
-import i18n from '../../constants/i18n';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, UIManager, View } from 'react-native';
 import { useCustomAlert } from '../../components/ui/CustomAlert';
+import i18n from '../../constants/i18n';
+import api from '../../services/api';
 
 interface ProjectDocumentsProps {
   projectId: string;
@@ -13,6 +13,10 @@ interface ProjectDocumentsProps {
   onViewDocument: (uri: string, name: string, type?: string) => void;
   onRefreshProjects?: () => void;
   onRefreshChecklist?: () => void;
+  canEdit?: boolean;
+  onAddDocument?: () => void;
+  lastUpdate?: number;
+  categories?: { id: string; name: string }[];
 }
 
 // Habilitar animaciones de layout en Android
@@ -20,12 +24,17 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-export default function ProjectDocuments({ projectId, userRole, projectStatus, onViewDocument, onRefreshProjects, onRefreshChecklist }: ProjectDocumentsProps) {
+export default function ProjectDocuments({ projectId, userRole, projectStatus, onViewDocument, onRefreshProjects, onRefreshChecklist, canEdit = false, onAddDocument, lastUpdate, categories = [] }: ProjectDocumentsProps) {
   const [documents, setDocuments] = useState<any[]>([]);
+  const [allDocuments, setAllDocuments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const { showAlert, AlertComponent } = useCustomAlert();
   const [isExpanded, setIsExpanded] = useState(true);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const LIMIT = 5;
+  const [selectedCategory, setSelectedCategory] = useState('ALL');
 
   const toggleExpand = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -42,7 +51,14 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
       
       // La API devuelve un objeto agrupado por fechas { "YYYY-MM-DD": [...] } o un array
       // Aplanamos los valores para obtener una lista única de archivos
-      const filesList = Array.isArray(data) ? data : Object.values(data).flat();
+      let filesList: any[] = [];
+      if (data.data && Array.isArray(data.data)) {
+         filesList = data.data; // Respuesta paginada estándar { data: [...], meta: ... }
+      } else if (Array.isArray(data)) {
+         filesList = data;
+      } else {
+         filesList = Object.values(data).flat();
+      }
       
       const mappedDocuments = filesList.map((file: any) => ({
         id: file.attachmentId || file.id || file.url.split('/').pop(), // Usamos attachmentId si existe
@@ -51,10 +67,13 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
         type: file.fileType,
         date: file.date,
         source: file.source || 'PROJECT',
-        sourceId: file.sourceId
+        sourceId: file.sourceId,
+        category: file.category
       }));
       
-      setDocuments(mappedDocuments);
+      setAllDocuments(mappedDocuments);
+      // La paginación y filtrado se manejan en el useEffect de abajo
+      setPage(1); 
     } catch (error) {
       console.log('Error fetching documents:', error);
       // Mock data si falla la API para demostración
@@ -64,13 +83,27 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
     }
   }, [projectId]);
 
+  // Efecto para Filtrado y Paginación
+  useEffect(() => {
+    const filtered = allDocuments.filter(doc => 
+      selectedCategory === 'ALL' || doc.category === selectedCategory
+    );
+    setDocuments(filtered.slice(0, page * LIMIT));
+    setHasMore(filtered.length > page * LIMIT);
+  }, [allDocuments, selectedCategory, page]);
+
   useEffect(() => {
     fetchDocuments();
-  }, [fetchDocuments]);
+  }, [fetchDocuments, lastUpdate]);
+
+  const handleLoadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+  };
 
   const handleUpload = async () => {
     if (projectStatus === 'Completed' || projectStatus === 'COMPLETED') {
-      showAlert("Acción Restringida", "No se pueden subir documentos en un proyecto completado.");
+      showAlert(i18n.t('documents.restricted'), i18n.t('documents.restrictedMessage'));
       return;
     }
     try {
@@ -100,11 +133,11 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
         headers: { 'Content-Type': Platform.OS === 'web' ? undefined : 'multipart/form-data' }
       });
 
-      showAlert("Éxito", "Documento subido correctamente.");
+      showAlert(i18n.t('common.success'), i18n.t('documents.success'));
       fetchDocuments();
     } catch (error) {
       console.error(error);
-      showAlert("Error", "No se pudo subir el documento.");
+      showAlert(i18n.t('common.error'), i18n.t('documents.error'));
     } finally {
       setIsUploading(false);
     }
@@ -112,16 +145,16 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
 
   const handleDelete = (doc: any) => {
     if (projectStatus === 'Completed' || projectStatus === 'COMPLETED') {
-      showAlert("Acción Restringida", "No se pueden eliminar documentos en un proyecto completado.");
+      showAlert(i18n.t('documents.restricted'), i18n.t('documents.deleteRestricted'));
       return;
     }
     showAlert(
-      "Eliminar Documento",
-      "¿Estás seguro?",
+      i18n.t('documents.deleteTitle'),
+      i18n.t('documents.deleteMessage'),
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: i18n.t('common.cancel'), style: "cancel" },
         { 
-          text: "Eliminar", 
+          text: i18n.t('common.delete'), 
           style: "destructive", 
           onPress: async () => {
             try {
@@ -144,7 +177,7 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
               fetchDocuments();
             } catch (error) {
               console.error(error);
-              showAlert("Error", "No se pudo eliminar.");
+              showAlert(i18n.t('common.error'), i18n.t('documents.deleteError'));
             }
           }
         }
@@ -163,42 +196,72 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
     <View style={styles.container}>
       <View style={styles.header}>
         <Pressable onPress={toggleExpand} style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-          <Text style={styles.title}>Documentos del Proyecto</Text>
+          <Text style={styles.title}>{i18n.t('documents.title')}</Text>
           <Feather name={isExpanded ? "chevron-down" : "chevron-right"} size={24} color="#1A202C" style={{ marginLeft: 8 }} />
         </Pressable>
-        {userRole === 'ADMIN' && (
-          <Pressable style={styles.addButton} onPress={handleUpload} disabled={isUploading}>
+        {(userRole === 'ADMIN' || canEdit) && (
+          <Pressable style={styles.addButton} onPress={onAddDocument || handleUpload} disabled={isUploading}>
             {isUploading ? <ActivityIndicator size="small" color="#3182CE" /> : <Feather name="plus" size={20} color="#3182CE" />}
-            <Text style={styles.addText}>{isUploading ? 'Subiendo...' : 'Agregar'}</Text>
+            <Text style={styles.addText}>{isUploading ? i18n.t('documents.uploading') : i18n.t('projectDetail.add')}</Text>
           </Pressable>
         )}
       </View>
 
       {isExpanded && (
-        isLoading ? (
-        <ActivityIndicator style={{ marginTop: 20 }} />
-      ) : documents.length === 0 ? (
-        <Text style={styles.emptyText}>No hay documentos adjuntos.</Text>
-      ) : (
-        <View style={styles.list}>
-          {documents.map((doc) => (
-            <Pressable key={doc.id} style={styles.docItem} onPress={() => onViewDocument(doc.uri, doc.name, doc.type)}>
-              <View style={styles.docIcon}>
-                <Feather name={getIcon(doc.type)} size={24} color="#4A5568" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.docName} numberOfLines={1}>{doc.name}</Text>
-                <Text style={styles.docDate}>{new Date(doc.date || Date.now()).toLocaleDateString()}</Text>
-              </View>
-              {userRole === 'ADMIN' && (
-                <Pressable style={styles.deleteButton} onPress={() => handleDelete(doc)}>
-                  <Feather name="trash-2" size={18} color="#E53E3E" />
+        <>
+          {/* Filtros por Categoría */}
+          {categories.length > 0 && (
+            <View style={styles.filterContainer}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 4 }}>
+                <Pressable 
+                  style={[styles.filterChip, selectedCategory === 'ALL' && styles.filterChipActive]}
+                  onPress={() => { setSelectedCategory('ALL'); setPage(1); }}
+                >
+                  <Text style={[styles.filterChipText, selectedCategory === 'ALL' && styles.filterChipTextActive]}>{i18n.t('common.all')}</Text>
                 </Pressable>
-              )}
+                {categories.map(cat => (
+                  <Pressable 
+                    key={cat.id}
+                    style={[styles.filterChip, selectedCategory === cat.name && styles.filterChipActive]}
+                    onPress={() => { setSelectedCategory(cat.name); setPage(1); }}
+                  >
+                    <Text style={[styles.filterChipText, selectedCategory === cat.name && styles.filterChipTextActive]}>{cat.name}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {documents.length === 0 && !isLoading ? (
+            <Text style={styles.emptyText}>{i18n.t('documents.empty')}</Text>
+          ) : (
+            <View style={styles.list}>
+              {documents.map((doc) => (
+                <Pressable key={doc.id} style={styles.docItem} onPress={() => onViewDocument(doc.uri, doc.name, doc.type)}>
+                  <View style={styles.docIcon}>
+                    <Feather name={getIcon(doc.type)} size={24} color="#4A5568" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.docName} numberOfLines={1}>{doc.name}</Text>
+                    <Text style={styles.docDate}>{new Date(doc.date || Date.now()).toLocaleDateString()}</Text>
+                  </View>
+                  {(userRole === 'ADMIN' || canEdit) && (
+                    <Pressable style={styles.deleteButton} onPress={() => handleDelete(doc)}>
+                      <Feather name="trash-2" size={18} color="#E53E3E" />
+                    </Pressable>
+                  )}
+                </Pressable>
+              ))}
+            </View>
+          )}
+          
+          {hasMore && (
+            <Pressable style={styles.loadMoreButton} onPress={handleLoadMore} disabled={isLoading}>
+              {isLoading ? <ActivityIndicator size="small" color="#3182CE" /> : <Text style={styles.loadMoreText}>{i18n.t('documents.loadMore')}</Text>}
             </Pressable>
-          ))}
-        </View>
-      ))}
+          )}
+        </>
+      )}
       <AlertComponent />
     </View>
   );
@@ -211,10 +274,26 @@ const styles = StyleSheet.create({
   addButton: { flexDirection: 'row', alignItems: 'center', padding: 8, backgroundColor: '#EBF8FF', borderRadius: 8 },
   addText: { marginLeft: 6, color: '#3182CE', fontWeight: '600', fontSize: 14, fontFamily: 'Inter-SemiBold' },
   emptyText: { color: '#A0AEC0', fontStyle: 'italic', textAlign: 'center', padding: 20, fontFamily: 'Inter-Regular' },
+  filterContainer: { marginBottom: 12, flexDirection: 'row' },
+  filterChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: '#EDF2F7', marginRight: 8 },
+  filterChipActive: { backgroundColor: '#3182CE' },
+  filterChipText: { fontSize: 12, color: '#4A5568' },
+  filterChipTextActive: { color: '#FFF', fontWeight: 'bold' },
   list: { gap: 8 },
   docItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F7FAFC', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#EDF2F7' },
   docIcon: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center', backgroundColor: '#E2E8F0', borderRadius: 8, marginRight: 12 },
   docName: { fontSize: 16, color: '#2D3748', fontWeight: '500', fontFamily: 'Inter-Medium' },
   docDate: { fontSize: 12, color: '#718096', fontFamily: 'Inter-Regular' },
   deleteButton: { padding: 8 },
+  loadMoreButton: {
+    padding: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F7FAFC',
+    borderRadius: 8,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  loadMoreText: { color: '#3182CE', fontWeight: '600', fontSize: 14 },
 });

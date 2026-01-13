@@ -3,6 +3,9 @@
 import { Feather } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import i18n from '../../constants/i18n';
+import { useAuth } from '../../contexts/AuthContext';
+import { usePermission } from '../../hooks/usePermission';
 import api from '../../services/api';
 import { useCustomAlert } from '../ui/CustomAlert';
 
@@ -19,6 +22,8 @@ export default function RolesManager({ onBack }: RolesManagerProps) {
   const [formData, setFormData] = useState({ name: '', description: '', permissions: [] as string[] });
   
   const { showAlert, AlertComponent } = useCustomAlert();
+  const { hasPermission } = usePermission();
+  const { refreshUser } = useAuth();
 
   const fetchRoles = async () => {
     setLoading(true);
@@ -27,7 +32,7 @@ export default function RolesManager({ onBack }: RolesManagerProps) {
       setRoles(response.data);
     } catch (error) {
       console.error('Error fetching roles:', error);
-      showAlert('Error', 'No se pudieron cargar los roles.');
+      showAlert(i18n.t('common.error'), i18n.t('roles.loadError'));
     } finally {
       setLoading(false);
     }
@@ -60,43 +65,45 @@ export default function RolesManager({ onBack }: RolesManagerProps) {
 
   const handleSave = async () => {
     if (!formData.name.trim()) {
-      showAlert('Error', 'El nombre del rol es obligatorio.');
+      showAlert(i18n.t('common.error'), i18n.t('roles.nameRequired'));
       return;
     }
 
     try {
       if (editingRole) {
         await api.put(`/api/roles/${editingRole.id}`, formData);
-        showAlert('Éxito', 'Rol actualizado correctamente.');
+        showAlert(i18n.t('common.success'), i18n.t('roles.updateSuccess'));
       } else {
         await api.post('/api/roles', formData);
-        showAlert('Éxito', 'Rol creado correctamente.');
+        showAlert(i18n.t('common.success'), i18n.t('roles.createSuccess'));
       }
       setModalVisible(false);
-      fetchRoles();
+      await fetchRoles();
+      await refreshUser(); // Refrescar permisos del usuario logeado
     } catch (error) {
       console.error('Error saving role:', error);
-      showAlert('Error', 'No se pudo guardar el rol.');
+      showAlert(i18n.t('common.error'), i18n.t('roles.saveError'));
     }
   };
 
   const handleDelete = (id: string) => {
     showAlert(
-      'Eliminar Rol',
-      '¿Estás seguro? Esto podría afectar a los usuarios que tengan este rol asignado.',
+      i18n.t('roles.deleteTitle'),
+      i18n.t('roles.deleteMessage'),
       [
-        { text: 'Cancelar', style: 'cancel' },
+        { text: i18n.t('common.cancel'), style: 'cancel' },
         {
-          text: 'Eliminar',
+          text: i18n.t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             try {
               await api.delete(`/api/roles/${id}`);
-              fetchRoles();
-              showAlert('Éxito', 'Rol eliminado.');
+              await fetchRoles();
+              await refreshUser(); // Refrescar permisos del usuario logeado
+              showAlert(i18n.t('common.success'), i18n.t('roles.deleteSuccess'));
             } catch (error) {
               console.error('Error deleting role:', error);
-              showAlert('Error', 'No se pudo eliminar el rol.');
+              showAlert(i18n.t('common.error'), i18n.t('roles.deleteError'));
             }
           }
         }
@@ -154,16 +161,20 @@ export default function RolesManager({ onBack }: RolesManagerProps) {
           <Text style={styles.roleDescription}>{item.description}</Text>
         </View>
         <View style={styles.actions}>
-          <Pressable onPress={() => openModal(item)} style={styles.actionButton}>
-            <Feather name="edit-2" size={20} color="#3182CE" />
-          </Pressable>
-          <Pressable onPress={() => handleDelete(item.id)} style={styles.actionButton}>
-            <Feather name="trash-2" size={20} color="#E53E3E" />
-          </Pressable>
+          {hasPermission('ROLE_UPDATE') && (
+            <Pressable onPress={() => openModal(item)} style={styles.actionButton}>
+              <Feather name="edit-2" size={20} color="#3182CE" />
+            </Pressable>
+          )}
+          {hasPermission('ROLE_DELETE') && (
+            <Pressable onPress={() => handleDelete(item.id)} style={styles.actionButton}>
+              <Feather name="trash-2" size={20} color="#E53E3E" />
+            </Pressable>
+          )}
         </View>
       </View>
       <View style={styles.permissionsContainer}>
-        <Text style={styles.permissionsLabel}>Permisos: {item.permissions?.length || 0}</Text>
+        <Text style={styles.permissionsLabel}>{i18n.t('roles.permissions')}: {item.permissions?.length || 0}</Text>
         <View style={styles.tagsRow}>
           {(item.permissions || []).slice(0, 5).map((p: string) => (
             <View key={p} style={styles.permissionTag}>
@@ -180,13 +191,30 @@ export default function RolesManager({ onBack }: RolesManagerProps) {
     </View>
   );
 
+  if (!hasPermission('ROLE_READ')) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Pressable onPress={onBack} style={styles.backButton}>
+            <Feather name="arrow-left" size={24} color="#4A5568" />
+          </Pressable>
+          <Text style={styles.title}>Gestión de Roles</Text>
+        </View>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Feather name="lock" size={48} color="#CBD5E0" />
+          <Text style={{ marginTop: 16, fontSize: 18, color: '#718096' }}>{i18n.t('common.accessDenied')}</Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Pressable onPress={onBack} style={styles.backButton}>
           <Feather name="arrow-left" size={24} color="#4A5568" />
         </Pressable>
-        <Text style={styles.title}>Gestión de Roles</Text>
+        <Text style={styles.title}>{i18n.t('roles.title')}</Text>
       </View>
 
       {loading ? (
@@ -197,13 +225,15 @@ export default function RolesManager({ onBack }: RolesManagerProps) {
           keyExtractor={item => item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.list}
-          ListEmptyComponent={<Text style={styles.emptyText}>No hay roles definidos.</Text>}
+          ListEmptyComponent={<Text style={styles.emptyText}>{i18n.t('roles.empty')}</Text>}
         />
       )}
 
-      <Pressable style={styles.fab} onPress={() => openModal()}>
-        <Feather name="plus" size={24} color="#FFF" />
-      </Pressable>
+      {hasPermission('ROLE_CREATE') && (
+        <Pressable style={styles.fab} onPress={() => openModal()}>
+          <Feather name="plus" size={24} color="#FFF" />
+        </Pressable>
+      )}
 
       <Modal
         visible={modalVisible}
@@ -214,30 +244,30 @@ export default function RolesManager({ onBack }: RolesManagerProps) {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{editingRole ? 'Editar Rol' : 'Nuevo Rol'}</Text>
+              <Text style={styles.modalTitle}>{editingRole ? i18n.t('roles.edit') : i18n.t('roles.new')}</Text>
               <Pressable onPress={() => setModalVisible(false)}>
                 <Feather name="x" size={24} color="#4A5568" />
               </Pressable>
             </View>
 
             <ScrollView style={{ maxHeight: 400 }}>
-              <Text style={styles.label}>Nombre del Rol</Text>
+              <Text style={styles.label}>{i18n.t('roles.name')}</Text>
               <TextInput
                 style={styles.input}
                 value={formData.name}
                 onChangeText={text => setFormData({ ...formData, name: text })}
-                placeholder="Ej. ARQUITECTO"
+                placeholder="Ej. ADMIN"
               />
 
-              <Text style={styles.label}>Descripción</Text>
+              <Text style={styles.label}>{i18n.t('roles.desc')}</Text>
               <TextInput
                 style={styles.input}
                 value={formData.description}
                 onChangeText={text => setFormData({ ...formData, description: text })}
-                placeholder="Descripción breve..."
+                placeholder={i18n.t('roles.descPlaceholder')}
               />
 
-              <Text style={styles.label}>Permisos</Text>
+              <Text style={styles.label}>{i18n.t('roles.permissions')}</Text>
               {Object.entries(groupedPermissions).map(([group, perms]) => {
                 const allSelected = perms.every(p => formData.permissions.includes(p));
                 return (
@@ -245,7 +275,7 @@ export default function RolesManager({ onBack }: RolesManagerProps) {
                   <View style={styles.groupHeader}>
                     <Text style={styles.groupTitle}>{group}</Text>
                     <Pressable onPress={() => toggleGroup(perms)}>
-                      <Text style={styles.selectAllText}>{allSelected ? 'Deseleccionar' : 'Todos'}</Text>
+                      <Text style={styles.selectAllText}>{allSelected ? i18n.t('roles.deselect') : i18n.t('roles.todos')}</Text>
                     </Pressable>
                   </View>
                   <View style={styles.permissionsGrid}>
@@ -273,7 +303,7 @@ export default function RolesManager({ onBack }: RolesManagerProps) {
             </ScrollView>
 
             <Pressable style={styles.saveButton} onPress={handleSave}>
-              <Text style={styles.saveButtonText}>Guardar</Text>
+              <Text style={styles.saveButtonText}>{i18n.t('common.save')}</Text>
             </Pressable>
           </View>
         </View>

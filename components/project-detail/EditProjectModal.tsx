@@ -77,7 +77,7 @@ export default function EditProjectModal({ visible, onClose, project, availableU
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.header}>
-            <Text style={styles.title}>Editar Proyecto</Text>
+            <Text style={styles.title}>{i18n.t('editProject.title')}</Text>
             <Pressable onPress={onClose}><Feather name="x" size={24} color="#4A5568" /></Pressable>
           </View>
 
@@ -86,16 +86,16 @@ export default function EditProjectModal({ visible, onClose, project, availableU
             style={styles.input} 
             value={name}
             onChangeText={setName}
-            placeholder="Nombre del proyecto"
+            placeholder={i18n.t('newProject.namePlaceholder')}
           />
 
-          <Text style={styles.label}>Participantes</Text>
+          <Text style={styles.label}>{i18n.t('editProject.participants')}</Text>
           
           <View style={styles.searchContainer}>
             <Feather name="search" size={20} color="#A0AEC0" style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Buscar usuario..."
+              placeholder={i18n.t('common.searchUser')}
               value={searchText}
               onChangeText={setSearchText}
             />
@@ -103,7 +103,7 @@ export default function EditProjectModal({ visible, onClose, project, availableU
 
           {filteredUsers.length > 0 && (
             <Pressable onPress={handleSelectAll} style={{ alignSelf: 'flex-end', marginBottom: 8, padding: 4 }}>
-              <Text style={{ color: '#3182CE', fontSize: 12, fontWeight: '600' }}>Seleccionar todos</Text>
+              <Text style={{ color: '#3182CE', fontSize: 12, fontWeight: '600' }}>{i18n.t('editProject.selectAll')}</Text>
             </Pressable>
           )}
 
@@ -122,7 +122,7 @@ export default function EditProjectModal({ visible, onClose, project, availableU
                 );
               })}
               {filteredUsers.length === 0 && (
-                <Text style={styles.emptyText}>No se encontraron usuarios.</Text>
+                <Text style={styles.emptyText}>{i18n.t('editProject.noUsers')}</Text>
               )}
             </ScrollView>
           </View>

@@ -1,5 +1,5 @@
 import { Feather } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { useFocusEffect, useNavigation } from 'expo-router';
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Image, KeyboardAvoidingView, LayoutAnimation, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, UIManager, useWindowDimensions, View } from 'react-native';
@@ -8,6 +8,7 @@ import { useCustomAlert } from '../../components/ui/CustomAlert';
 import i18n from '../../constants/i18n';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProjects } from '../../contexts/ProjectsContext';
+import { usePermission } from '../../hooks/usePermission';
 import api from '../../services/api';
 import { BudgetCategory, Expense, ProjectBudget } from '../../types';
 import { HeaderActionContext } from './_layout';
@@ -160,8 +161,8 @@ const BudgetBarChart = ({ categories }: { categories: BudgetCategory[] }) => {
                     elevation: 5,
                   }}>
                     <Text style={{ color: '#FFF', fontSize: 10, fontWeight: 'bold', marginBottom: 2 }}>{cat.name}</Text>
-                    <Text style={{ color: '#CBD5E0', fontSize: 10 }}>Asig: {formatCurrency(cat.allocated)}</Text>
-                    <Text style={{ color: '#63B3ED', fontSize: 10 }}>Gast: {formatCurrency(cat.spent)}</Text>
+                    <Text style={{ color: '#CBD5E0', fontSize: 10 }}>{i18n.t('budgets.allocated')}: {formatCurrency(cat.allocated)}</Text>
+                    <Text style={{ color: '#63B3ED', fontSize: 10 }}>{i18n.t('budgets.spent')}: {formatCurrency(cat.spent)}</Text>
                     {/* Flecha del Tooltip */}
                     <View style={{ position: 'absolute', bottom: -5, width: 0, height: 0, borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 5, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: '#2D3748' }} />
                   </View>
@@ -290,7 +291,7 @@ const AttachmentViewerModal = ({ visible, attachmentId, onClose, token }: { visi
           return <WebView source={{ uri: content.uri }} style={{ flex: 1, width: '100%' }} />;
         }
       case 'error':
-        return <Text style={{ color: 'white' }}>No se pudo cargar el archivo.</Text>;
+        return <Text style={{ color: 'white' }}>{i18n.t('common.loadError')}</Text>;
       default:
         return null;
     }
@@ -308,7 +309,7 @@ const AttachmentViewerModal = ({ visible, attachmentId, onClose, token }: { visi
   );
 };
 
-const ExpenseHistory = ({ expenses, categories, onAddExpense, onEdit, onDelete, onViewAttachment }: { expenses: Expense[], categories: BudgetCategory[], onAddExpense: () => void, onEdit: (expense: Expense) => void, onDelete: (id: string) => void, onViewAttachment: (attachmentId: string) => void }) => {
+const ExpenseHistory = ({ expenses, categories, onAddExpense, onEdit, onDelete, onViewAttachment, canUpdate, canDelete }: { expenses: Expense[], categories: BudgetCategory[], onAddExpense: () => void, onEdit: (expense: Expense) => void, onDelete: (id: string) => void, onViewAttachment: (attachmentId: string) => void, canUpdate?: boolean, canDelete?: boolean }) => {
   const [search, setSearch] = useState('');
   
   const filteredExpenses = expenses.filter(e => 
@@ -321,10 +322,12 @@ const ExpenseHistory = ({ expenses, categories, onAddExpense, onEdit, onDelete, 
       <View style={styles.historyHeader}>
         <Text style={styles.sectionTitle}>{i18n.t('budgets.expenseHistory')}</Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Pressable style={styles.addButton} onPress={onAddExpense}>
-            <Feather name="plus" size={14} color="#FFF" />
-            <Text style={styles.addButtonText}>{i18n.t('projectDetail.add')}</Text>
-          </Pressable>
+          {canUpdate && (
+            <Pressable style={styles.addButton} onPress={onAddExpense}>
+              <Feather name="plus" size={14} color="#FFF" />
+              <Text style={styles.addButtonText}>{i18n.t('projectDetail.add')}</Text>
+            </Pressable>
+          )}
           <Pressable style={styles.exportButton} onPress={() => alert(i18n.t('budgets.exporting'))}>
             <Feather name="download" size={14} color="#FFF" />
             <Text style={styles.exportButtonText}>{i18n.t('common.export')}</Text>
@@ -375,12 +378,16 @@ const ExpenseHistory = ({ expenses, categories, onAddExpense, onEdit, onDelete, 
                   )}
                 </View>
                 <View style={styles.colActions}>
-                  <Pressable style={styles.actionButton} onPress={() => onEdit(item)}>
-                    <Feather name="edit-2" size={16} color="#3182CE" />
-                  </Pressable>
-                  <Pressable style={styles.actionButton} onPress={() => onDelete(item.id)}>
-                    <Feather name="trash-2" size={16} color="#E53E3E" />
-                  </Pressable>
+                  {canUpdate && (
+                    <Pressable style={styles.actionButton} onPress={() => onEdit(item)}>
+                      <Feather name="edit-2" size={16} color="#3182CE" />
+                    </Pressable>
+                  )}
+                  {canDelete && (
+                    <Pressable style={styles.actionButton} onPress={() => onDelete(item.id)}>
+                      <Feather name="trash-2" size={16} color="#E53E3E" />
+                    </Pressable>
+                  )}
                 </View>
               </View>
             );
@@ -400,8 +407,10 @@ const ProjectBudgetGroup = ({
   updatedExpenses = [],
   onDeleteExpense,
   onEditExpense,
-  onViewAttachment
-}: { project: any, onAddExpense: () => void, extraExpenses?: Expense[], customBudget?: any, deletedExpenseIds?: string[], updatedExpenses?: Expense[], onDeleteExpense: (id: string) => void, onEditExpense: (expense: Expense) => void, onViewAttachment: (attachmentId: string) => void }) => {
+  onViewAttachment,
+  canUpdate,
+  canDelete
+}: { project: any, onAddExpense: () => void, extraExpenses?: Expense[], customBudget?: any, deletedExpenseIds?: string[], updatedExpenses?: Expense[], onDeleteExpense: (id: string) => void, onEditExpense: (expense: Expense) => void, onViewAttachment: (attachmentId: string) => void, canUpdate?: boolean, canDelete?: boolean }) => {
   const [expanded, setExpanded] = useState(false);
   
   // Usamos useMemo para que los datos mockeados no cambien en cada renderizado
@@ -488,7 +497,16 @@ const ProjectBudgetGroup = ({
           <BudgetCards budget={budgetData.totalBudget} spent={totalSpent} />
           <BudgetBarChart categories={categories} />
           <CategoryProgress categories={categories} />
-          <ExpenseHistory expenses={allExpenses} categories={categories} onAddExpense={onAddExpense} onDelete={onDeleteExpense} onEdit={onEditExpense} onViewAttachment={onViewAttachment} />
+          <ExpenseHistory 
+            expenses={allExpenses} 
+            categories={categories} 
+            onAddExpense={onAddExpense} 
+            onDelete={onDeleteExpense} 
+            onEdit={onEditExpense} 
+            onViewAttachment={onViewAttachment}
+            canUpdate={canUpdate}
+            canDelete={canDelete}
+          />
         </View>
       )}
     </View>
@@ -502,123 +520,106 @@ const AddExpenseModal = ({ visible, onClose, projects, initialProjectId, onSave,
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
   const [attachmentUri, setAttachmentUri] = useState<string | null>(null);
-  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const { showAlert, AlertComponent } = useCustomAlert();
 
-  // Actualizar el proyecto seleccionado si cambia la prop initialProjectId
-  React.useEffect(() => {
-    if (visible && initialProjectId) {
-      setProjectId(initialProjectId);
+  useEffect(() => {
+    if (visible) {
+      if (expenseToEdit) {
+        setProjectId(expenseToEdit.projectId);
+        setConcept(expenseToEdit.concept);
+        setAmount(expenseToEdit.amount.toString());
+        setCategory(expenseToEdit.category);
+        setAttachmentUri(null);
+      } else {
+        setProjectId(initialProjectId || projects[0]?.id || '');
+        setConcept('');
+        setAmount('');
+        setCategory('');
+        setAttachmentUri(null);
+      }
     }
-  }, [visible, initialProjectId]);
-
-  // Cargar datos si estamos editando
-  React.useEffect(() => {
-    if (visible && expenseToEdit) {
-      setProjectId(expenseToEdit.projectId || initialProjectId || '');
-      setConcept(expenseToEdit.concept);
-      setAmount(expenseToEdit.amount.toString());
-      setCategory(expenseToEdit.category);
-      // Nota: attachmentUri podría venir del objeto expense si lo tuviéramos guardado como URI local
-      // setAttachmentUri(...) 
-    }
-  }, [visible, expenseToEdit]);
-
-  const handleClose = () => {
-    setConcept('');
-    setAmount('');
-    setCategory('');
-    setAttachmentUri(null);
-    setShowCategoryPicker(false);
-    onClose();
-  };
-
-  const pickAttachment = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (permissionResult.granted === false) {
-      showAlert(i18n.t('common.permissionRequired'), i18n.t('common.permissionGallery'));
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.8,
-    });
-
-    if (!result.canceled) {
-      setAttachmentUri(result.assets[0].uri);
-    }
-  };
+  }, [visible, expenseToEdit, initialProjectId, projects]);
 
   const handleSave = () => {
     if (!concept || !amount || !category) {
       showAlert(i18n.t('common.error'), i18n.t('common.fillAllFields'));
       return;
     }
-    
-    // Llamamos a la función onSave pasada por props para actualizar el estado en la pantalla principal
+
     onSave({
-      id: expenseToEdit?.id, // Pasamos el ID si estamos editando
+      id: expenseToEdit?.id,
       projectId,
       concept,
       amount: parseFloat(amount.replace(/,/g, '')),
       category,
       attachmentUri
     });
-    
-    // Limpiar y cerrar
-    setConcept('');
-    setAmount('');
-    setCategory('');
-    setAttachmentUri(null);
     onClose();
   };
 
+  const pickDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) return;
+      setAttachmentUri(result.assets[0].uri);
+    } catch (err) {
+      console.log('Error picking document:', err);
+    }
+  };
+
   return (
-    <Modal animationType="fade" transparent={true} visible={visible} onRequestClose={handleClose}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.modalOverlay}
-      >
+    <Modal animationType="fade" transparent={true} visible={visible} onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>{expenseToEdit ? i18n.t('budgets.editExpense') : i18n.t('budgets.addExpense')}</Text>
-            <Pressable onPress={handleClose}>
-              <Feather name="x" size={24} color="#4A5568" />
-            </Pressable>
+            <Pressable onPress={onClose}><Feather name="x" size={24} color="#4A5568" /></Pressable>
           </View>
 
+          {!expenseToEdit && (
+            <>
+              <Text style={styles.inputLabel}>{i18n.t('common.project')}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.projectSelectorContainer}>
+                {projects.map(p => (
+                  <Pressable key={p.id} onPress={() => setProjectId(p.id)} style={[styles.projectBadge, projectId === p.id && styles.projectBadgeActive]}>
+                    <Text style={[styles.projectBadgeText, projectId === p.id && styles.projectBadgeTextActive]}>{p.name}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </>
+          )}
+
           <Text style={styles.inputLabel}>{i18n.t('budgets.concept')}</Text>
+          <TextInput style={styles.modalInput} value={concept} onChangeText={setConcept} placeholder="Ej. Cemento" />
+
+          <Text style={styles.inputLabel}>{i18n.t('budgets.amount')}</Text>
           <TextInput 
             style={styles.modalInput} 
-            placeholder="Ej. Cemento, Varilla, Mano de obra..." 
-            value={concept}
-            onChangeText={setConcept}
+            value={amount} 
+            onChangeText={(text) => setAmount(formatInputCurrency(text))} 
+            keyboardType="decimal-pad" 
+            placeholder="0.00" 
           />
 
           <Text style={styles.inputLabel}>{i18n.t('budgets.category')}</Text>
-          
-          {/* Selector de Categoría (ComboBox) */}
           <View style={{ zIndex: 10 }}>
-            <Pressable 
-              style={[styles.modalInput, styles.selectButton]} 
-              onPress={() => setShowCategoryPicker(!showCategoryPicker)}
-            >
+            <Pressable style={[styles.modalInput, styles.selectButton]} onPress={() => setShowCategoryDropdown(!showCategoryDropdown)}>
               <Text style={{ color: category ? '#2D3748' : '#A0AEC0' }}>{category || i18n.t('budgets.selectCategory')}</Text>
-              <Feather name={showCategoryPicker ? "chevron-up" : "chevron-down"} size={20} color="#4A5568" />
+              <Feather name="chevron-down" size={20} color="#A0AEC0" />
             </Pressable>
-            
-            {showCategoryPicker && (
+            {showCategoryDropdown && (
               <View style={styles.dropdownContainer}>
                 <ScrollView style={styles.dropdownScroll} nestedScrollEnabled={true}>
                   {categories.map((cat) => (
                     <Pressable 
                       key={cat.id} 
-                      style={styles.dropdownItem}
-                      onPress={() => {
-                        setCategory(cat.name);
-                        setShowCategoryPicker(false);
-                      }}
+                      style={styles.dropdownItem} 
+                      onPress={() => { setCategory(cat.name); setShowCategoryDropdown(false); }}
                     >
                       <Text style={styles.dropdownItemText}>{cat.name}</Text>
                     </Pressable>
@@ -628,31 +629,20 @@ const AddExpenseModal = ({ visible, onClose, projects, initialProjectId, onSave,
             )}
           </View>
 
-          <Text style={styles.inputLabel}>{i18n.t('budgets.amount')}</Text>
-          <TextInput 
-            style={styles.modalInput} 
-            placeholder="0.00" 
-            keyboardType="decimal-pad"
-            value={amount}
-            onChangeText={(text) => setAmount(formatInputCurrency(text))}
-          />
-
           <Text style={styles.inputLabel}>{i18n.t('budgets.receiptOptional')}</Text>
-          <Pressable style={styles.uploadButton} onPress={pickAttachment}>
-            <Feather name="upload" size={20} color="#4A5568" />
-            <Text style={styles.uploadButtonText}>
-              {attachmentUri ? i18n.t('common.edit') : i18n.t('common.upload')}
-            </Text>
-          </Pressable>
-          
-          {attachmentUri && (
+          {attachmentUri ? (
             <View style={styles.attachmentPreview}>
-                <Feather name="image" size={20} color="#3182CE" />
-                <Text style={styles.attachmentText} numberOfLines={1}>{i18n.t('budgets.attachmentSelected')}</Text>
-                <Pressable onPress={() => setAttachmentUri(null)}>
-                    <Feather name="x" size={20} color="#E53E3E" />
-                </Pressable>
+              <Feather name="file" size={20} color="#3182CE" />
+              <Text style={styles.attachmentText} numberOfLines={1}>{i18n.t('budgets.attachmentSelected')}</Text>
+              <Pressable onPress={() => setAttachmentUri(null)}>
+                <Feather name="x" size={20} color="#E53E3E" />
+              </Pressable>
             </View>
+          ) : (
+            <Pressable style={styles.uploadButton} onPress={pickDocument}>
+              <Feather name="upload" size={20} color="#4A5568" />
+              <Text style={styles.uploadButtonText}>{i18n.t('common.upload')}</Text>
+            </Pressable>
           )}
 
           <Pressable style={styles.saveButton} onPress={handleSave}>
@@ -821,8 +811,7 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
               const isSelected = selectedCategories.includes(cat.name);
               const percentage = categoryPercentages[cat.name] || ''; // This is a string
               const rawTotal = parseFloat(totalAmount.replace(/,/g, '')) || 0;
-              const calculatedAmountForCategory = rawTotal && percentage 
-              const calculatedAmount = calculatedAmountForCategory && percentage 
+              const calculatedAmount = (rawTotal && percentage)
                 ? (rawTotal * (parseFloat(percentage) / 100)) 
                 : 0;
 
@@ -876,7 +865,7 @@ const DeleteConfirmationModal = ({ visible, onClose, onConfirm }: { visible: boo
       <View style={styles.modalOverlay}>
         <View style={[styles.modalContent, { maxWidth: 350 }]}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{i18n.t('common.delete') || 'Eliminar'}</Text>
+            <Text style={styles.modalTitle}>{i18n.t('common.delete')}</Text>
             <Pressable onPress={onClose}><Feather name="x" size={24} color="#4A5568" /></Pressable>
           </View>
           <Text style={{ fontSize: 16, color: '#4A5568', marginBottom: 24 }}>
@@ -884,10 +873,10 @@ const DeleteConfirmationModal = ({ visible, onClose, onConfirm }: { visible: boo
           </Text>
           <View style={styles.modalButtons}>
             <Pressable style={[styles.modalButton, styles.cancelButton]} onPress={onClose}>
-              <Text style={styles.buttonText}>{i18n.t('common.cancel') || 'Cancelar'}</Text>
+              <Text style={styles.buttonText}>{i18n.t('common.cancel')}</Text>
             </Pressable>
             <Pressable style={[styles.modalButton, styles.deleteButton]} onPress={onConfirm}>
-              <Text style={[styles.buttonText, { color: '#FFF' }]}>{i18n.t('common.delete') || 'Eliminar'}</Text>
+              <Text style={[styles.buttonText, { color: '#FFF' }]}>{i18n.t('common.delete')}</Text>
             </Pressable>
           </View>
         </View>
@@ -935,6 +924,7 @@ export default function BudgetsScreen() {
   const { projects, budgets, refreshBudgets, isBudgetsLoading } = useProjects(); // Usamos budgets del contexto global
   const { token } = useAuth();
   const { width } = useWindowDimensions();
+  const { hasPermission } = usePermission();
   const isSmallScreen = width < 768;
   
   const [refreshing, setRefreshing] = useState(false);
@@ -1111,9 +1101,11 @@ export default function BudgetsScreen() {
   useFocusEffect(
     useCallback(() => {
       // El botón del Header ahora abre el modal de "Crear Presupuesto" (Monto Total)
-      setCustomAddAction(() => () => setActiveModal('createBudget'));
+      if (hasPermission('BUDGET_CREATE')) {
+        setCustomAddAction(() => () => setActiveModal('createBudget'));
+      }
       return () => setCustomAddAction(null);
-    }, [])
+    }, [hasPermission])
   );
 
   // Filtrar proyectos que tienen presupuesto para mostrarlos en la lista
@@ -1129,6 +1121,15 @@ export default function BudgetsScreen() {
       setRefreshing(false);
     }
   }, [refreshBudgets]);
+
+  if (!hasPermission('MENU_BUDGETS')) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Feather name="lock" size={48} color="#CBD5E0" />
+        <Text style={{ marginTop: 16, fontSize: 18, color: '#718096' }}>{i18n.t('common.accessDenied')}</Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView 
@@ -1161,6 +1162,8 @@ export default function BudgetsScreen() {
           onDeleteExpense={(id) => setExpenseToDelete({ id, projectId: project.id })}
           onEditExpense={(expense) => openEditModal(expense, project.id)}
           onViewAttachment={handleViewAttachment}
+          canUpdate={hasPermission('BUDGET_UPDATE')}
+          canDelete={hasPermission('BUDGET_DELETE')}
         />
       )) : (
         <View style={{ padding: 40, alignItems: 'center', opacity: 0.7 }}>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Modal, StyleSheet, Text, View } from 'react-native';
+import i18n from '../../constants/i18n';
 
 interface EvidenceUploadModalProps {
   visible: boolean;
@@ -15,10 +16,10 @@ export default function EvidenceUploadModal({ visible }: EvidenceUploadModalProp
     >
       <View style={styles.container}>
         <View style={styles.content}>
-          <Text style={styles.title}>Subiendo Evidencia</Text>
+          <Text style={styles.title}>{i18n.t('upload.evidenceTitle')}</Text>
           <View style={styles.body}>
             <ActivityIndicator size="large" color="#3182CE" />
-            <Text style={styles.text}>Procesando archivo...</Text>
+            <Text style={styles.text}>{i18n.t('upload.processing')}</Text>
           </View>
         </View>
       </View>
