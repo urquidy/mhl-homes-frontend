@@ -183,6 +183,11 @@ const i18n = new I18n({
       mapInstruction: 'Move the map to locate the project',
       validationError: 'Please complete all fields.',
     },
+    newTask: {
+      selectStep: 'Select step',
+      selectDate: 'Select date',
+      deadline: 'Deadline',
+    },
     projectDetail: {
       notFound: 'Project not found.',
       client: 'Client',
@@ -329,6 +334,11 @@ const i18n = new I18n({
       errorSavingAgendaType: 'Could not save agenda type.',
       errorDeletingAgendaType: 'Could not delete agenda type.',
       noAgendaTypes: 'No agenda types configured.',
+      documentCategories: 'Document Categories',
+      manageDocumentCategories: 'Manage document categories',
+      noDocumentCategories: 'No document categories configured.',
+      newDocCategory: 'New Category',
+      editDocCategory: 'Edit Category',
     },
     agenda: {
       titleRequired: 'Title is required',
@@ -431,6 +441,16 @@ const i18n = new I18n({
       todos: 'All',
       desc: 'Description',
       descPlaceholder: 'Enter role description',
+      updateSuccess: 'Role updated successfully.',
+      loadError: 'Could not load roles.',
+      nameRequired: 'Role name is required.',
+      createSuccess: 'Role created successfully.',
+      deleteTitle: 'Delete Role',
+      deleteMessage: 'Are you sure you want to delete this role? This cannot be undone.',
+      deleteSuccess: 'Role deleted successfully.',
+      deleteError: 'Could not delete role.',
+      saveError: 'Could not save role.',
+      empty: 'No roles configured.',
     },
   },
   es: {
@@ -569,6 +589,11 @@ const i18n = new I18n({
       mapInstruction: 'Mueve el mapa para ubicar el proyecto',
       validationError: 'Por favor completa todos los campos.',
     },
+    newTask: {
+      selectStep: 'Seleccionar paso',
+      selectDate: 'Seleccionar fecha',
+      deadline: 'Fecha Límite',
+    },
     projectDetail: {
       notFound: 'Proyecto no encontrado.',
       client: 'Cliente',
@@ -685,6 +710,11 @@ const i18n = new I18n({
       errorSavingAgendaType: 'No se pudo guardar el tipo de agenda.',
       errorDeletingAgendaType: 'No se pudo eliminar el tipo de agenda.',
       noAgendaTypes: 'No hay tipos de agenda configurados.',
+      documentCategories: 'Categorías de Documentos',
+      manageDocumentCategories: 'Gestionar categorías de documentos',
+      noDocumentCategories: 'No hay categorías de documentos configuradas.',
+      newDocCategory: 'Nueva Categoría',
+      editDocCategory: 'Editar Categoría',
     },
     agenda: {
       titleRequired: 'El título es obligatorio',
@@ -787,6 +817,7 @@ const i18n = new I18n({
       todos: 'Todos',
       desc: 'Descripción',
       descPlaceholder: 'Ingresa la descripción del rol',
+      updateSuccess: 'Rol actualizado correctamente.',
     },
   },
   eu: {
@@ -962,6 +993,11 @@ const i18n = new I18n({
       mapInstruction: 'Mugitu mapa proiektua kokatzeko',
       validationError: 'Mesedez, bete eremu guztiak.',
     },
+    newTask: {
+      selectStep: 'Hautatu urratsa',
+      selectDate: 'Hautatu data',
+      deadline: 'Epea',
+    },
     projectDetail: {
       notFound: 'Ez da proiektua aurkitu.',
       client: 'Bezeroa',
@@ -1108,6 +1144,11 @@ const i18n = new I18n({
       errorSavingAgendaType: 'Ezin izan da agenda mota gorde.',
       errorDeletingAgendaType: 'Ezin izan da agenda mota ezabatu.',
       noAgendaTypes: 'Ez dago agenda motarik konfiguratuta.',
+      documentCategories: 'Dokumentu Kategoriak',
+      manageDocumentCategories: 'Kudeatu dokumentu kategoriak',
+      noDocumentCategories: 'Ez dago dokumentu kategoriarik konfiguratuta.',
+      newDocCategory: 'Kategoria Berria',
+      editDocCategory: 'Editatu Kategoria',
     },
     agenda: {
       titleRequired: 'Izenburua derrigorrezkoa da',
@@ -1209,6 +1250,7 @@ const i18n = new I18n({
       todos: 'Denak',
       desc: 'Deskribapena',
       descPlaceholder: 'Sartu rolaren deskribapena',
+      updateSuccess: 'Rola behar bezala eguneratu da.',
     },
   },
 });

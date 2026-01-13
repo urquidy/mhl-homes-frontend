@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import i18n from '../../constants/i18n';
+import { useAuth } from '../../contexts/AuthContext';
 import { usePermission } from '../../hooks/usePermission';
 import api from '../../services/api';
 import { useCustomAlert } from '../ui/CustomAlert';
@@ -22,6 +23,7 @@ export default function RolesManager({ onBack }: RolesManagerProps) {
   
   const { showAlert, AlertComponent } = useCustomAlert();
   const { hasPermission } = usePermission();
+  const { refreshUser } = useAuth();
 
   const fetchRoles = async () => {
     setLoading(true);
@@ -76,7 +78,8 @@ export default function RolesManager({ onBack }: RolesManagerProps) {
         showAlert(i18n.t('common.success'), i18n.t('roles.createSuccess'));
       }
       setModalVisible(false);
-      fetchRoles();
+      await fetchRoles();
+      await refreshUser(); // Refrescar permisos del usuario logeado
     } catch (error) {
       console.error('Error saving role:', error);
       showAlert(i18n.t('common.error'), i18n.t('roles.saveError'));
@@ -95,7 +98,8 @@ export default function RolesManager({ onBack }: RolesManagerProps) {
           onPress: async () => {
             try {
               await api.delete(`/api/roles/${id}`);
-              fetchRoles();
+              await fetchRoles();
+              await refreshUser(); // Refrescar permisos del usuario logeado
               showAlert(i18n.t('common.success'), i18n.t('roles.deleteSuccess'));
             } catch (error) {
               console.error('Error deleting role:', error);

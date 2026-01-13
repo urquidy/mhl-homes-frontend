@@ -9,7 +9,7 @@ export const usePermission = () => {
    */
   const hasPermission = (permission: string): boolean => {
     if (!user?.permissions) return false;
-    return user.permissions.includes(permission) || user.permissions.includes('ROLE_ADMIN');
+    return user.permissions.includes(permission);
   };
 
   /**
@@ -17,7 +17,7 @@ export const usePermission = () => {
    */
   const hasAnyPermission = (permissions: string[]): boolean => {
     if (!user?.permissions) return false;
-    if (user.permissions.includes('ROLE_ADMIN')) return true;
+    if (user.permissions.includes('ROLE_ADMIN') || user.permissions.includes('ADMIN')) return true;
     return permissions.some(p => user.permissions?.includes(p));
   };
 
@@ -26,7 +26,7 @@ export const usePermission = () => {
    */
   const hasAllPermissions = (permissions: string[]): boolean => {
     if (!user?.permissions) return false;
-    if (user.permissions.includes('ROLE_ADMIN')) return true;
+    if (user.permissions.includes('ROLE_ADMIN') || user.permissions.includes('ADMIN')) return true;
     return permissions.every(p => user.permissions?.includes(p));
   };
 

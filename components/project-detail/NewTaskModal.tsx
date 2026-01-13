@@ -51,7 +51,7 @@ export default function NewTaskModal({ visible, onClose, onSave, isSaving, catal
       setShowStepSelector(false);
       setShowUserSuggestions(false);
     }
-  }, [visible, initialData]);
+  }, [visible]);
 
   const handleSave = () => {
     onSave({

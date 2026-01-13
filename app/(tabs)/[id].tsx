@@ -388,16 +388,22 @@ export default function ProjectDetailScreen() {
 
   // Actualizar páginas cuando cambia el grupo seleccionado
   useEffect(() => {
+    // Cuando cambian los datos de los grupos, actualizamos las páginas del grupo actual
+    // sin resetear la página actual, para no perder la navegación del usuario.
     if (blueprintGroups[selectedGroup]) {
       setBlueprintPages(blueprintGroups[selectedGroup]);
-      setCurrentPage(0); // Resetear a página 1 al cambiar de grupo
     } else if (groupNames.length > 0) {
-      // Si el grupo seleccionado no existe (ej. borrado o cambio de idioma), ir al primero
+      // Si el grupo seleccionado ya no es válido (ej. se borró), vamos al primero
       setSelectedGroup(groupNames[0]);
     } else {
       setBlueprintPages([]);
     }
-  }, [selectedGroup, blueprintGroups, groupNames]);
+  }, [blueprintGroups, groupNames, selectedGroup]);
+  
+  // Reseteamos a la página 0 solo cuando el usuario cambia de grupo explícitamente.
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [selectedGroup]);
 
   // Efecto para abrir tarea específica desde notificación
   useEffect(() => {
