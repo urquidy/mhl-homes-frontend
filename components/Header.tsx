@@ -3,20 +3,19 @@ import { useDrawerStatus } from '@react-navigation/drawer';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import i18n from '../constants/i18n';
-import { useTenant } from '../contexts/TenantContext';
+import { Fonts } from '../constants/theme';
+import { useTheme } from '../contexts/ThemeContext';
 import api from '../services/api';
 
 interface HeaderProps {
   userImageUri?: string; // URI para la imagen del usuario, opcional
   token?: string | null; // Token para imágenes protegidas
   onMenuPress?: () => void; // Función para abrir/cerrar el menú, ahora opcional
-  onAddPress?: () => void; // Función para el botón de agregar
   onProfilePress?: () => void; // Función al presionar el avatar
 }
 
-const Header: React.FC<HeaderProps> = ({ userImageUri, token, onMenuPress, onAddPress, onProfilePress }) => {
-  const { tenant } = useTenant();
+const Header: React.FC<HeaderProps> = ({ userImageUri, token, onMenuPress, onProfilePress }) => {
+  const { theme } = useTheme();
   const router = useRouter();
   // Hook para saber si el menú está abierto. Devuelve 'open' o 'closed'.
   const isDrawerOpen = useDrawerStatus() === 'open';
@@ -45,39 +44,28 @@ const Header: React.FC<HeaderProps> = ({ userImageUri, token, onMenuPress, onAdd
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: tenant.secondaryColor || '#1A202C' }]}>
+    <View style={[styles.container, { backgroundColor: theme.menuColor || '#1A202C' }]}>
       <View style={styles.leftContainer}>
         {/* --- Lado Izquierdo: Botón de Menú --- */}
         {onMenuPress ? (
           <Pressable onPress={onMenuPress} style={styles.menuButton}>
-            <Feather name="menu" size={24} color={tenant.primaryColor} />
+            <Feather name="menu" size={24} color={theme.primaryColor} />
           </Pressable>
         ) : <View style={styles.menuButton} />}
       </View>
 
       {/* --- Centro: Logo del Tenant --- */}
       <View style={styles.logoContainer}>
-        {tenant.logoUri ? (
-          <Image source={{ uri: tenant.logoUri }} style={styles.headerLogo} resizeMode="contain" />
+        {theme.logoUri ? (
+          <Image source={{ uri: theme.logoUri }} style={styles.headerLogo} resizeMode="contain" />
         ) : (
           // Fallback: Nombre del tenant si no hay logo
-          <Text style={[styles.headerTitle, { color: tenant.primaryColor }]}>{tenant.name}</Text>
+          <Text style={[styles.headerTitle, { color: theme.primaryColor }]}>Edbuild</Text>
         )}
       </View>
       
       {/* --- Lado Derecho: Acciones --- */}
       <View style={styles.rightContainer}>
-        {/* Botón de Agregar (Visible si se pasa la función onAddPress) */}
-        {onAddPress && (
-          <Pressable
-              onPress={onAddPress}
-              style={({ pressed }) => [styles.newProjectButton, { backgroundColor: tenant.primaryColor }, pressed && styles.buttonPressed]}
-            >
-              <Feather name="plus" size={20} color="#FFFFFF" />
-              {/* Solo mostramos el texto si el menú NO está abierto en web, para ahorrar espacio */}
-              {(Platform.OS === 'web' && isDrawerOpen) && <Text style={styles.newProjectButtonText}>{i18n.t('nav.newProject')}</Text>}
-          </Pressable>
-        )}
 
         {/* Avatar del Usuario */}
         <Pressable onPress={onProfilePress}>
@@ -98,9 +86,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 12,
-    backgroundColor: '#1A202C',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
     // Sombra para darle elevación
     shadowColor: '#000',
     shadowOffset: {
@@ -123,23 +109,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   newProjectButton: {
-    backgroundColor: '#D4AF37', // Dorado
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
     paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: 12,
     marginRight: 16,
     marginTop: Platform.OS === 'web' ? 0 : 20,
   },
   buttonPressed: {
-    backgroundColor: '#b89b30', // Dorado más oscuro al presionar
+    opacity: 0.8,
   },
   newProjectButtonText: {
-    color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: 'bold',
+    fontFamily: Fonts.bold,
     marginLeft: 8,
     marginTop: Platform.OS === 'web' ? 0 : 20,
   },
@@ -164,7 +148,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontFamily: Fonts.bold,
   },
 });
 

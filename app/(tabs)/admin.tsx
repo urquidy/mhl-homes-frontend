@@ -6,12 +6,15 @@ import RolesManager from '../../components/admin/RolesManager';
 import { useCustomAlert } from '../../components/ui/CustomAlert';
 import i18n from '../../constants/i18n';
 import { useAuth } from '../../contexts/AuthContext';
+
+import { useTheme } from '../../contexts/ThemeContext';
 import { usePermission } from '../../hooks/usePermission';
 import api from '../../services/api';
 
 export default function AdminScreen() {
   const { user } = useAuth();
   const { hasPermission } = usePermission();
+  const { reloadTheme, theme } = useTheme();
   const [currentView, setCurrentView] = useState<'menu' | 'users' | 'project-steps' | 'roles' | 'agenda-types' | 'document-categories' | 'site-config'>('menu');
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
@@ -24,6 +27,7 @@ export default function AdminScreen() {
   const [formData, setFormData] = useState({ username: '', email: '', role: '', password: '' });
   const [emailError, setEmailError] = useState<string | null>(null);
   const [isFormValid, setIsFormValid] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Estado para Pasos del Proyecto (Catálogo)
   const [projectSteps, setProjectSteps] = useState<any[]>([]);
@@ -34,7 +38,7 @@ export default function AdminScreen() {
   // Estado para Tipos de Agenda (Catálogo Genérico)
   const [agendaTypes, setAgendaTypes] = useState<any[]>([]);
   const [agendaTypeModalVisible, setAgendaTypeModalVisible] = useState(false);
-  const [agendaTypeFormData, setAgendaTypeFormData] = useState({ name: '', description: '', primaryColor: '#3182CE', icon: 'calendar' });
+  const [agendaTypeFormData, setAgendaTypeFormData] = useState({ name: '', description: '', primaryColor: theme.primaryColor, icon: 'calendar' });
   const [editingAgendaType, setEditingAgendaType] = useState<any>(null);
 
   // Estado para Categorías de Documentos (Catálogo Genérico)
@@ -46,7 +50,7 @@ export default function AdminScreen() {
   // Estado para Configuración del Sitio (FRONT_CONFIG)
   const [siteConfigs, setSiteConfigs] = useState<any[]>([]);
   const [siteConfigModalVisible, setSiteConfigModalVisible] = useState(false);
-  const [siteConfigFormData, setSiteConfigFormData] = useState({ name: '', description: '', primaryColor: '#D4AF37', secondaryColor: '#1A202C', logoUri: '', loginTitle: '' });
+  const [siteConfigFormData, setSiteConfigFormData] = useState({ name: '', description: '', primaryColor: theme.primaryColor, secondaryColor: '#1A202C', menuColor: '#FFFFFF', backgroundColor: '#F7FAFC', logoUri: '', loginTitle: '' });
   const [editingSiteConfig, setEditingSiteConfig] = useState<any>(null);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
 
@@ -190,6 +194,7 @@ export default function AdminScreen() {
       password: '' 
     });
     setEmailError(null);
+    setShowPassword(false);
     setEditModalVisible(true);
   };
 
@@ -199,6 +204,7 @@ export default function AdminScreen() {
     const defaultRole = roles.length > 0 ? roles[0].id : '';
     setFormData({ username: '', email: '', role: defaultRole, password: '' });
     setEmailError(null);
+    setShowPassword(false);
     setEditModalVisible(true);
   };
 
@@ -336,7 +342,7 @@ export default function AdminScreen() {
   // --- FUNCIONES PARA TIPOS DE AGENDA ---
   const openCreateAgendaTypeModal = () => {
     setEditingAgendaType(null);
-    setAgendaTypeFormData({ name: '', description: '', primaryColor: '#3182CE', icon: 'calendar' });
+    setAgendaTypeFormData({ name: '', description: '', primaryColor: theme.primaryColor, icon: 'calendar' });
     setAgendaTypeModalVisible(true);
   };
 
@@ -463,7 +469,7 @@ export default function AdminScreen() {
   // --- FUNCIONES PARA CONFIGURACIÓN DEL SITIO ---
   const openCreateSiteConfigModal = () => {
     setEditingSiteConfig(null);
-    setSiteConfigFormData({ name: '', description: '', primaryColor: '#D4AF37', secondaryColor: '#1A202C', logoUri: '', loginTitle: '' });
+    setSiteConfigFormData({ name: '', description: '', primaryColor: theme.primaryColor, secondaryColor: '#1A202C', menuColor: '#FFFFFF', backgroundColor: '#F7FAFC', logoUri: '', loginTitle: '' });
     setSiteConfigModalVisible(true);
   };
 
@@ -472,8 +478,10 @@ export default function AdminScreen() {
     setSiteConfigFormData({
       name: item.name,
       description: item.description || '',
-      primaryColor: item.metadata?.primaryColor || '#D4AF37',
+      primaryColor: item.metadata?.primaryColor || '#3182CE',
       secondaryColor: item.metadata?.secondaryColor || '#1A202C',
+      menuColor: item.metadata?.menuColor || '#FFFFFF',
+      backgroundColor: item.metadata?.backgroundColor || '#F7FAFC',
       logoUri: item.metadata?.logoUri || '',
       loginTitle: item.metadata?.loginTitle || ''
     });
@@ -494,6 +502,8 @@ export default function AdminScreen() {
         metadata: {
           primaryColor: siteConfigFormData.primaryColor,
           secondaryColor: siteConfigFormData.secondaryColor,
+          menuColor: siteConfigFormData.menuColor,
+          backgroundColor: siteConfigFormData.backgroundColor,
           logoUri: siteConfigFormData.logoUri,
           loginTitle: siteConfigFormData.loginTitle
         }
@@ -508,6 +518,7 @@ export default function AdminScreen() {
       }
       setSiteConfigModalVisible(false);
       fetchSiteConfigs();
+      await reloadTheme(); // Recargar el tema globalmente
     } catch (error) {
       console.error('Error saving site config:', error);
       showAlert(i18n.t('common.error'), 'Error al guardar configuración');
@@ -571,7 +582,9 @@ export default function AdminScreen() {
 
       // Subir a endpoint genérico de archivos
       const response = await api.post('/api/files', formData, {
-        headers: { 'Content-Type': Platform.OS === 'web' ? undefined : 'multipart/form-data' },
+        headers: {
+          'Content-Type': Platform.OS === 'web' ? undefined : 'multipart/form-data',
+        },
       });
 
       // Asumimos que el backend devuelve { uri: '...' } o { id: '...' }
@@ -602,7 +615,7 @@ export default function AdminScreen() {
         <View style={styles.userInfo}>
           <Text style={styles.userName}>{item.username}</Text>
           <Text style={styles.userEmail}>{item.email}</Text>
-          <View style={[styles.roleBadge, isAdmin ? styles.roleAdmin : styles.roleUser]}>
+          <View style={[styles.roleBadge, isAdmin ? { backgroundColor: theme.primaryColor } : styles.roleUser]}>
             <Text style={[styles.roleText, isAdmin ? { color: '#FFF' } : { color: '#2D3748' }]}>{roleName}</Text>
           </View>
         </View>
@@ -610,7 +623,7 @@ export default function AdminScreen() {
         {hasPermission('USER_UPDATE') && (
         <View style={styles.actions}>
           <Pressable onPress={() => openEditModal(item)} style={styles.actionButton}>
-            <Feather name="edit-2" size={20} color="#3182CE" />
+            <Feather name="edit-2" size={20} color={theme.primaryColor} />
           </Pressable>
           {hasPermission('USER_DELETE') && (
             <Pressable onPress={() => handleDeleteUser(item.id)} style={[styles.actionButton, { marginLeft: 8 }]}>
@@ -634,7 +647,7 @@ export default function AdminScreen() {
         </View>
 
         {loading ? (
-          <ActivityIndicator size="large" color="#3182CE" style={{ marginTop: 20 }} />
+          <ActivityIndicator size="large" color={theme.primaryColor} style={{ marginTop: 20 }} />
         ) : (
           <FlatList
             data={users}
@@ -645,7 +658,7 @@ export default function AdminScreen() {
           />
         )}
 
-        <Pressable style={styles.fab} onPress={openCreateModal}>
+        <Pressable style={[styles.fab, { backgroundColor: theme.primaryColor }]} onPress={openCreateModal}>
           <Feather name="plus" size={24} color="#FFF" />
         </Pressable>
 
@@ -682,14 +695,19 @@ export default function AdminScreen() {
               {emailError && <Text style={styles.errorText}>{emailError}</Text>}
 
               <Text style={styles.label}>{editingUser ? i18n.t('profile.newPassword') : i18n.t('common.password')}</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.password}
-                onChangeText={text => setFormData({...formData, password: text})}
-                secureTextEntry
-                placeholder={editingUser ? i18n.t('admin.leaveBlankToKeep') : ""}
-                placeholderTextColor="#A0AEC0"
-              />
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  value={formData.password}
+                  onChangeText={text => setFormData({...formData, password: text})}
+                  secureTextEntry={!showPassword}
+                  placeholder={editingUser ? i18n.t('admin.leaveBlankToKeep') : ""}
+                  placeholderTextColor="#A0AEC0"
+                />
+                <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+                  <Feather name={showPassword ? "eye" : "eye-off"} size={20} color="#A0AEC0" />
+                </Pressable>
+              </View>
 
               <Text style={styles.label}>{i18n.t('common.role')}</Text>
               <View style={[styles.roleSelector, { flexWrap: 'wrap' }]}>
@@ -711,7 +729,7 @@ export default function AdminScreen() {
               </View>
 
               <Pressable 
-                style={[styles.saveButton, !isFormValid && styles.disabledButton]} 
+                style={[styles.saveButton, { backgroundColor: theme.primaryColor }, !isFormValid && styles.disabledButton]} 
                 onPress={editingUser ? handleUpdateUser : handleCreateUser}
                 disabled={!isFormValid}
               >
@@ -736,7 +754,7 @@ export default function AdminScreen() {
         </View>
 
         {loading ? (
-          <ActivityIndicator size="large" color="#3182CE" style={{ marginTop: 20 }} />
+          <ActivityIndicator size="large" color={theme.primaryColor} style={{ marginTop: 20 }} />
         ) : (
           <ScrollView contentContainerStyle={styles.listContent}>
             {projectSteps.map((category) => (
@@ -745,7 +763,7 @@ export default function AdminScreen() {
                 <View style={styles.treeNodeHeader}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
                     <View style={[styles.treeNodeIcon, { backgroundColor: '#EBF8FF' }]}>
-                      <Feather name="folder" size={20} color="#3182CE" />
+                      <Feather name="folder" size={20} color={theme.primaryColor} />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.treeNodeTitle} numberOfLines={1}>{category.name}</Text>
@@ -760,7 +778,7 @@ export default function AdminScreen() {
                     )}
                     {hasPermission('CATALOG_UPDATE') && (
                     <Pressable onPress={() => openEditStepModal(category)} style={styles.actionButton}>
-                      <Feather name="edit-2" size={18} color="#3182CE" />
+                      <Feather name="edit-2" size={18} color={theme.primaryColor} />
                     </Pressable>
                     )}
                     {hasPermission('CATALOG_DELETE') && (
@@ -799,7 +817,7 @@ export default function AdminScreen() {
         )}
 
         {hasPermission('CATALOG_MANAGE') && (
-        <Pressable style={styles.fab} onPress={() => openCreateStepModal(null)}>
+        <Pressable style={[styles.fab, { backgroundColor: theme.primaryColor }]} onPress={() => openCreateStepModal(null)}>
           <Feather name="plus" size={24} color="#FFF" />
         </Pressable>
         )}
@@ -844,7 +862,7 @@ export default function AdminScreen() {
                 keyboardType="numeric"
               />
 
-              <Pressable style={styles.saveButton} onPress={handleSaveStep}>
+              <Pressable style={[styles.saveButton, { backgroundColor: theme.primaryColor }]} onPress={handleSaveStep}>
                 <Text style={styles.saveButtonText}>{i18n.t('common.save')}</Text>
               </Pressable>
             </View>
@@ -866,7 +884,7 @@ export default function AdminScreen() {
         </View>
 
         {loading ? (
-          <ActivityIndicator size="large" color="#3182CE" style={{ marginTop: 20 }} />
+          <ActivityIndicator size="large" color={theme.primaryColor} style={{ marginTop: 20 }} />
         ) : (
           <FlatList
             data={agendaTypes}
@@ -885,7 +903,7 @@ export default function AdminScreen() {
                 <View style={styles.actions}>
                   {hasPermission('CATALOG_UPDATE') && (
                   <Pressable onPress={() => openEditAgendaTypeModal(item)} style={styles.actionButton}>
-                    <Feather name="edit-2" size={20} color="#3182CE" />
+                    <Feather name="edit-2" size={20} color={theme.primaryColor} />
                   </Pressable>
                   )}
                   {hasPermission('CATALOG_DELETE') && (
@@ -900,7 +918,7 @@ export default function AdminScreen() {
         )}
 
         {hasPermission('CATALOG_MANAGE') && (
-        <Pressable style={styles.fab} onPress={openCreateAgendaTypeModal}>
+        <Pressable style={[styles.fab, { backgroundColor: theme.primaryColor }]} onPress={openCreateAgendaTypeModal}>
           <Feather name="plus" size={24} color="#FFF" />
         </Pressable>
         )}
@@ -918,7 +936,7 @@ export default function AdminScreen() {
               <TextInput style={styles.input} value={agendaTypeFormData.description} onChangeText={text => setAgendaTypeFormData({...agendaTypeFormData, description: text})} />
               <Text style={styles.label}>{i18n.t('admin.color')}</Text>
               <View style={styles.colorPickerRow}>
-                {['#3182CE', '#E53E3E', '#38A169', '#D69E2E', '#805AD5', '#D53F8C', '#319795', '#DD6B20', '#718096', '#000000'].map(color => (
+                {[theme.primaryColor, '#E53E3E', '#38A169', '#D69E2E', '#805AD5', '#D53F8C', '#319795', '#DD6B20', '#718096', '#000000'].map(color => (
                   <Pressable
                     key={color}
                     style={[styles.colorOption, { backgroundColor: color }, agendaTypeFormData.primaryColor === color && styles.colorOptionSelected]}
@@ -943,7 +961,7 @@ export default function AdminScreen() {
                 ))}
               </View>
 
-              <Pressable style={styles.saveButton} onPress={handleSaveAgendaType}><Text style={styles.saveButtonText}>{i18n.t('common.save')}</Text></Pressable>
+              <Pressable style={[styles.saveButton, { backgroundColor: theme.primaryColor }]} onPress={handleSaveAgendaType}><Text style={styles.saveButtonText}>{i18n.t('common.save')}</Text></Pressable>
             </View>
           </View>
         </Modal>
@@ -963,7 +981,7 @@ export default function AdminScreen() {
         </View>
 
         {loading ? (
-          <ActivityIndicator size="large" color="#3182CE" style={{ marginTop: 20 }} />
+          <ActivityIndicator size="large" color={theme.primaryColor} style={{ marginTop: 20 }} />
         ) : (
           <FlatList
             data={documentCategories}
@@ -982,7 +1000,7 @@ export default function AdminScreen() {
                 <View style={styles.actions}>
                   {hasPermission('CATALOG_UPDATE') && (
                   <Pressable onPress={() => openEditDocCategoryModal(item)} style={styles.actionButton}>
-                    <Feather name="edit-2" size={20} color="#3182CE" />
+                    <Feather name="edit-2" size={20} color={theme.primaryColor} />
                   </Pressable>
                   )}
                   {hasPermission('CATALOG_DELETE') && (
@@ -997,7 +1015,7 @@ export default function AdminScreen() {
         )}
 
         {hasPermission('CATALOG_MANAGE') && (
-        <Pressable style={styles.fab} onPress={openCreateDocCategoryModal}>
+        <Pressable style={[styles.fab, { backgroundColor: theme.primaryColor }]} onPress={openCreateDocCategoryModal}>
           <Feather name="plus" size={24} color="#FFF" />
         </Pressable>
         )}
@@ -1014,7 +1032,7 @@ export default function AdminScreen() {
               <Text style={styles.label}>{i18n.t('common.description')}</Text>
               <TextInput style={styles.input} value={docCategoryFormData.description} onChangeText={text => setDocCategoryFormData({...docCategoryFormData, description: text})} />
               
-              <Pressable style={styles.saveButton} onPress={handleSaveDocCategory}><Text style={styles.saveButtonText}>{i18n.t('common.save')}</Text></Pressable>
+              <Pressable style={[styles.saveButton, { backgroundColor: theme.primaryColor }]} onPress={handleSaveDocCategory}><Text style={styles.saveButtonText}>{i18n.t('common.save')}</Text></Pressable>
             </View>
           </View>
         </Modal>
@@ -1034,7 +1052,7 @@ export default function AdminScreen() {
         </View>
 
         {loading ? (
-          <ActivityIndicator size="large" color="#3182CE" style={{ marginTop: 20 }} />
+          <ActivityIndicator size="large" color={theme.primaryColor} style={{ marginTop: 20 }} />
         ) : (
           <FlatList
             data={siteConfigs}
@@ -1050,7 +1068,7 @@ export default function AdminScreen() {
                 </View>
                 <View style={styles.actions}>
                   <Pressable onPress={() => openEditSiteConfigModal(item)} style={styles.actionButton}>
-                    <Feather name="edit-2" size={20} color="#3182CE" />
+                    <Feather name="edit-2" size={20} color={theme.primaryColor} />
                   </Pressable>
                   <Pressable onPress={() => handleDeleteAgendaType(item.id)} style={[styles.actionButton, { marginLeft: 8 }]}>
                     <Feather name="trash-2" size={20} color="#E53E3E" />
@@ -1061,7 +1079,7 @@ export default function AdminScreen() {
           />
         )}
 
-        <Pressable style={styles.fab} onPress={openCreateSiteConfigModal}>
+        <Pressable style={[styles.fab, { backgroundColor: theme.primaryColor }]} onPress={openCreateSiteConfigModal}>
           <Feather name="plus" size={24} color="#FFF" />
         </Pressable>
 
@@ -1091,7 +1109,7 @@ export default function AdminScreen() {
                   onPress={handlePickLogo}
                   disabled={isUploadingLogo}
                 >
-                  {isUploadingLogo ? <ActivityIndicator size="small" color="#3182CE" /> : <Feather name="upload" size={20} color="#4A5568" />}
+                  {isUploadingLogo ? <ActivityIndicator size="small" color={theme.primaryColor} /> : <Feather name="upload" size={20} color="#4A5568" />}
                 </Pressable>
               </View>
               {siteConfigFormData.logoUri ? (
@@ -1105,7 +1123,7 @@ export default function AdminScreen() {
 
               <Text style={styles.label}>Color Primario</Text>
               <View style={styles.colorPickerRow}>
-                {['#D4AF37', '#3182CE', '#E53E3E', '#38A169', '#2D3748', '#805AD5', '#DD6B20', '#000000'].map(color => (
+                {['#3182CE', '#D4AF37', '#E53E3E', '#38A169', '#2D3748', '#805AD5', '#DD6B20', '#000000'].map(color => (
                   <Pressable
                     key={color}
                     style={[styles.colorOption, { backgroundColor: color }, siteConfigFormData.primaryColor === color && styles.colorOptionSelected]}
@@ -1114,7 +1132,29 @@ export default function AdminScreen() {
                 ))}
               </View>
 
-              <Pressable style={styles.saveButton} onPress={handleSaveSiteConfig}><Text style={styles.saveButtonText}>{i18n.t('common.save')}</Text></Pressable>
+              <Text style={styles.label}>Color Menú</Text>
+              <View style={styles.colorPickerRow}>
+                {['#FFFFFF', '#1A202C', '#2D3748', '#4A5568', '#F7FAFC', '#EDF2F7'].map(color => (
+                  <Pressable
+                    key={color}
+                    style={[styles.colorOption, { backgroundColor: color }, siteConfigFormData.menuColor === color && styles.colorOptionSelected]}
+                    onPress={() => setSiteConfigFormData({...siteConfigFormData, menuColor: color})}
+                  />
+                ))}
+              </View>
+
+              <Text style={styles.label}>Color Fondo</Text>
+              <View style={styles.colorPickerRow}>
+                {['#F7FAFC', '#EDF2F7', '#E2E8F0', '#FFFFFF', '#1A202C'].map(color => (
+                  <Pressable
+                    key={color}
+                    style={[styles.colorOption, { backgroundColor: color }, siteConfigFormData.backgroundColor === color && styles.colorOptionSelected]}
+                    onPress={() => setSiteConfigFormData({...siteConfigFormData, backgroundColor: color})}
+                  />
+                ))}
+              </View>
+
+              <Pressable style={[styles.saveButton, { backgroundColor: theme.primaryColor }]} onPress={handleSaveSiteConfig}><Text style={styles.saveButtonText}>{i18n.t('common.save')}</Text></Pressable>
             </View>
           </View>
         </Modal>
@@ -1274,6 +1314,27 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, fontWeight: '600', fontFamily: 'Inter-SemiBold', color: '#4A5568', marginBottom: 8 },
   input: { backgroundColor: '#F7FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 16, color: '#2D3748', fontFamily: 'Inter-Regular' },
   modalButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F7FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginBottom: 16,
+    height: 50,
+  },
+  passwordInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#2D3748',
+    fontFamily: 'Inter-Regular',
+    height: '100%',
+  },
+  eyeIcon: {
+    padding: 4,
+  },
   modalButton: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 8 },
   errorText: { color: '#E53E3E', fontSize: 12, marginBottom: 12, fontFamily: 'Inter-Regular' },
   cancelButton: { backgroundColor: '#EDF2F7' },
@@ -1284,7 +1345,7 @@ const styles = StyleSheet.create({
   roleOptionTextSelected: { color: '#3182CE' },
   roleDescription: { fontSize: 11, color: '#A0AEC0', marginTop: 2, fontFamily: 'Inter-Regular' },
   roleDescriptionSelected: { color: '#63B3ED' },
-  saveButton: { backgroundColor: '#3182CE', paddingVertical: 14, borderRadius: 8, alignItems: 'center' },
+  saveButton: { paddingVertical: 14, borderRadius: 8, alignItems: 'center' },
   disabledButton: { backgroundColor: '#CBD5E0' },
   saveButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold', fontFamily: 'Inter-Bold' },
 
@@ -1296,7 +1357,6 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#3182CE',
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 6,

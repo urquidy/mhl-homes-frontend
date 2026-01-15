@@ -4,10 +4,13 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Image, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import i18n from '../../constants/i18n';
+import { Fonts } from '../../constants/theme';
 import { useProjects } from '../../contexts/ProjectsContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import api from '../../services/api';
 import MapView from './MapComponent';
 
@@ -127,6 +130,11 @@ const createProject = async (projectData: any, imageFile: { uri: string, name: s
 export default function NewProjectModal({ onClose }: NewProjectModalProps) {
   const router = useRouter();
   const { refreshProjects } = useProjects();
+  const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const [contentWidth, setContentWidth] = useState(0);
 
   const [name, setName] = useState('');
   const [client, setClient] = useState('');
@@ -155,6 +163,38 @@ export default function NewProjectModal({ onClose }: NewProjectModalProps) {
   // Estados para el selector de fecha
   const [isDatePickerVisible, setIsDatePickerVisible] = useState(false);
   const [activeDateInput, setActiveDateInput] = useState<'start' | 'end'>('start');
+
+  // --- Estado para el Wizard (Pasos) ---
+  const [currentStep, setCurrentStep] = useState(0);
+  const totalSteps = 4;
+
+  // Validación en tiempo real del paso actual
+  const isStepValid = useMemo(() => {
+    if (currentStep === 0) {
+      return name.trim().length > 0 && client.trim().length > 0;
+    }
+    return true;
+  }, [currentStep, name, client]);
+
+  // Scroll al inicio al cambiar de paso
+  useEffect(() => {
+    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+  }, [currentStep]);
+
+  // Animación de deslizamiento al cambiar de paso
+  useEffect(() => {
+    Animated.timing(slideAnim, {
+      toValue: -currentStep * contentWidth,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [currentStep, contentWidth]);
+
+  const handleNext = () => {
+    if (isStepValid) setCurrentStep(prev => Math.min(prev + 1, totalSteps - 1));
+  };
+
+  const handleBack = () => setCurrentStep(prev => Math.max(prev - 1, 0));
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -312,12 +352,12 @@ export default function NewProjectModal({ onClose }: NewProjectModalProps) {
     setEndDate('');
     setStatus('Not Started');
     setParticipants([]);
+    setCurrentStep(0);
     if (onClose) onClose();
     else router.back();
   };
 
   const handleCreateProject = async () => {
-    if (name && client) {
       setIsLoading(true);
       try {
         // Convertimos los IDs seleccionados a Usernames para enviar a la API
@@ -373,161 +413,240 @@ export default function NewProjectModal({ onClose }: NewProjectModalProps) {
         await refreshProjects();
 
         handleClose();
-      } catch (error) {
+      } catch (error: any) {
         console.error(error);
-        setErrorMessage(error instanceof Error ? error.message : 'No se pudo guardar el proyecto.');
+        if (error.response && error.response.data && error.response.data.message) {
+          if (error.response.data.message.includes('límite de proyectos')) {
+            setErrorMessage(i18n.t('projects.limitReached')); // Corrected key to plural 'projects'
+          } else {
+            setErrorMessage(error.response.data.message);
+          }
+        } else {
+          setErrorMessage(error.message || i18n.t('projects.createError'));
+        }
         setErrorModalVisible(true);
       } finally {
         setIsLoading(false);
       }
-    } else {
-      // Opcional: Mostrar una alerta si los campos están vacíos
-      Alert.alert('Campos incompletos', i18n.t('newProject.validationError'));
-    }
   };
+
+  // Títulos de los pasos
+  const stepTitles = [
+    i18n.t('newProject.headerTitle'), // Información General
+    'Cronograma y Estado',
+    'Equipo de Trabajo',
+    'Documentación'
+  ];
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: Platform.OS !== 'web' ? insets.top : 0 }]}>
       
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        ref={scrollViewRef}
+        style={styles.scrollView} 
+        contentContainerStyle={styles.scrollContent} 
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.headerRow}>
-          <Text style={styles.title}>{i18n.t('newProject.headerTitle')}</Text>
+          <Text style={styles.title}>{stepTitles[currentStep]}</Text>
           <Pressable onPress={handleClose} hitSlop={8}>
             <Feather name="x" size={24} color="#4A5568" />
           </Pressable>
         </View>
         
-        <Text style={styles.label}>{i18n.t('newProject.nameLabel')}</Text>
-        <TextInput 
-          style={styles.input} 
-          placeholder={i18n.t('newProject.namePlaceholder')}
-          value={name}
-          onChangeText={setName}
-        />
-        
-        <Text style={styles.label}>{i18n.t('newProject.clientLabel')}</Text>
-        <TextInput 
-          style={styles.input} 
-          placeholder={i18n.t('newProject.clientPlaceholder')}
-          value={client}
-          onChangeText={setClient}
-        />
-
-        <Text style={styles.label}>{i18n.t('newProject.addressLabel')}</Text>
-        <View style={styles.addressRow}>
-          <TextInput 
-            style={[styles.input, styles.addressInput]} 
-            placeholder={i18n.t('newProject.addressPlaceholder')}
-            value={address}
-            onChangeText={setAddress}
-          />
-          <Pressable style={styles.mapButton} onPress={handleOpenMapPicker}>
-            <Feather name="map-pin" size={22} color="#4A5568" />
-          </Pressable>
-        </View>
-
-        <View style={styles.row}>
-          <View style={styles.halfColumn}>
-            <Text style={styles.label}>{i18n.t('newProject.startDate')}</Text>
-            <Pressable onPress={() => openDatePicker('start')}>
-              <View pointerEvents="none">
-                <TextInput 
-                  style={styles.input} 
-                  placeholder="YYYY-MM-DD" 
-                  value={startDate}
-                  editable={false}
-                />
-              </View>
-              <Feather name="calendar" size={20} color="#718096" style={styles.inputIcon} />
-            </Pressable>
-          </View>
-          <View style={styles.halfColumn}>
-            <Text style={styles.label}>{i18n.t('newProject.endDate')}</Text>
-            <Pressable onPress={() => openDatePicker('end')}>
-              <View pointerEvents="none">
-                <TextInput 
-                  style={styles.input} 
-                  placeholder="YYYY-MM-DD" 
-                  value={endDate}
-                  editable={false}
-                />
-              </View>
-              <Feather name="calendar" size={20} color="#718096" style={styles.inputIcon} />
-            </Pressable>
-          </View>
-        </View>
-
-        <Text style={styles.label}>{i18n.t('newProject.status')}</Text>
-        <View style={styles.statusContainer}>
-          {(['Not Started', 'In Progress', 'Delayed', 'On Time'] as const).map((s) => (
-            <Pressable key={s} style={[styles.statusButton, status === s && styles.statusButtonActive]} onPress={() => setStatus(s)}>
-              <Text style={[styles.statusButtonText, status === s && styles.statusButtonTextActive]}>
-                {s === 'Not Started' ? (i18n.t('dashboard.status.notStarted') || 'Not Started') :
-                 s === 'In Progress' ? i18n.t('dashboard.status.inProgress') : 
-                 s === 'Delayed' ? i18n.t('dashboard.status.delayed') : 
-                 i18n.t('dashboard.status.onTime')}
-              </Text>
-            </Pressable>
+        {/* Indicador de Pasos */}
+        <View style={styles.stepIndicator}>
+          {[0, 1, 2, 3].map((step) => (
+            <View 
+              key={step} 
+              style={[
+                styles.stepDot, 
+                step <= currentStep && { backgroundColor: theme.primaryColor, width: 24 } // El paso actual/completado es más largo o coloreado
+              ]} 
+            />
           ))}
         </View>
 
-        <Text style={styles.label}>Participantes</Text>
-        <View style={styles.participantsContainer}>
-          {participants.map((pId, index) => {
-            const user = availableUsers.find(u => u.id === pId);
-            return (
-              <View key={index} style={styles.participantChip}>
-                <Text style={styles.participantChipText}>{user?.username || pId}</Text>
-                <Pressable onPress={() => toggleParticipant(pId)}>
-                  <Feather name="x" size={14} color="#FFF" style={{ marginLeft: 4 }} />
+        {/* Contenedor Deslizable de Pasos */}
+        <View 
+          style={{ overflow: 'hidden' }} 
+          onLayout={(e) => setContentWidth(e.nativeEvent.layout.width)}
+        >
+          <Animated.View style={{ 
+            flexDirection: 'row', 
+            width: contentWidth * totalSteps, 
+            transform: [{ translateX: slideAnim }],
+            opacity: contentWidth === 0 ? 0 : 1 // Evitar parpadeo inicial
+          }}>
+            {/* --- PASO 1: Información General --- */}
+            <View style={{ width: contentWidth }}>
+            <Text style={styles.label}>{i18n.t('newProject.nameLabel')} *</Text>
+            <TextInput 
+              style={styles.input} 
+              placeholder={i18n.t('newProject.namePlaceholder')}
+              value={name}
+              onChangeText={setName}
+            />
+            
+            <Text style={styles.label}>{i18n.t('newProject.clientLabel')} *</Text>
+            <TextInput 
+              style={styles.input} 
+              placeholder={i18n.t('newProject.clientPlaceholder')}
+              value={client}
+              onChangeText={setClient}
+            />
+
+            <Text style={styles.label}>{i18n.t('newProject.addressLabel')}</Text>
+            <View style={styles.addressRow}>
+              <TextInput 
+                style={[styles.input, styles.addressInput]} 
+                placeholder={i18n.t('newProject.addressPlaceholder')}
+                value={address}
+                onChangeText={setAddress}
+              />
+              <Pressable style={styles.mapButton} onPress={handleOpenMapPicker}>
+                <Feather name="map-pin" size={22} color="#4A5568" />
+              </Pressable>
+            </View>
+            </View>
+
+            {/* --- PASO 2: Fechas y Estado --- */}
+            <View style={{ width: contentWidth }}>
+            <View style={styles.row}>
+              <View style={styles.halfColumn}>
+                <Text style={styles.label}>{i18n.t('newProject.startDate')}</Text>
+                <Pressable onPress={() => openDatePicker('start')}>
+                  <View pointerEvents="none">
+                    <TextInput 
+                      style={styles.input} 
+                      placeholder="YYYY-MM-DD" 
+                      value={startDate}
+                      editable={false}
+                    />
+                  </View>
+                  <Feather name="calendar" size={20} color="#718096" style={styles.inputIcon} />
                 </Pressable>
               </View>
-            );
-          })}
-          <Pressable style={styles.addParticipantButton} onPress={() => setIsParticipantModalVisible(true)}>
-            <Feather name="plus" size={20} color="#4A5568" />
-            <Text style={styles.addParticipantText}>Agregar</Text>
-          </Pressable>
-        </View>
-
-        <Text style={styles.label}>{i18n.t('newProject.planLabel')}</Text>
-        <View style={styles.uploadButtonsRow}>
-          <Pressable style={[styles.uploadButton, { flex: 1, marginRight: 8 }]} onPress={pickImage}>
-            <Feather name="image" size={20} color="#4A5568" />
-            <Text style={styles.uploadButtonText}>Imagen</Text>
-          </Pressable>
-          <Pressable style={[styles.uploadButton, { flex: 1, marginLeft: 8 }]} onPress={pickDocument}>
-            <Feather name="file-text" size={20} color="#4A5568" />
-            <Text style={styles.uploadButtonText}>PDF</Text>
-          </Pressable>
-        </View>
-
-        {planUri && (
-          <View style={styles.imagePreviewContainer}>
-            {selectedFile?.type === 'application/pdf' ? (
-              <View style={styles.pdfPreview}>
-                <Feather name="file-text" size={48} color="#E53E3E" />
-                <Text style={styles.pdfName}>{selectedFile.name}</Text>
+              <View style={styles.halfColumn}>
+                <Text style={styles.label}>{i18n.t('newProject.endDate')}</Text>
+                <Pressable onPress={() => openDatePicker('end')}>
+                  <View pointerEvents="none">
+                    <TextInput 
+                      style={styles.input} 
+                      placeholder="YYYY-MM-DD" 
+                      value={endDate}
+                      editable={false}
+                    />
+                  </View>
+                  <Feather name="calendar" size={20} color="#718096" style={styles.inputIcon} />
+                </Pressable>
               </View>
-            ) : (
-              <Image source={{ uri: planUri }} style={styles.imagePreview} resizeMode="cover" />
+            </View>
+
+            <Text style={styles.label}>{i18n.t('newProject.status')}</Text>
+            <View style={styles.statusContainer}>
+              {(['Not Started', 'In Progress', 'Delayed', 'On Time'] as const).map((s) => (
+                <Pressable key={s} style={[styles.statusButton, status === s && styles.statusButtonActive]} onPress={() => setStatus(s)}>
+                  <Text style={[styles.statusButtonText, status === s && styles.statusButtonTextActive]}>
+                    {s === 'Not Started' ? (i18n.t('dashboard.status.notStarted') || 'Not Started') :
+                    s === 'In Progress' ? i18n.t('dashboard.status.inProgress') : 
+                    s === 'Delayed' ? i18n.t('dashboard.status.delayed') : 
+                    i18n.t('dashboard.status.onTime')}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            </View>
+
+            {/* --- PASO 3: Participantes --- */}
+            <View style={{ width: contentWidth }}>
+            <Text style={styles.label}>Participantes</Text>
+            <View style={styles.participantsContainer}>
+              {participants.map((pId, index) => {
+                const user = availableUsers.find(u => u.id === pId);
+                return (
+                  <View key={index} style={styles.participantChip}>
+                    <Text style={styles.participantChipText}>{user?.username || pId}</Text>
+                    <Pressable onPress={() => toggleParticipant(pId)}>
+                      <Feather name="x" size={14} color="#FFF" style={{ marginLeft: 4 }} />
+                    </Pressable>
+                  </View>
+                );
+              })}
+              <Pressable style={styles.addParticipantButton} onPress={() => setIsParticipantModalVisible(true)}>
+                <Feather name="plus" size={20} color="#4A5568" />
+                <Text style={styles.addParticipantText}>Agregar</Text>
+              </Pressable>
+            </View>
+            </View>
+
+            {/* --- PASO 4: Documentación --- */}
+            <View style={{ width: contentWidth }}>
+            <Text style={styles.label}>{i18n.t('newProject.planLabel')}</Text>
+            <View style={styles.uploadButtonsRow}>
+              <Pressable style={[styles.uploadButton, { flex: 1, marginRight: 8 }]} onPress={pickImage}>
+                <Feather name="image" size={20} color="#4A5568" />
+                <Text style={styles.uploadButtonText}>Imagen</Text>
+              </Pressable>
+              <Pressable style={[styles.uploadButton, { flex: 1, marginLeft: 8 }]} onPress={pickDocument}>
+                <Feather name="file-text" size={20} color="#4A5568" />
+                <Text style={styles.uploadButtonText}>PDF</Text>
+              </Pressable>
+            </View>
+
+            {planUri && (
+              <View style={styles.imagePreviewContainer}>
+                {selectedFile?.type === 'application/pdf' ? (
+                  <View style={styles.pdfPreview}>
+                    <Feather name="file-text" size={48} color="#E53E3E" />
+                    <Text style={styles.pdfName}>{selectedFile.name}</Text>
+                  </View>
+                ) : (
+                  <Image source={{ uri: planUri }} style={styles.imagePreview} resizeMode="cover" />
+                )}
+                <Pressable style={styles.removeImageButton} onPress={() => { setPlanUri(null); setSelectedFile(null); }}>
+                  <Feather name="x" size={16} color="#FFFFFF" />
+                </Pressable>
+              </View>
             )}
-            <Pressable style={styles.removeImageButton} onPress={() => { setPlanUri(null); setSelectedFile(null); }}>
-              <Feather name="x" size={16} color="#FFFFFF" />
+            </View>
+          </Animated.View>
+        </View>
+
+        {/* --- Botones de Navegación --- */}
+        <View style={styles.navigationButtons}>
+          {currentStep > 0 ? (
+            <Pressable style={[styles.button, styles.navButton, styles.cancelButton]} onPress={handleBack}>
+              <Text style={[styles.buttonText, styles.cancelButtonText]}>Atrás</Text>
             </Pressable>
-          </View>
-        )}
-
-        <Pressable style={[styles.button, isLoading && { opacity: 0.7 }]} onPress={handleCreateProject} disabled={isLoading}>
-          {isLoading ? (
-            <ActivityIndicator color="#FFF" />
           ) : (
-            <Text style={styles.buttonText}>{i18n.t('newProject.createButton')}</Text>
+            <Pressable style={[styles.button, styles.navButton, styles.cancelButton]} onPress={handleClose}>
+              <Text style={[styles.buttonText, styles.cancelButtonText]}>{i18n.t('common.cancel')}</Text>
+            </Pressable>
           )}
-        </Pressable>
 
-        <Pressable style={[styles.button, styles.cancelButton]} onPress={handleClose}>
-          <Text style={[styles.buttonText, styles.cancelButtonText]}>{i18n.t('common.cancel')}</Text>
-        </Pressable>
+          {currentStep < totalSteps - 1 ? (
+            <Pressable 
+              style={[
+                styles.button, 
+                styles.navButton, 
+                { backgroundColor: isStepValid ? theme.primaryColor : '#CBD5E0' }
+              ]} 
+              onPress={handleNext}
+              disabled={!isStepValid}
+            >
+              <Text style={styles.buttonText}>Siguiente</Text>
+            </Pressable>
+          ) : (
+            <Pressable 
+              style={[styles.button, styles.navButton, { backgroundColor: theme.primaryColor }, (isLoading || !isStepValid) && { opacity: 0.7, backgroundColor: '#CBD5E0' }]} 
+              onPress={handleCreateProject} 
+              disabled={isLoading || !isStepValid}
+            >
+              {isLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>{planUri ? i18n.t('newProject.createButton') : i18n.t('common.skip')}</Text>}
+            </Pressable>
+          )}
+        </View>
       </ScrollView>
 
       {/* Modal del Mapa (Solo visible en móviles si se activa) */}
@@ -543,7 +662,7 @@ export default function NewProjectModal({ onClose }: NewProjectModalProps) {
           
           {/* Marcador central fijo (UI Overlay) */}
           <View style={styles.centerMarkerContainer} pointerEvents="none">
-            <Feather name="map-pin" size={40} color="#D4AF37" />
+            <Feather name="map-pin" size={40} color={theme.primaryColor} />
           </View>
 
           <View style={styles.mapFooter}>
@@ -552,7 +671,7 @@ export default function NewProjectModal({ onClose }: NewProjectModalProps) {
               <Pressable style={[styles.button, styles.cancelButton, { flex: 1, marginRight: 8, marginTop: 0 }]} onPress={() => setIsMapVisible(false)}>
                 <Text style={[styles.buttonText, styles.cancelButtonText]}>{i18n.t('common.cancel')}</Text>
               </Pressable>
-              <Pressable style={[styles.button, { flex: 1, marginLeft: 8, marginTop: 0 }]} onPress={confirmLocation}>
+              <Pressable style={[styles.button, { backgroundColor: theme.primaryColor, flex: 1, marginLeft: 8, marginTop: 0 }]} onPress={confirmLocation}>
                 <Text style={styles.buttonText}>{i18n.t('common.confirm')}</Text>
               </Pressable>
             </View>
@@ -592,7 +711,7 @@ export default function NewProjectModal({ onClose }: NewProjectModalProps) {
                 );
               })}
             </ScrollView>
-            <Pressable style={styles.button} onPress={() => setIsParticipantModalVisible(false)}>
+            <Pressable style={[styles.button, { backgroundColor: theme.primaryColor }]} onPress={() => setIsParticipantModalVisible(false)}>
               <Text style={styles.buttonText}>Listo</Text>
             </Pressable>
           </View>
@@ -638,7 +757,7 @@ const styles = StyleSheet.create({
     maxHeight: Platform.OS === 'web' ? '90%' : undefined,
     backgroundColor: '#FFFFFF',
     borderRadius: Platform.OS === 'web' ? 16 : 0,
-    // Sombra para dar efecto de elevación en el modal web
+    // Sombra para dar efecto de elevación en el modal web (si se usa standalone)
     ...Platform.select({
       web: {
         shadowColor: '#000',
@@ -649,7 +768,7 @@ const styles = StyleSheet.create({
     })
   },
   scrollContent: {
-    padding: 24,
+    padding: 20,
   },
   headerRow: {
     flexDirection: 'row',
@@ -657,17 +776,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
   },
+  stepIndicator: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 24,
+    gap: 8,
+  },
+  stepDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#E2E8F0',
+  },
+  navigationButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   title: {
-    fontSize: 28,
-    fontFamily: 'DMSans-Bold',
+    fontSize: 24,
+    fontFamily: Fonts.title,
     color: '#1A202C',
     flex: 1,
   },
   label: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#4A5568',
     marginBottom: 8,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: Fonts.bold,
   },
   input: {
     backgroundColor: '#F7FAFC',
@@ -676,21 +812,23 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    marginBottom: 16,
-    fontFamily: 'DMSans-Regular',
+    marginBottom: 20,
+    fontFamily: Fonts.regular,
     color: '#2D3748',
   },
   button: {
-    backgroundColor: '#D4AF37',
     padding: 16,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
     marginTop: 16,
+  },
+  navButton: {
+    flex: 1,
   },
   buttonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: Fonts.bold,
   },
   cancelButton: {
     backgroundColor: '#EDF2F7',
@@ -708,13 +846,13 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderRadius: 8,
     padding: 20,
-    // marginBottom: 16, // Moved to row container
+    minWidth: 100,
   },
   uploadButtonText: {
     marginLeft: 8,
     color: '#4A5568',
     fontSize: 16,
-    fontFamily: 'DMSans-Regular',
+    fontFamily: Fonts.regular,
   },
   uploadButtonsRow: {
     flexDirection: 'row',
@@ -803,11 +941,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  row: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
-  halfColumn: { flex: 1 },
-  statusContainer: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  row: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 },
+  halfColumn: { flex: 1, minWidth: '45%' },
+  statusContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
   statusButton: {
     flex: 1,
+    minWidth: '45%',
     paddingVertical: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
@@ -816,12 +955,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#F7FAFC',
   },
   statusButtonActive: {
-    backgroundColor: '#D4AF37',
-    borderColor: '#D4AF37',
+    backgroundColor: '#2D3748', // Color oscuro para estado activo por defecto, o usar theme.primaryColor si se prefiere
+    borderColor: '#2D3748',
   },
   statusButtonText: { 
     color: '#4A5568', 
-    fontFamily: 'DMSans-Bold',
+    fontFamily: Fonts.bold,
   },
   statusButtonTextActive: { color: '#FFFFFF' },
   
@@ -850,7 +989,7 @@ const styles = StyleSheet.create({
   participantChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#3182CE',
+    backgroundColor: '#2D3748',
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 20,
@@ -858,7 +997,7 @@ const styles = StyleSheet.create({
   participantChipText: {
     color: '#FFF',
     fontSize: 14,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: Fonts.bold,
   },
   addParticipantButton: {
     flexDirection: 'row',
@@ -874,20 +1013,20 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     color: '#4A5568',
     fontSize: 14,
-    fontFamily: 'DMSans-Bold',
+    fontFamily: Fonts.bold,
   },
   // Estilos Modal Genérico
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { width: '90%', maxWidth: 400, backgroundColor: '#FFF', borderRadius: 12, padding: 24, maxHeight: '80%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  modalTitle: { fontSize: 20, fontFamily: 'DMSans-Bold', color: '#1A202C' },
+  modalTitle: { fontSize: 20, fontFamily: Fonts.title, color: '#1A202C' },
   userItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#EDF2F7' },
-  userName: { fontSize: 16, fontFamily: 'DMSans-Bold', color: '#2D3748' },
-  userRole: { fontSize: 14, fontFamily: 'DMSans-Regular', color: '#718096' },
+  userName: { fontSize: 16, fontFamily: Fonts.bold, color: '#2D3748' },
+  userRole: { fontSize: 14, fontFamily: Fonts.regular, color: '#718096' },
   modalMessage: {
     fontSize: 16,
     color: '#4A5568',
     marginBottom: 24,
-    fontFamily: 'DMSans-Regular',
+    fontFamily: Fonts.regular,
   },
 });

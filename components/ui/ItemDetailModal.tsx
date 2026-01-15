@@ -1,6 +1,7 @@
-import React from 'react';
-import { View, Text, Modal, Pressable, ScrollView, Image, TextInput, StyleSheet } from 'react-native';
+import { Fonts } from '@/constants/theme';
 import { Feather } from '@expo/vector-icons';
+import React from 'react';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import i18n from '../../constants/i18n';
 
 interface ItemDetailModalProps {
@@ -115,30 +116,30 @@ export default function ItemDetailModal({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end', alignItems: 'center' },
-  content: { width: '100%', maxWidth: 600, backgroundColor: '#FFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },
+  content: { width: '100%', maxWidth: 600, backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 32, paddingBottom: 40 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  title: { fontSize: 20, fontWeight: 'bold', color: '#1A202C' },
-  text: { fontSize: 18, marginBottom: 16, color: '#2D3748' },
+  title: { fontSize: 22, fontFamily: Fonts.title, color: '#1A202C' },
+  text: { fontSize: 18, marginBottom: 16, color: '#2D3748', fontFamily: Fonts.regular },
   statusRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
-  deadlineBadge: { flexDirection: 'row', alignItems: 'center', marginRight: 16, backgroundColor: '#FFF5F5', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
-  deadlineText: { fontSize: 12, color: '#E53E3E', fontWeight: '600' },
-  statusLabel: { fontSize: 16, color: '#718096', marginRight: 8 },
+  deadlineBadge: { flexDirection: 'row', alignItems: 'center', marginRight: 16, backgroundColor: '#FFF5F5', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  deadlineText: { fontSize: 12, color: '#E53E3E', fontFamily: Fonts.bold },
+  statusLabel: { fontSize: 16, color: '#718096', marginRight: 8, fontFamily: Fonts.medium },
   statusButton: { padding: 4 },
-  statusButtonText: { fontSize: 16, fontWeight: 'bold' },
-  sectionHeader: { fontSize: 16, fontWeight: 'bold', color: '#4A5568', marginTop: 16, marginBottom: 8 },
+  statusButtonText: { fontSize: 16, fontFamily: Fonts.bold },
+  sectionHeader: { fontSize: 18, fontFamily: Fonts.title, color: '#2D3748', marginTop: 20, marginBottom: 12 },
   evidenceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  thumbnail: { width: 80, height: 80, borderRadius: 8, backgroundColor: '#EDF2F7' },
+  thumbnail: { width: 80, height: 80, borderRadius: 12, backgroundColor: '#EDF2F7' },
   videoOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 8 },
   removeButton: { position: 'absolute', top: -8, right: -8, backgroundColor: '#E53E3E', borderRadius: 12, width: 24, height: 24, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF', zIndex: 10, elevation: 2 },
-  addButton: { width: 80, height: 80, borderRadius: 8, borderWidth: 1, borderColor: '#CBD5E0', borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center' },
-  addText: { fontSize: 12, color: '#718096', marginTop: 4 },
-  commentItem: { backgroundColor: '#F7FAFC', padding: 12, borderRadius: 8, marginBottom: 8 },
-  commentAuthor: { fontSize: 12, fontWeight: 'bold', color: '#4A5568' },
-  commentDate: { fontSize: 10, color: '#A0AEC0', marginTop: 4, textAlign: 'right' },
-  commentText: { fontSize: 14, color: '#2D3748' },
-  deleteButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#E53E3E', padding: 12, borderRadius: 8, marginTop: 24 },
-  deleteText: { color: '#FFF', fontWeight: 'bold', marginLeft: 8 },
+  addButton: { width: 80, height: 80, borderRadius: 12, borderWidth: 1, borderColor: '#CBD5E0', borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center' },
+  addText: { fontSize: 12, color: '#718096', marginTop: 4, fontFamily: Fonts.medium },
+  commentItem: { backgroundColor: '#F7FAFC', padding: 16, borderRadius: 12, marginBottom: 12 },
+  commentAuthor: { fontSize: 14, fontFamily: Fonts.bold, color: '#2D3748' },
+  commentDate: { fontSize: 12, color: '#A0AEC0', marginTop: 2, textAlign: 'right', fontFamily: Fonts.regular },
+  commentText: { fontSize: 14, color: '#4A5568', fontFamily: Fonts.regular, marginTop: 4 },
+  deleteButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#E53E3E', padding: 16, borderRadius: 12, marginTop: 32 },
+  deleteText: { color: '#FFF', fontFamily: Fonts.bold, marginLeft: 8 },
   inputContainer: { flexDirection: 'row', marginTop: 16, alignItems: 'center' },
-  input: { flex: 1, backgroundColor: '#EDF2F7', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, marginRight: 8 },
-  sendButton: { backgroundColor: '#3182CE', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+  input: { flex: 1, backgroundColor: '#EDF2F7', borderRadius: 24, paddingHorizontal: 20, paddingVertical: 12, marginRight: 12, fontFamily: Fonts.regular, fontSize: 16 },
+  sendButton: { backgroundColor: '#3182CE', width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
 });

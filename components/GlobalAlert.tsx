@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useTheme } from '../contexts/ThemeContext';
 import { registerGlobalAlert } from '../services/api';
 
 export default function GlobalAlert() {
   const [visible, setVisible] = useState(false);
   const [alertData, setAlertData] = useState({ title: '', message: '' });
+  const { theme } = useTheme();
 
   useEffect(() => {
     // Nos suscribimos a las alertas globales de la API
@@ -28,7 +30,7 @@ export default function GlobalAlert() {
           <Text style={styles.title}>{alertData.title}</Text>
           <Text style={styles.message}>{alertData.message}</Text>
           <View style={styles.buttonContainer}>
-            <Pressable style={styles.button} onPress={() => setVisible(false)}>
+            <Pressable style={[styles.button, { backgroundColor: theme.primaryColor }]} onPress={() => setVisible(false)}>
               <Text style={styles.buttonText}>Entendido</Text>
             </Pressable>
           </View>
@@ -74,7 +76,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   button: {
-    backgroundColor: '#3182CE',
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 8,

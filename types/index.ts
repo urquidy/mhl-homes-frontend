@@ -2,13 +2,23 @@
 export type UserRole = 'Admin' | 'Project Manager' | 'Viewer' | string | null;
 
 export interface User {
+
   id: string;
+
   username: string;
+
   email: string;
+
   role: UserRole;
+
   permissions?: string[];
+
   companyName: string;
+
+  tenantId?: string;
+
   imageUri?: string;
+
 }
 
 export type ProjectStatus = 'Not Started' | 'In Progress' | 'Delayed' | 'Completed' | 'On Time';

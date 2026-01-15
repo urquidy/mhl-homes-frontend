@@ -22,6 +22,8 @@ import ItemDetailModal from '../../components/ui/ItemDetailModal';
 import i18n from '../../constants/i18n';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProjects } from '../../contexts/ProjectsContext';
+import { useTheme } from '../../contexts/ThemeContext';
+
 import { usePermission } from '../../hooks/usePermission';
 import api from '../../services/api';
 
@@ -77,7 +79,9 @@ const updateProjectWithFile = async (id: string, projectData: any, imageFile: { 
   }
 
   return await api.put(`/api/projects/${id}`, formData, {
-    headers: { 'Content-Type': Platform.OS === 'web' ? undefined : 'multipart/form-data' },
+    headers: { 
+      'Content-Type': Platform.OS === 'web' ? undefined : 'multipart/form-data',
+    },
     onUploadProgress: (progressEvent) => {
       if (onProgress && progressEvent.total) {
         const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -172,6 +176,7 @@ export default function ProjectDetailScreen() {
   const { getProjectById, getChecklistByProjectId, toggleChecklistItem, updateChecklistEvidence, addChecklistItem, updateProjectPlan, addChecklistEvidence, deleteChecklistEvidence, addChecklistComment, deleteChecklistItem, startProject, isLoading, fetchProjectChecklist, clearProjectChecklist, refreshProjects, addProjectBlueprint } = useProjects();
   const { user, token } = useAuth();
   const { hasPermission } = usePermission();
+  const { theme } = useTheme();
 
   const projectId = Array.isArray(id) ? id[0] : (id ?? '');
   const project = projectId ? getProjectById(projectId) : undefined;
@@ -285,7 +290,9 @@ export default function ProjectDetailScreen() {
     formData.append('category', categoryName);
 
     await api.post(`/api/projects/${projectId}/attachment`, formData, {
-        headers: { 'Content-Type': Platform.OS === 'web' ? undefined : 'multipart/form-data' }
+        headers: { 
+          'Content-Type': Platform.OS === 'web' ? undefined : 'multipart/form-data',
+        }
     });
     
     setDocsLastUpdate(Date.now());
@@ -464,9 +471,12 @@ export default function ProjectDetailScreen() {
 
       if (Platform.OS === 'web') {
         try {
-          const response = await fetch(finalUri, { headers: { Authorization: `Bearer ${token}` } });
-          if (response.ok) {
-            const blob = await response.blob();
+          const response = await api.get(finalUri, { 
+            headers: { Authorization: `Bearer ${token}`},
+            responseType: 'blob'
+          });
+          if (response.status === 200) {
+            const blob = response.data;
             const blobUrl = URL.createObjectURL(blob);
             const source = { uri: blobUrl };
             
@@ -643,7 +653,7 @@ export default function ProjectDetailScreen() {
 
     return {
       uri: finalUri,
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined
+      headers: token ? { Authorization: `Bearer ${token}` } : { }
     };
   };
   
@@ -657,7 +667,7 @@ export default function ProjectDetailScreen() {
   const [zoomScale, setZoomScale] = useState(1);
   const [currentPencilPath, setCurrentPencilPath] = useState<string>('');
   const [currentPencilPathDisplay, setCurrentPencilPathDisplay] = useState<string>(''); // Nueva variable para dibujar en píxeles (sin desfase)
-  const [pencilColor, setPencilColor] = useState('#3182CE'); // Color por defecto (Azul)
+  const [pencilColor, setPencilColor] = useState(theme.primaryColor); // Color por defecto (Tema)
   
   // Estados para el Modal de Detalle de Item
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -1453,7 +1463,7 @@ export default function ProjectDetailScreen() {
       };
       
       // Enviamos null como archivo para solo actualizar datos
-      await updateProjectWithFile(projectId, projectPayload, null);
+      await updateProjectWithFile(projectId, projectPayload, null, undefined, undefined);
       
       // Refrescamos la lista global de proyectos para que se refleje el cambio
       if (refreshProjects) await refreshProjects();
@@ -1515,8 +1525,8 @@ export default function ProjectDetailScreen() {
     
     try {
       if (Platform.OS === 'web') { // Web
-        const response = await fetch(viewingImageSource.uri, { headers: viewingImageSource.headers });
-        const blob = await response.blob();
+        const response = await api.get(viewingImageSource.uri, { headers: viewingImageSource.headers, responseType: 'blob' });
+        const blob = response.data;
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -1575,9 +1585,9 @@ export default function ProjectDetailScreen() {
     if (Platform.OS === 'web' && isPdf) {
       setIsImageLoading(true);
       try {
-        const response = await fetch(source.uri, { headers: source.headers });
-        if (!response.ok) throw new Error('No se pudo cargar el documento');
-        const blob = await response.blob();
+        const response = await api.get(source.uri, { headers: source.headers, responseType: 'blob' });
+        if (response.status !== 200) throw new Error('No se pudo cargar el documento');
+        const blob = response.data;
         const blobUrl = URL.createObjectURL(blob);
         setViewingImageSource({ uri: blobUrl }); // Guardamos la URL local del blob
         setViewingMediaType('pdf');
@@ -1602,7 +1612,7 @@ export default function ProjectDetailScreen() {
         }} 
         scrollEnabled={!isInteracting}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#3182CE']} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primaryColor]} />
         }
       >
       {/* Usamos Stack.Screen para configurar el título de la cabecera dinámicamente */}
@@ -1637,7 +1647,7 @@ export default function ProjectDetailScreen() {
             }} 
             style={{ padding: 8, marginBottom: 8 }}
           >
-            <Feather name="edit-2" size={20} color={(project.status === 'Completed' || (project?.status as string) === 'COMPLETED') ? "#A0AEC0" : "#3182CE"} />
+            <Feather name="edit-2" size={20} color={(project.status === 'Completed' || (project?.status as string) === 'COMPLETED') ? "#A0AEC0" : theme.primaryColor} />
           </Pressable>
         )}
       </View>
@@ -1675,9 +1685,9 @@ export default function ProjectDetailScreen() {
           </Pressable>
         )}
         {project.status !== 'Completed' && isAllTasksCompleted && (
-          <Pressable onPress={handleCompleteProject} style={[styles.inlineStartButton, { backgroundColor: '#EBF8FF', borderColor: '#3182CE' }]}>
-            <Feather name="check-circle" size={16} color="#3182CE" />
-            <Text style={[styles.inlineStartButtonText, { color: '#3182CE' }]}>{i18n.t('common.finish')}</Text>
+          <Pressable onPress={handleCompleteProject} style={[styles.inlineStartButton, { backgroundColor: '#EBF8FF', borderColor: theme.primaryColor }]}>
+            <Feather name="check-circle" size={16} color={theme.primaryColor} />
+            <Text style={[styles.inlineStartButtonText, { color: theme.primaryColor }]}>{i18n.t('common.finish')}</Text>
           </Pressable>
         )}
       </View>
@@ -1685,7 +1695,7 @@ export default function ProjectDetailScreen() {
       {/* Barra de Progreso */}
       <View style={styles.progressContainer}>
         <View style={styles.progressBarBackground}>
-          <View style={[styles.progressBarFill, { width: `${project.progress}%` }]} />
+          <View style={[styles.progressBarFill, { width: `${project.progress}%`, backgroundColor: theme.primaryColor }]} />
         </View>
         <Text style={styles.progressText}>{project.progress}% {i18n.t('common.completed')}</Text>
       </View>
@@ -1714,10 +1724,10 @@ export default function ProjectDetailScreen() {
             {groupNames.map(name => (
               <Pressable 
                 key={name} 
-                style={[styles.groupTab, selectedGroup === name && styles.groupTabActive]}
+                style={[styles.groupTab, selectedGroup === name && { backgroundColor: theme.primaryColor, borderColor: theme.primaryColor }]}
                 onPress={() => setSelectedGroup(name)}
               >
-                <Text style={[styles.groupTabText, selectedGroup === name && styles.groupTabTextActive]}>{name}</Text>
+                <Text style={[styles.groupTabText, selectedGroup === name && { color: '#FFF' }]}>{name}</Text>
               </Pressable>
             ))}
             {hasPermission('PROJECT_UPDATE') && (
@@ -1725,7 +1735,7 @@ export default function ProjectDetailScreen() {
                 style={[styles.groupTab, { backgroundColor: '#EBF8FF', borderColor: '#BEE3F8' }]}
                 onPress={() => setIsAddGroupModalVisible(true)}
               >
-                <Feather name="plus" size={16} color="#3182CE" />
+                <Feather name="plus" size={16} color={theme.primaryColor} />
               </Pressable>
             )}
           </ScrollView>
@@ -1736,32 +1746,31 @@ export default function ProjectDetailScreen() {
           <View style={styles.drawingControls}>
             <View style={styles.toolsContainer}>
               {/* Herramienta: Mover (Pan) */}
-              <Pressable onPress={() => setIsDrawingMode(false)} style={[styles.toolButton, !isDrawingMode && styles.toolButtonActive]}>
+              <Pressable onPress={() => setIsDrawingMode(false)} style={[styles.toolButton, !isDrawingMode && { backgroundColor: theme.primaryColor }]}>
                 <Feather name="move" size={20} color={!isDrawingMode ? '#FFF' : '#4A5568'} />
               </Pressable>
               
               <View style={styles.toolSeparator} />
 
               {/* Selector de Forma */}
-              <Pressable onPress={() => { setIsDrawingMode(true); setDrawingShape('rectangle'); }} style={[styles.toolButton, isDrawingMode && drawingShape === 'rectangle' && styles.toolButtonActive]}>
+              <Pressable onPress={() => { setIsDrawingMode(true); setDrawingShape('rectangle'); }} style={[styles.toolButton, isDrawingMode && drawingShape === 'rectangle' && { backgroundColor: theme.primaryColor }]}>
                 <Feather name="square" size={20} color={isDrawingMode && drawingShape === 'rectangle' ? '#FFF' : '#4A5568'} />
               </Pressable>
-              <Pressable onPress={() => { setIsDrawingMode(true); setDrawingShape('circle'); }} style={[styles.toolButton, isDrawingMode && drawingShape === 'circle' && styles.toolButtonActive]}>
+              <Pressable onPress={() => { setIsDrawingMode(true); setDrawingShape('circle'); }} style={[styles.toolButton, isDrawingMode && drawingShape === 'circle' && { backgroundColor: theme.primaryColor }]}>
                 <Feather name="circle" size={20} color={isDrawingMode && drawingShape === 'circle' ? '#FFF' : '#4A5568'} />
               </Pressable>
-              <Pressable onPress={() => { setIsDrawingMode(true); setDrawingShape('pin'); }} style={[styles.toolButton, isDrawingMode && drawingShape === 'pin' && styles.toolButtonActive]}>
+              <Pressable onPress={() => { setIsDrawingMode(true); setDrawingShape('pin'); }} style={[styles.toolButton, isDrawingMode && drawingShape === 'pin' && { backgroundColor: theme.primaryColor }]}>
                 <Feather name="map-pin" size={20} color={isDrawingMode && drawingShape === 'pin' ? '#FFF' : '#4A5568'} />
               </Pressable>
-              <Pressable onPress={() => { setIsDrawingMode(true); setDrawingShape('pencil'); }} style={[styles.toolButton, isDrawingMode && drawingShape === 'pencil' && styles.toolButtonActive]}>
+              <Pressable onPress={() => { setIsDrawingMode(true); setDrawingShape('pencil'); }} style={[styles.toolButton, isDrawingMode && drawingShape === 'pencil' && { backgroundColor: theme.primaryColor }]}>
                 <Feather name="edit-3" size={20} color={isDrawingMode && drawingShape === 'pencil' ? '#FFF' : '#4A5568'} />
               </Pressable>
               {planType === 'pdf' && (
-                <Pressable onPress={() => setIsAspectRatioModalVisible(true)} style={[styles.toolButton, isAspectRatioModalVisible && styles.toolButtonActive]}>
+                <Pressable onPress={() => setIsAspectRatioModalVisible(true)} style={[styles.toolButton, isAspectRatioModalVisible && { backgroundColor: theme.primaryColor }]}>
                   <Feather name="maximize" size={20} color={isAspectRatioModalVisible ? '#FFF' : '#4A5568'} />
                 </Pressable>
               )}
-              <View style={styles.toolSeparator} />
-              <Pressable onPress={() => { setIsCatalogOpen(!isCatalogOpen); updateMapBounds(); }} style={[styles.toolButton, isCatalogOpen && styles.toolButtonActive]}>
+              <Pressable onPress={() => { setIsCatalogOpen(!isCatalogOpen); updateMapBounds(); }} style={[styles.toolButton, isCatalogOpen && { backgroundColor: theme.primaryColor }]}>
                 <Feather name="list" size={20} color={isCatalogOpen ? '#FFF' : '#4A5568'} />
               </Pressable>
             </View>
@@ -1774,7 +1783,7 @@ export default function ProjectDetailScreen() {
           {/* Barra de Filtros de Categoría */}
           <View style={styles.filterContainer}>
             <Pressable style={styles.filterButton} onPress={() => setIsFilterModalVisible(true)}>
-              <Feather name="filter" size={16} color="#3182CE" />
+              <Feather name="filter" size={16} color={theme.primaryColor} />
               <Text style={styles.filterButtonText}>
                 {selectedCategoryFilter 
                   ? catalogGroups.find(g => g.id === selectedCategoryFilter)?.name || i18n.t('common.filter')
@@ -1783,7 +1792,7 @@ export default function ProjectDetailScreen() {
               </Text>
               {selectedCategoryFilter && (
                 <Pressable onPress={() => setSelectedCategoryFilter(null)} style={{ marginLeft: 8, padding: 2 }} hitSlop={8}>
-                  <Feather name="x" size={16} color="#3182CE" />
+                  <Feather name="x" size={16} color={theme.primaryColor} />
                 </Pressable>
               )}
             </Pressable>
@@ -1792,7 +1801,7 @@ export default function ProjectDetailScreen() {
           {/* Selector de Color para Lápiz */}
           {isDrawingMode && drawingShape === 'pencil' && (
             <View style={styles.colorPickerRow}>
-              {['#3182CE', '#E53E3E', '#38A169', '#D69E2E', '#000000', '#FFFFFF'].map(color => (
+              {[theme.primaryColor, '#E53E3E', '#38A169', '#D69E2E', '#000000', '#FFFFFF'].map(color => (
                 <Pressable
                   key={color}
                   style={[styles.colorOption, { backgroundColor: color }, pencilColor === color && styles.colorOptionSelected]}
@@ -1988,7 +1997,7 @@ export default function ProjectDetailScreen() {
             {/* Renderizar dibujo en progreso */}
             {currentDrawing && (
               <View style={[
-                styles.drawingOverlay,
+                styles.drawingOverlay, { borderColor: theme.primaryColor, backgroundColor: `${theme.primaryColor}4D` }, // 4D = 30% opacity
                 {
                   left: (currentDrawing.width < 0 ? currentDrawing.x + currentDrawing.width : currentDrawing.x) * zoomScale,
                   top: (currentDrawing.height < 0 ? currentDrawing.y + currentDrawing.height : currentDrawing.y) * zoomScale,
@@ -2014,7 +2023,7 @@ export default function ProjectDetailScreen() {
             {/* Spinner de Carga de Imagen */}
             {isImageLoading && (
               <View style={styles.loadingOverlay}>
-                <ActivityIndicator size="large" color="#3182CE" />
+                <ActivityIndicator size="large" color={theme.primaryColor} />
               </View>
             )}
 
@@ -2058,7 +2067,7 @@ export default function ProjectDetailScreen() {
               setViewingImageSource(planImageSource);
               setViewingMediaType(planType);
             }}>
-              <Text style={{ color: '#3182CE', fontSize: 14 }}>{planType === 'pdf' ? i18n.t('projectDetail.viewDocument') : i18n.t('projectDetail.viewFullImage')}</Text>
+              <Text style={{ color: theme.primaryColor, fontSize: 14 }}>{planType === 'pdf' ? i18n.t('projectDetail.viewDocument') : i18n.t('projectDetail.viewFullImage')}</Text>
             </Pressable>
             {hasPermission('PROJECT_UPDATE') && (
               <Pressable onPress={handleUploadPlan} style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -2074,7 +2083,7 @@ export default function ProjectDetailScreen() {
             <Text style={{ marginTop: 16, color: '#718096', marginBottom: 16 }}>{i18n.t('projectDetail.noPlan')}</Text>
             {hasPermission('PROJECT_UPDATE') && (
               <Pressable style={styles.uploadPlanButton} onPress={handleUploadPlan}>
-                <Feather name="upload" size={16} color="#3182CE" />
+                <Feather name="upload" size={16} color={theme.primaryColor} />
                 <Text style={styles.uploadPlanText}>{i18n.t('projectDetail.uploadPlan')}</Text>
               </Pressable>
             )}
@@ -2143,7 +2152,7 @@ export default function ProjectDetailScreen() {
                 <Text style={{ marginTop: 16, marginBottom: 24, textAlign: 'center', color: '#4A5568', fontSize: 16 }}>
                   {i18n.t('projectDetail.pdfAndroidMessage')}
                 </Text>
-                <Pressable style={[styles.modalButton, { backgroundColor: '#3182CE', width: '100%', alignItems: 'center' }]} onPress={handleDownloadViewingDoc}>
+                <Pressable style={[styles.modalButton, { backgroundColor: theme.primaryColor, width: '100%', alignItems: 'center' }]} onPress={handleDownloadViewingDoc}>
                   <Text style={{ color: '#FFF', fontWeight: 'bold' }}>{i18n.t('projectDetail.openPdf')}</Text>
                 </Pressable>
               </View>
@@ -2217,7 +2226,7 @@ export default function ProjectDetailScreen() {
             <TextInput style={styles.input} value={newGroupName} onChangeText={setNewGroupName} placeholder="Ej. Eléctrico, Hidráulico..." />
             <View style={styles.modalButtons}>
               <Pressable style={[styles.modalButton, styles.cancelButton]} onPress={() => setIsAddGroupModalVisible(false)}><Text>{i18n.t('common.cancel')}</Text></Pressable>
-              <Pressable style={[styles.modalButton, styles.saveButton]} onPress={() => { setIsAddGroupModalVisible(false); setTimeout(() => startPlanUpload('newGroup'), 100); }} disabled={!newGroupName.trim()}><Text style={styles.saveButtonText}>{i18n.t('common.confirm')}</Text></Pressable>
+              <Pressable style={[styles.modalButton, { backgroundColor: theme.primaryColor }]} onPress={() => { setIsAddGroupModalVisible(false); setTimeout(() => startPlanUpload('newGroup'), 100); }} disabled={!newGroupName.trim()}><Text style={styles.saveButtonText}>{i18n.t('common.confirm')}</Text></Pressable>
             </View>
           </View>
         </View>
@@ -2327,7 +2336,7 @@ export default function ProjectDetailScreen() {
                         style={[styles.catalogItem, { marginBottom: 8 }]}
                         {...createCatalogItemResponder(item, group.id).panHandlers}
                       >
-                        <Feather name="check-square" size={16} color="#3182CE" style={{ marginRight: 8 }} />
+                        <Feather name="check-square" size={16} color={theme.primaryColor} style={{ marginRight: 8 }} />
                         <Text style={styles.catalogItemText}>{item.name}</Text>
                       </View>
                     ))}
@@ -2343,7 +2352,7 @@ export default function ProjectDetailScreen() {
 
       {/* Elemento Arrastrado (Fantasma) */}
       {draggedItem && (
-        <View style={[styles.draggedGhost, { top: draggedItem.y - 20, left: draggedItem.x - 50 }]}>
+        <View style={[styles.draggedGhost, { top: draggedItem.y - 20, left: draggedItem.x - 50, backgroundColor: theme.primaryColor }]}>
           <Feather name="check-square" size={20} color="#FFF" style={{ marginRight: 8 }} />
           <Text style={styles.draggedGhostText}>{draggedItem.text}</Text>
         </View>
@@ -2417,14 +2426,13 @@ const styles = StyleSheet.create({
   inlineStartButtonText: { color: '#38A169', fontWeight: 'bold', fontFamily: 'Inter-Bold', fontSize: 12, marginLeft: 4 },
   progressContainer: { marginBottom: 24 },
   progressBarBackground: { height: 10, backgroundColor: '#EDF2F7', borderRadius: 5, overflow: 'hidden' },
-  progressBarFill: { height: '100%', backgroundColor: '#3182CE' },
+  progressBarFill: { height: '100%' },
   progressText: { marginTop: 4, fontSize: 12, color: '#718096', fontFamily: 'Inter-SemiBold', textAlign: 'right' },
   
   drawingControls: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   instructionText: { fontSize: 14, color: '#718096', fontFamily: 'Inter-Regular', marginRight: 8 },
   toolsContainer: { flexDirection: 'row', backgroundColor: '#EDF2F7', borderRadius: 8, padding: 2 },
   toolButton: { padding: 8, borderRadius: 6 },
-  toolButtonActive: { backgroundColor: '#3182CE' },
   toolSeparator: { width: 1, backgroundColor: '#CBD5E0', marginHorizontal: 4, marginVertical: 4 },
   filterContainer: { marginBottom: 12 },
   filterButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F7FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, alignSelf: 'flex-start' },
@@ -2456,9 +2464,7 @@ const styles = StyleSheet.create({
 
   groupTabsContainer: { flexDirection: 'row', marginBottom: 12 },
   groupTab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F7FAFC', borderWidth: 1, borderColor: '#E2E8F0', marginRight: 8, alignItems: 'center', justifyContent: 'center' },
-  groupTabActive: { backgroundColor: '#3182CE', borderColor: '#3182CE' },
   groupTabText: { fontSize: 14, color: '#718096', fontWeight: '600' },
-  groupTabTextActive: { color: '#FFF' },
 
   paginationControls: { position: 'absolute', bottom: 16, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, shadowColor: "#000", shadowOffset: {width: 0, height: 2}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3, zIndex: 20 },
   pageButton: { padding: 4 },
@@ -2467,7 +2473,7 @@ const styles = StyleSheet.create({
 
   mapPin: { position: 'absolute', width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginLeft: -12, marginTop: -12, borderWidth: 2, borderColor: '#FFF', shadowColor: "#000", shadowOffset: {width: 0, height: 2}, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5 },
   mapArea: { position: 'absolute', borderWidth: 2, borderRadius: 12 }, // Área dibujada (círculo/rectángulo redondeado)
-  drawingOverlay: { position: 'absolute', borderWidth: 2, borderColor: '#3182CE', backgroundColor: 'rgba(49, 130, 206, 0.3)', borderRadius: 12 },
+  drawingOverlay: { position: 'absolute', borderWidth: 2, borderRadius: 12 },
   
   viewFullText: { textAlign: 'center', color: '#3182CE', marginTop: 8, fontSize: 14, fontFamily: 'Inter-Regular' },
   assignedToText: { fontSize: 12, color: '#718096', marginLeft: 16, marginTop: 2, fontFamily: 'Inter-Regular' },
@@ -2535,7 +2541,6 @@ const styles = StyleSheet.create({
   },
   modalButton: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 8, marginLeft: 8 },
   cancelButton: { backgroundColor: '#EDF2F7' },
-  saveButton: { backgroundColor: '#3182CE' },
   saveButtonText: { color: '#FFF', fontWeight: 'bold' },
   uploadPlanButton: { flexDirection: 'row', alignItems: 'center', padding: 10, backgroundColor: '#EBF8FF', borderRadius: 8 },
   uploadPlanText: { marginLeft: 8, color: '#3182CE', fontWeight: '600' },
@@ -2580,7 +2585,7 @@ const styles = StyleSheet.create({
   commentDate: { fontSize: 10, color: '#A0AEC0', marginTop: 4, textAlign: 'right', fontFamily: 'Inter-Regular' },
   commentInputContainer: { flexDirection: 'row', marginTop: 16, alignItems: 'center' },
   commentInput: { flex: 1, backgroundColor: '#EDF2F7', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, marginRight: 8 },
-  sendButton: { backgroundColor: '#3182CE', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+  sendButton: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
   evidenceCountText: { fontSize: 12, color: '#718096', marginLeft: 40, marginTop: 4, fontFamily: 'Inter-Regular' },
   deleteButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#E53E3E', padding: 12, borderRadius: 8, marginTop: 24 },
   deleteButtonText: { color: '#FFF', fontWeight: 'bold', marginLeft: 8, fontFamily: 'Inter-Bold' },
@@ -2603,7 +2608,7 @@ const styles = StyleSheet.create({
   catalogGroup: { marginRight: 16 },
   catalogGroupTitle: { fontSize: 12, fontWeight: 'bold', color: '#718096', marginBottom: 8, marginLeft: 4, fontFamily: 'Inter-Bold' },
   catalogOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.2)', zIndex: 90 },
-  draggedGhost: { position: 'absolute', flexDirection: 'row', alignItems: 'center', backgroundColor: '#3182CE', padding: 12, borderRadius: 24, zIndex: 9999, elevation: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4, opacity: 0.9 },
+  draggedGhost: { position: 'absolute', flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 24, zIndex: 9999, elevation: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4, opacity: 0.9 },
   draggedGhostText: { color: '#FFF', fontWeight: 'bold', fontFamily: 'Inter-Bold' },
   panelHandleContainer: { width: '100%', alignItems: 'center', paddingVertical: 10, marginTop: -10, marginBottom: 5 },
   panelHandle: { width: 40, height: 5, borderRadius: 3, backgroundColor: '#CBD5E0' },

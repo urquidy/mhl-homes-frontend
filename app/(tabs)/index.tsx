@@ -5,9 +5,11 @@ import { ActivityIndicator, Animated, FlatList, Image, LayoutAnimation, Platform
 import { SafeAreaView } from 'react-native-safe-area-context';
 import NotificationFilters from '../../components/ui/NotificationFilters';
 import i18n from '../../constants/i18n';
+import { Fonts } from '../../constants/theme';
 import { CalendarEvent, useEvents } from '../../contexts/EventsContext';
 import { AppNotification, NotificationFilter, useNotifications } from '../../contexts/NotificationsContext';
 import { useProjects } from '../../contexts/ProjectsContext'; // Assuming useProjects is correctly imported
+import { useTheme } from '../../contexts/ThemeContext';
 import api from '../../services/api';
 import { Project } from '../../types'; // Adjusted path to types.ts
 import { MenuContext } from './_layout';
@@ -24,6 +26,8 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 // --- Componente para un solo ítem de la lista ---
 const ProjectListItem = React.forwardRef<View, { item: Project } & React.ComponentProps<typeof Pressable>>(({ item, ...props }, ref) => {
+  const { width } = useWindowDimensions();
+  const isSmallScreen = width < 768;
   const statusInfo = {
     'Not Started': { color: '#718096', label: i18n.t('dashboard.status.notStarted') || 'Not Started' },
     'In Progress': { color: '#3182CE', label: i18n.t('dashboard.status.inProgress') },
@@ -36,7 +40,7 @@ const ProjectListItem = React.forwardRef<View, { item: Project } & React.Compone
 
   return (
     <Pressable ref={ref} {...props}>
-      <View style={styles.projectCard}>
+      <View style={[styles.projectCard, isSmallScreen && styles.projectCardSmall]}>
         {/* Cabecera: Nombre y Tag de Estado */}
         <View style={styles.cardHeader}>
           <Text style={styles.projectName}>{item.name}</Text>
@@ -95,7 +99,8 @@ const AnimatedNotificationItem: React.FC<{
   onPress: (n: AppNotification) => void;
   index: number;
   isProcessing?: boolean;
-}> = ({ notif, onPress, index, isProcessing }) => {
+  primaryColor: string;
+}> = ({ notif, onPress, index, isProcessing, primaryColor }) => {
   // Valores iniciales: Opacidad 0 y desplazado -20px hacia arriba
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-20)).current;
@@ -118,12 +123,12 @@ const AnimatedNotificationItem: React.FC<{
     <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
       <Pressable style={styles.notificationItem} onPress={() => !isProcessing && onPress(notif)}>
         {isProcessing ? (
-          <ActivityIndicator size="small" color="#3182CE" style={styles.sidebarIcon} />
+          <ActivityIndicator size="small" color={primaryColor} style={styles.sidebarIcon} />
         ) : (
           <Feather 
             name={notif.icon} 
             size={20} 
-            color={notif.read ? "#A0AEC0" : "#3182CE"} 
+            color={notif.read ? "#A0AEC0" : primaryColor} 
             style={styles.sidebarIcon} 
           />
         )}
@@ -146,8 +151,9 @@ const Notifications: React.FC<{
   setFilter: (f: NotificationFilter) => void,
   loadMore: () => void,
   hasMore: boolean,
-  isLoading: boolean
-}> = ({ notifications, onMarkAsRead, onMarkAllRead, filter, setFilter, loadMore, hasMore, isLoading }) => {
+  isLoading: boolean,
+  primaryColor: string
+}> = ({ notifications, onMarkAsRead, onMarkAllRead, filter, setFilter, loadMore, hasMore, isLoading, primaryColor }) => {
   const router = useRouter();
   const [processingNotifId, setProcessingNotifId] = useState<string | null>(null);
 
@@ -213,7 +219,7 @@ const Notifications: React.FC<{
         <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>{i18n.t('dashboard.notifications')}</Text>
         {notifications.some(n => !n.read) && (
           <Pressable onPress={onMarkAllRead}>
-            <Text style={{ fontSize: 12, color: '#3182CE', fontWeight: '600' }}>{i18n.t('common.markAsRead')}</Text>
+            <Text style={{ fontSize: 12, color: primaryColor, fontWeight: '600' }}>{i18n.t('common.markAsRead')}</Text>
           </Pressable>
         )}
       </View>
@@ -230,14 +236,15 @@ const Notifications: React.FC<{
           onPress={handlePress} 
           index={index} 
           isProcessing={processingNotifId === notif.id}
+          primaryColor={primaryColor}
         />
       ))}
       
-      {isLoading && <ActivityIndicator size="small" color="#3182CE" style={{ marginVertical: 10 }} />}
+      {isLoading && <ActivityIndicator size="small" color={primaryColor} style={{ marginVertical: 10 }} />}
 
       {hasMore && !isLoading && (
         <Pressable onPress={loadMore} style={{ padding: 12, alignItems: 'center', backgroundColor: '#F7FAFC', borderRadius: 8, marginTop: 8 }}>
-          <Text style={{ color: '#3182CE', fontWeight: '600', fontSize: 14 }}>{i18n.t('common.loadMoreNotifications')}</Text>
+          <Text style={{ color: primaryColor, fontWeight: '600', fontSize: 14 }}>{i18n.t('common.loadMoreNotifications')}</Text>
         </Pressable>
       )}
 
@@ -352,6 +359,7 @@ export default function DashboardScreen() {
   const { displayedNotifications, filter, setFilter, loadMore, hasMore, isLoading, markAsRead, markAllAsRead, refreshNotifications } = useNotifications(); // Usamos las notificaciones del contexto
   const { reloadMenu } = useContext(MenuContext);
   const [activeFilter, setActiveFilter] = useState<FilterType>('All');
+  const { theme } = useTheme();
   const { width } = useWindowDimensions();
   const isLargeScreen = width > 1024; // Breakpoint para mostrar columnas
   const [refreshing, setRefreshing] = useState(false);
@@ -428,10 +436,10 @@ export default function DashboardScreen() {
       <ScrollView 
         style={styles.scrollView}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#3182CE']} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primaryColor]} />
         }
       >
-        <View style={[styles.container, !isLargeScreen && { flexDirection: 'column' }]}>
+        <View style={[styles.container, !isLargeScreen && { flexDirection: 'column', padding: 16, gap: 16 }]}>
           {/* --- Columna Principal (Proyectos) --- */}
           <View style={isLargeScreen ? styles.mainContent : styles.fullWidthContent}>
             <Text style={styles.title}>{i18n.t('dashboard.activeProjects')}</Text>
@@ -490,6 +498,7 @@ export default function DashboardScreen() {
               loadMore={loadMore}
               hasMore={hasMore}
               isLoading={isLoading}
+              primaryColor={theme.primaryColor}
             />
             <UpcomingMilestones milestones={upcomingMilestones} />
           </View>
@@ -525,22 +534,21 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
-    fontFamily: 'Inter-Bold',
+    fontFamily: Fonts.title,
     color: '#1A202C',
     marginBottom: 24,
   },
   filterContainer: {
     flexDirection: 'row',
     backgroundColor: '#F0F2F5',
-    borderRadius: 10,
+    borderRadius: 16,
     padding: 4,
     marginBottom: 24,
   },
   filterButton: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
     alignItems: 'center',
   },
   filterButtonActive: {
@@ -548,34 +556,37 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: 8,
     elevation: 3,
   },
   filterText: {
     fontSize: 14,
-    fontWeight: '600',
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: Fonts.medium,
     color: '#4A5568',
   },
   filterTextActive: {
     color: '#1A202C',
+    fontFamily: Fonts.bold,
   },
   listContentContainer: {
     paddingBottom: 24,
   },
   projectCard: {
     backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    // Sombra suave
+    padding: 24,
+    borderRadius: 20,
+    marginBottom: 20,
+    borderWidth: 0, // Quitamos borde para usar sombra más limpia
+    // Sombra suave estilo EdbuildLogin
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  projectCardSmall: {
+    padding: 16,
+    borderRadius: 16,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -585,27 +596,25 @@ const styles = StyleSheet.create({
   },
   projectName: {
     fontSize: 18,
-    fontWeight: 'bold',
-    fontFamily: 'Inter-Bold',
+    fontFamily: Fonts.bold,
     color: '#1A202C',
     flex: 1,
     marginRight: 8,
   },
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
   },
   statusText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: 'bold',
-    fontFamily: 'Inter-Bold',
+    fontFamily: Fonts.bold,
   },
   projectAddress: {
     fontSize: 14,
     color: '#718096',
-    fontFamily: 'Inter-Regular',
+    fontFamily: Fonts.regular,
     marginBottom: 16,
   },
   progressSection: {
@@ -627,8 +636,7 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 14,
-    fontWeight: '600',
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: Fonts.medium,
     color: '#4A5568',
   },
   participantsContainer: {
@@ -654,8 +662,7 @@ const styles = StyleSheet.create({
   initialsText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: 'bold',
-    fontFamily: 'Inter-Bold',
+    fontFamily: Fonts.bold,
   },
   emptyContainer: {
     marginTop: 50,
@@ -664,13 +671,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: '#718096',
-    fontFamily: 'Inter-Regular',
+    fontFamily: Fonts.regular,
   },
   // Estilos para los nuevos componentes
   sectionTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    fontFamily: 'Inter-Bold',
+    fontFamily: Fonts.title,
     color: '#1A202C',
     marginBottom: 16,
   },
@@ -681,6 +687,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     marginBottom: 16,
+    padding: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
   sidebarIcon: {
     marginRight: 12,
@@ -690,34 +704,39 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     color: '#4A5568',
-    fontFamily: 'Inter-Regular',
+    fontFamily: Fonts.regular,
     lineHeight: 20,
   },
   milestoneItem: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 20,
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   calendarIcon: {
     width: 48,
     height: 48,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    backgroundColor: '#F7FAFC',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
   },
   calendarMonth: {
     fontSize: 10,
-    fontWeight: 'bold',
-    fontFamily: 'Inter-Bold',
+    fontFamily: Fonts.bold,
     color: '#718096',
   },
   calendarDay: {
     fontSize: 18,
-    fontWeight: 'bold',
-    fontFamily: 'Inter-Bold',
+    fontFamily: Fonts.title,
     color: '#1A202C',
   },
   milestoneDetails: {
@@ -725,14 +744,13 @@ const styles = StyleSheet.create({
   },
   milestoneTitle: {
     fontSize: 14,
-    fontWeight: '600',
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: Fonts.medium,
     color: '#2D3748',
   },
   milestoneProjectName: {
     fontSize: 12,
     color: '#718096',
-    fontFamily: 'Inter-Regular',
+    fontFamily: Fonts.regular,
     marginTop: 2,
   },
 });

@@ -1,17 +1,17 @@
 import { Feather } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import { useFocusEffect, useNavigation } from 'expo-router';
-import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigation } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Image, KeyboardAvoidingView, LayoutAnimation, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, UIManager, useWindowDimensions, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useCustomAlert } from '../../components/ui/CustomAlert';
 import i18n from '../../constants/i18n';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProjects } from '../../contexts/ProjectsContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { usePermission } from '../../hooks/usePermission';
 import api from '../../services/api';
 import { BudgetCategory, Expense, ProjectBudget } from '../../types';
-import { HeaderActionContext } from './_layout';
 
 // Habilitar animaciones de layout en Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -118,6 +118,7 @@ const BudgetBarChart = ({ categories }: { categories: BudgetCategory[] }) => {
   const [selectedBarIndex, setSelectedBarIndex] = useState<number | null>(null);
   const maxValue = Math.max(...categories.map(c => Math.max(c.allocated, c.spent)), 1);
   const chartHeight = 120;
+  const { theme } = useTheme();
 
   // --- Lógica Responsiva ---
   // Ancho total disponible para la gráfica (restando paddings)
@@ -171,7 +172,7 @@ const BudgetBarChart = ({ categories }: { categories: BudgetCategory[] }) => {
                   {/* Allocated Bar */}
                   <View style={{ width: barWidth, height: allocatedHeight, backgroundColor: '#CBD5E0', borderTopLeftRadius: 4, borderTopRightRadius: 4, marginRight: 4, opacity: isSelected ? 1 : 0.8 }} />
                   {/* Spent Bar */}
-                  <View style={{ width: barWidth, height: spentHeight, backgroundColor: isOver ? '#E53E3E' : '#3182CE', borderTopLeftRadius: 4, borderTopRightRadius: 4, opacity: isSelected ? 1 : 0.8 }} />
+                  <View style={{ width: barWidth, height: spentHeight, backgroundColor: isOver ? '#E53E3E' : theme.primaryColor, borderTopLeftRadius: 4, borderTopRightRadius: 4, opacity: isSelected ? 1 : 0.8 }} />
                 </View>
                 <Text style={{ fontSize: 10, color: isSelected ? '#2D3748' : '#718096', fontWeight: isSelected ? 'bold' : 'normal', marginTop: 8, textAlign: 'center' }} numberOfLines={2}>{cat.name}</Text>
               </Pressable>
@@ -185,7 +186,7 @@ const BudgetBarChart = ({ categories }: { categories: BudgetCategory[] }) => {
           <Text style={{ fontSize: 12, color: '#718096' }}>{i18n.t('budgets.allocated')}</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <View style={{ width: 12, height: 12, backgroundColor: '#3182CE', marginRight: 6, borderRadius: 3 }} />
+          <View style={{ width: 12, height: 12, backgroundColor: theme.primaryColor, marginRight: 6, borderRadius: 3 }} />
           <Text style={{ fontSize: 12, color: '#718096' }}>{i18n.t('budgets.spent')}</Text>
         </View>
       </View>
@@ -194,6 +195,7 @@ const BudgetBarChart = ({ categories }: { categories: BudgetCategory[] }) => {
 };
 
 const CategoryProgress = ({ categories }: { categories: BudgetCategory[] }) => {
+  const { theme } = useTheme();
   return (
     <View style={styles.sectionContainer}>
       <Text style={styles.sectionTitle}>{i18n.t('budgets.summaryByCategory')}</Text>
@@ -216,7 +218,7 @@ const CategoryProgress = ({ categories }: { categories: BudgetCategory[] }) => {
               </Text>
             </View>
             <View style={styles.progressBarBg}>
-              <View style={[styles.progressBarFill, { width: `${progress}%`, backgroundColor: isOverBudget ? '#E53E3E' : '#3182CE' }]} />
+              <View style={[styles.progressBarFill, { width: `${progress}%`, backgroundColor: isOverBudget ? '#E53E3E' : theme.primaryColor }]} />
             </View>
           </View>
         );
@@ -242,20 +244,15 @@ const AttachmentViewerModal = ({ visible, attachmentId, onClose, token }: { visi
 
     const loadAttachment = async () => {
       setContent({ uri: '', type: 'loading' });
-      const baseURL = api.defaults.baseURL || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080';
-      const url = `${baseURL}/api/files/${attachmentId}`;
 
       try {
-        const response = await fetch(url, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        const response = await api.get(`/api/files/${attachmentId}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          responseType: 'blob'
         });
 
-        if (!response.ok) {
-          throw new Error('Failed to fetch attachment');
-        }
-
-        const contentType = response.headers.get('content-type') || '';
-        const blob = await response.blob();
+        const contentType = response.headers['content-type'] || '';
+        const blob = response.data;
         const blobUrl = URL.createObjectURL(blob);
         contentUriRef.current = blobUrl; // Store for cleanup
 
@@ -316,6 +313,7 @@ const ExpenseHistory = ({ expenses, categories, onAddExpense, onEdit, onDelete, 
     e.concept.toLowerCase().includes(search.toLowerCase()) || 
     e.category.toLowerCase().includes(search.toLowerCase())
   );
+  const { theme } = useTheme();
 
   return (
     <View style={styles.sectionContainer}>
@@ -380,7 +378,7 @@ const ExpenseHistory = ({ expenses, categories, onAddExpense, onEdit, onDelete, 
                 <View style={styles.colActions}>
                   {canUpdate && (
                     <Pressable style={styles.actionButton} onPress={() => onEdit(item)}>
-                      <Feather name="edit-2" size={16} color="#3182CE" />
+                      <Feather name="edit-2" size={16} color={theme.primaryColor} />
                     </Pressable>
                   )}
                   {canDelete && (
@@ -412,6 +410,7 @@ const ProjectBudgetGroup = ({
   canDelete
 }: { project: any, onAddExpense: () => void, extraExpenses?: Expense[], customBudget?: any, deletedExpenseIds?: string[], updatedExpenses?: Expense[], onDeleteExpense: (id: string) => void, onEditExpense: (expense: Expense) => void, onViewAttachment: (attachmentId: string) => void, canUpdate?: boolean, canDelete?: boolean }) => {
   const [expanded, setExpanded] = useState(false);
+  const { theme } = useTheme();
   
   // Usamos useMemo para que los datos mockeados no cambien en cada renderizado
   // Si existe un presupuesto personalizado (creado recientemente), lo usamos en lugar del mock
@@ -485,7 +484,7 @@ const ProjectBudgetGroup = ({
       <Pressable onPress={toggleExpand} style={styles.groupHeader}>
         <Feather name={expanded ? "chevron-down" : "chevron-right"} size={20} color="#4A5568" />
         <Text style={styles.groupTitle}>{project.name}</Text>
-        <View style={[styles.badge, { backgroundColor: expanded ? '#3182CE' : '#E2E8F0' }]}>
+        <View style={[styles.badge, { backgroundColor: expanded ? theme.primaryColor : '#E2E8F0' }]}>
           <Text style={[styles.badgeText, { color: expanded ? '#FFF' : '#4A5568' }]}>
             {formatCurrency(totalSpent)}
           </Text>
@@ -522,6 +521,7 @@ const AddExpenseModal = ({ visible, onClose, projects, initialProjectId, onSave,
   const [attachmentUri, setAttachmentUri] = useState<string | null>(null);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const { showAlert, AlertComponent } = useCustomAlert();
+  const { theme } = useTheme();
 
   useEffect(() => {
     if (visible) {
@@ -586,8 +586,8 @@ const AddExpenseModal = ({ visible, onClose, projects, initialProjectId, onSave,
               <Text style={styles.inputLabel}>{i18n.t('common.project')}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.projectSelectorContainer}>
                 {projects.map(p => (
-                  <Pressable key={p.id} onPress={() => setProjectId(p.id)} style={[styles.projectBadge, projectId === p.id && styles.projectBadgeActive]}>
-                    <Text style={[styles.projectBadgeText, projectId === p.id && styles.projectBadgeTextActive]}>{p.name}</Text>
+                  <Pressable key={p.id} onPress={() => setProjectId(p.id)} style={[styles.projectBadge, projectId === p.id && { backgroundColor: '#EBF8FF', borderColor: theme.primaryColor }]}>
+                    <Text style={[styles.projectBadgeText, projectId === p.id && { color: theme.primaryColor, fontWeight: '600' }]}>{p.name}</Text>
                   </Pressable>
                 ))}
               </ScrollView>
@@ -632,7 +632,7 @@ const AddExpenseModal = ({ visible, onClose, projects, initialProjectId, onSave,
           <Text style={styles.inputLabel}>{i18n.t('budgets.receiptOptional')}</Text>
           {attachmentUri ? (
             <View style={styles.attachmentPreview}>
-              <Feather name="file" size={20} color="#3182CE" />
+              <Feather name="file" size={20} color={theme.primaryColor} />
               <Text style={styles.attachmentText} numberOfLines={1}>{i18n.t('budgets.attachmentSelected')}</Text>
               <Pressable onPress={() => setAttachmentUri(null)}>
                 <Feather name="x" size={20} color="#E53E3E" />
@@ -645,7 +645,7 @@ const AddExpenseModal = ({ visible, onClose, projects, initialProjectId, onSave,
             </Pressable>
           )}
 
-          <Pressable style={styles.saveButton} onPress={handleSave}>
+          <Pressable style={[styles.saveButton, { backgroundColor: theme.primaryColor }]} onPress={handleSave}>
             <Text style={styles.saveButtonText}>{i18n.t('budgets.saveExpense')}</Text>
           </Pressable>
           <AlertComponent />
@@ -665,6 +665,7 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [categoryPercentages, setCategoryPercentages] = useState<Record<string, string>>({});
   const { showAlert, AlertComponent } = useCustomAlert();
+  const { theme } = useTheme();
 
   const toggleCategory = (catName: string) => {
     if (selectedCategories.includes(catName)) {
@@ -781,8 +782,8 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
           {availableProjects.length > 0 ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.projectSelectorContainer}>
               {availableProjects.map(p => (
-                <Pressable key={p.id} onPress={() => setProjectId(p.id)} style={[styles.projectBadge, projectId === p.id && styles.projectBadgeActive]}>
-                  <Text style={[styles.projectBadgeText, projectId === p.id && styles.projectBadgeTextActive]}>{p.name}</Text>
+                <Pressable key={p.id} onPress={() => setProjectId(p.id)} style={[styles.projectBadge, projectId === p.id && { backgroundColor: '#EBF8FF', borderColor: theme.primaryColor }]}>
+                  <Text style={[styles.projectBadgeText, projectId === p.id && { color: theme.primaryColor, fontWeight: '600' }]}>{p.name}</Text>
                 </Pressable>
               ))}
             </ScrollView>
@@ -802,7 +803,7 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
             <Text style={[styles.inputLabel, { marginBottom: 0 }]}>{i18n.t('budgets.budgetItems')}</Text>
             <Pressable onPress={handleDistributeRemaining} hitSlop={8}>
-              <Text style={{ color: '#3182CE', fontSize: 12, fontWeight: 'bold' }}>{i18n.t('budgets.distributeRemaining')}</Text>
+              <Text style={{ color: theme.primaryColor, fontSize: 12, fontWeight: 'bold' }}>{i18n.t('budgets.distributeRemaining')}</Text>
             </Pressable>
           </View>
           <Text style={styles.helperText}>{i18n.t('budgets.selectCategories')}</Text>
@@ -821,7 +822,7 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
                     <Feather 
                       name={isSelected ? "check-square" : "square"} 
                       size={20} 
-                      color={isSelected ? "#3182CE" : "#A0AEC0"} 
+                      color={isSelected ? theme.primaryColor : "#A0AEC0"} 
                     />
                     <Text style={[styles.categoryCheckboxText, isSelected && styles.categoryCheckboxTextActive]}>{cat.name}</Text>
                   </Pressable>
@@ -838,7 +839,7 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
                         onChangeText={(text) => updatePercentage(cat.name, text)}
                       />
                       <Text style={styles.percentageSymbol}>%</Text>
-                      <Text style={styles.calculatedAmountText}>
+                      <Text style={[styles.calculatedAmountText, { color: theme.primaryColor }]}>
                         {calculatedAmount > 0 ? formatCurrency(calculatedAmount) : '$0.00'}
                       </Text>
                     </View>
@@ -848,7 +849,7 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
             })}
           </ScrollView>
 
-          <Pressable style={[styles.saveButton, availableProjects.length === 0 && styles.disabledButton]} onPress={handleSave} disabled={availableProjects.length === 0}>
+          <Pressable style={[styles.saveButton, { backgroundColor: theme.primaryColor }, availableProjects.length === 0 && styles.disabledButton]} onPress={handleSave} disabled={availableProjects.length === 0}>
             <Text style={styles.saveButtonText}>{i18n.t('budgets.createBudget')}</Text>
           </Pressable>
           <AlertComponent />
@@ -925,6 +926,7 @@ export default function BudgetsScreen() {
   const { token } = useAuth();
   const { width } = useWindowDimensions();
   const { hasPermission } = usePermission();
+  const { theme } = useTheme();
   const isSmallScreen = width < 768;
   
   const [refreshing, setRefreshing] = useState(false);
@@ -1096,18 +1098,6 @@ export default function BudgetsScreen() {
     setActiveModal('addExpense');
   };
   
-  const { setCustomAddAction } = useContext(HeaderActionContext);
-
-  useFocusEffect(
-    useCallback(() => {
-      // El botón del Header ahora abre el modal de "Crear Presupuesto" (Monto Total)
-      if (hasPermission('BUDGET_CREATE')) {
-        setCustomAddAction(() => () => setActiveModal('createBudget'));
-      }
-      return () => setCustomAddAction(null);
-    }, [hasPermission])
-  );
-
   // Filtrar proyectos que tienen presupuesto para mostrarlos en la lista
   const visibleProjects = projects.filter(p => budgets && budgets[p.id] !== undefined);
 
@@ -1132,10 +1122,11 @@ export default function BudgetsScreen() {
   }
 
   return (
+    <View style={{ flex: 1 }}>
     <ScrollView 
       style={[styles.container, isSmallScreen && styles.containerSmall]}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#3182CE']} />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primaryColor]} />
       }
     >
       <Text style={styles.title}>{i18n.t('budgets.title')}</Text>
@@ -1180,6 +1171,12 @@ export default function BudgetsScreen() {
       )}
       <View style={{ height: 40 }} />
 
+      </ScrollView>
+      {hasPermission('BUDGET_CREATE') && (
+        <Pressable style={[styles.fab, { backgroundColor: theme.primaryColor }]} onPress={() => setActiveModal('createBudget')}>
+          <Feather name="plus" size={24} color="#FFF" />
+        </Pressable>
+      )}
       {/* Modal para Crear Presupuesto (Header Button) */}
       <CreateBudgetModal 
         visible={activeModal === 'createBudget'} 
@@ -1215,7 +1212,7 @@ export default function BudgetsScreen() {
         token={token}
       />
       <AlertComponent />
-    </ScrollView>
+    </View>
   );
 }
 
@@ -1249,7 +1246,7 @@ const styles = StyleSheet.create({
   categoryName: { fontSize: 14, color: '#4A5568', fontWeight: '500' },
   categoryValues: { fontSize: 12, color: '#718096' },
   progressBarBg: { height: 8, backgroundColor: '#EDF2F7', borderRadius: 4, overflow: 'hidden' },
-  progressBarFill: { height: '100%', backgroundColor: '#3182CE', borderRadius: 4 },
+  progressBarFill: { height: '100%', borderRadius: 4 },
   overBudgetTag: {
     backgroundColor: '#FED7D7',
     paddingHorizontal: 6,
@@ -1265,7 +1262,7 @@ const styles = StyleSheet.create({
 
   // Historial y Tabla
   historyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  exportButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#3182CE', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
+  exportButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#718096', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
   exportButtonText: { color: '#FFF', fontSize: 12, fontWeight: 'bold', marginLeft: 6 },
   addButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#38A169', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
   addButtonText: { color: '#FFF', fontSize: 12, fontWeight: 'bold', marginLeft: 6 },
@@ -1296,7 +1293,7 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#1A202C' },
   inputLabel: { fontSize: 14, fontWeight: '600', color: '#4A5568', marginBottom: 8 },
   modalInput: { backgroundColor: '#F7FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 16, color: '#2D3748' },
-  saveButton: { backgroundColor: '#3182CE', paddingVertical: 14, borderRadius: 8, alignItems: 'center', marginTop: 8 },
+  saveButton: { paddingVertical: 14, borderRadius: 8, alignItems: 'center', marginTop: 8 },
   disabledButton: { backgroundColor: '#A0AEC0' },
   saveButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
   emptyText: { color: '#718096', fontStyle: 'italic', marginBottom: 16 },
@@ -1334,17 +1331,9 @@ const styles = StyleSheet.create({
     borderWidth: 1, 
     borderColor: 'transparent' 
   },
-  projectBadgeActive: { 
-    backgroundColor: '#EBF8FF', 
-    borderColor: '#3182CE' 
-  },
   projectBadgeText: { 
     color: '#4A5568', 
     fontSize: 14 
-  },
-  projectBadgeTextActive: { 
-    color: '#3182CE', 
-    fontWeight: '600' 
   },
 
   // Estilos para carga de archivos
@@ -1383,7 +1372,7 @@ const styles = StyleSheet.create({
   percentageLabel: { fontSize: 12, color: '#718096', marginRight: 8 },
   percentageInput: { backgroundColor: '#F7FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 4, paddingVertical: 4, paddingHorizontal: 8, width: 50, textAlign: 'center', fontSize: 14, color: '#2D3748' },
   percentageSymbol: { fontSize: 14, color: '#4A5568', marginLeft: 4, marginRight: 12 },
-  calculatedAmountText: { fontSize: 12, fontWeight: 'bold', color: '#3182CE' },
+  calculatedAmountText: { fontSize: 12, fontWeight: 'bold' },
 
   // Estilos para botones del modal de confirmación
   modalButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12, marginTop: 8 },
@@ -1427,5 +1416,20 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.27,
+    shadowRadius: 4.65,
   },
 });

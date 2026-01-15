@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, Modal, Pressable, StyleSheet } from 'react-native';
+import { Fonts } from '@/constants/theme';
 import { Feather } from '@expo/vector-icons';
+import React, { useMemo, useState } from 'react';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import i18n from '../../constants/i18n';
 
 const daysOfWeek = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -82,16 +83,16 @@ export default function CalendarPickerModal({ visible, onClose, onSelect }: Cale
 
 const styles = StyleSheet.create({
   modalContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  inputModalContent: { width: '85%', maxWidth: 400, backgroundColor: '#FFF', borderRadius: 12, elevation: 5 },
+  inputModalContent: { width: '85%', maxWidth: 400, backgroundColor: '#FFF', borderRadius: 20, elevation: 5 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: '#F7FAFC', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-  title: { fontSize: 16, fontWeight: 'bold', color: '#2D3748' },
+  title: { fontSize: 18, fontFamily: Fonts.title, color: '#2D3748' },
   weekRow: { flexDirection: 'row', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#EDF2F7' },
-  weekDay: { flex: 1, textAlign: 'center', fontSize: 12, color: '#718096', fontWeight: '600' },
+  weekDay: { flex: 1, textAlign: 'center', fontSize: 12, color: '#718096', fontFamily: Fonts.bold },
   daysGrid: { flexDirection: 'row', flexWrap: 'wrap', padding: 8 },
   dayCell: { width: '14.28%', aspectRatio: 1, padding: 2 },
-  dayButton: { flex: 1, justifyContent: 'center', alignItems: 'center', borderRadius: 20, borderWidth: 1, borderColor: 'transparent' },
+  dayButton: { flex: 1, justifyContent: 'center', alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: 'transparent' },
   dayButtonPressed: { backgroundColor: '#EBF8FF', borderColor: '#3182CE' },
   footer: { padding: 16, borderTopWidth: 1, borderTopColor: '#E2E8F0' },
-  cancelButton: { backgroundColor: '#EDF2F7', paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
-  cancelText: { fontWeight: 'bold', color: '#4A5568' }
+  cancelButton: { backgroundColor: '#EDF2F7', paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
+  cancelText: { fontFamily: Fonts.bold, color: '#4A5568' }
 });

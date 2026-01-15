@@ -1,11 +1,14 @@
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, FlatList, Modal, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Animated, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
+import NewProjectModal from '../../components/projects/NewProjectModal';
 import { useCustomAlert } from '../../components/ui/CustomAlert';
 import i18n from '../../constants/i18n';
+import { Fonts } from '../../constants/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProjects } from '../../contexts/ProjectsContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { usePermission } from '../../hooks/usePermission';
 
 export default function ProjectsScreen() {
@@ -13,6 +16,7 @@ export default function ProjectsScreen() {
   const { user } = useAuth();
   const { hasPermission } = usePermission();
   const router = useRouter();
+  const { theme } = useTheme();
   
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
@@ -24,6 +28,7 @@ export default function ProjectsScreen() {
   const [searchText, setSearchText] = useState('');
   const [showDeleted, setShowDeleted] = useState(false);
   const [searchTimer, setSearchTimer] = useState<any>(null);
+  const [isNewProjectModalVisible, setIsNewProjectModalVisible] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const { showAlert, AlertComponent } = useCustomAlert();
 
@@ -176,7 +181,7 @@ export default function ProjectsScreen() {
 
       {isLoading && !refreshing && projects.length === 0 ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color="#3182CE" />
+          <ActivityIndicator size="large" color={theme.primaryColor} />
         </View>
       ) : (
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
@@ -185,19 +190,19 @@ export default function ProjectsScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#3182CE']} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primaryColor]} />
         }
         // Paginación
         onEndReached={loadMoreProjects}
         onEndReachedThreshold={0.5}
-        ListFooterComponent={hasMoreProjects && projects.length > 0 ? <ActivityIndicator style={{ padding: 10 }} color="#3182CE" /> : null}
+        ListFooterComponent={hasMoreProjects && projects.length > 0 ? <ActivityIndicator style={{ padding: 10 }} color={theme.primaryColor} /> : null}
         renderItem={({ item }) => (
           <Pressable style={styles.card} onPress={() => handlePressProject(item.id)}>
             <View style={styles.cardContent}>
               <View style={styles.nameRow}>
                 <Text style={styles.projectName}>{item.name}</Text>
                 {isNewProject((item as any).createdAt) && (
-                  <View style={styles.newBadge}>
+                  <View style={[styles.newBadge, { backgroundColor: theme.primaryColor }]}>
                     <Text style={styles.newBadgeText}>{i18n.t('common.new')}</Text>
                   </View>
                 )}
@@ -236,6 +241,12 @@ export default function ProjectsScreen() {
         }
       />
       </Animated.View>
+      )}
+
+      {hasPermission('PROJECT_CREATE') && (
+        <Pressable style={[styles.fab, { backgroundColor: theme.primaryColor }]} onPress={() => setIsNewProjectModalVisible(true)}>
+          <Feather name="plus" size={24} color="#FFF" />
+        </Pressable>
       )}
 
       {/* Modal de Confirmación de Eliminación */}
@@ -306,6 +317,21 @@ export default function ProjectsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Modal de Nuevo Proyecto */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isNewProjectModalVisible}
+        onRequestClose={() => setIsNewProjectModalVisible(false)}
+      >
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <NewProjectModal onClose={() => setIsNewProjectModalVisible(false)} />
+        </KeyboardAvoidingView>
+      </Modal>
       <AlertComponent />
     </View>
   );
@@ -315,27 +341,31 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 24, backgroundColor: '#FFFFFF' },
   containerDeleted: { backgroundColor: '#FFF5F5' },
   header: { marginBottom: 24 },
-  title: { fontSize: 32, fontWeight: 'bold', marginBottom: 16, color: '#1A202C' },
+  title: { fontSize: 32, fontFamily: Fonts.title, marginBottom: 16, color: '#1A202C' },
   listContent: { paddingBottom: 24 },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#F7FAFC',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 16,
+    // Sombra estilo EdbuildLogin
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
   },
   cardContent: { flex: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  projectName: { fontSize: 18, fontWeight: 'bold', color: '#2D3748', flexShrink: 1 },
-  newBadge: { backgroundColor: '#3182CE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 },
-  newBadgeText: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
+  projectName: { fontSize: 18, fontFamily: Fonts.bold, color: '#2D3748', flexShrink: 1 },
+  newBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 },
+  newBadgeText: { color: '#FFF', fontSize: 10, fontFamily: Fonts.bold },
   addressContainer: { flexDirection: 'row', alignItems: 'center' },
-  addressText: { fontSize: 14, color: '#718096', marginLeft: 6 },
-  emptyText: { textAlign: 'center', color: '#718096', marginTop: 20, fontSize: 16 },
+  addressText: { fontSize: 14, color: '#718096', marginLeft: 6, fontFamily: Fonts.regular },
+  emptyText: { textAlign: 'center', color: '#718096', marginTop: 20, fontSize: 16, fontFamily: Fonts.regular },
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -352,23 +382,29 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F7FAFC',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
   searchIcon: { marginRight: 8 },
   searchInput: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 14,
     fontSize: 16,
     color: '#2D3748',
+    fontFamily: Fonts.regular,
   },
   filterButton: {
     padding: 8,
     marginLeft: 8,
-    borderRadius: 8,
+    borderRadius: 12,
   },
   filterButtonActive: {
     backgroundColor: '#E53E3E',
@@ -384,8 +420,8 @@ const styles = StyleSheet.create({
     width: '85%',
     maxWidth: 400,
     backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: 24,
+    borderRadius: 20,
+    padding: 32,
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -394,7 +430,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontFamily: Fonts.title,
     marginBottom: 12,
     color: '#1A202C',
   },
@@ -402,18 +438,34 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 24,
     color: '#4A5568',
+    fontFamily: Fonts.regular,
   },
   modalButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
-  modalBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8 },
+  modalBtn: { paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12 },
   modalCancelBtn: { backgroundColor: '#EDF2F7' },
   modalDeleteBtn: { backgroundColor: '#E53E3E' },
   modalStartBtn: { backgroundColor: '#38A169' },
   modalBtnText: {
     color: '#4A5568',
-    fontWeight: '600',
+    fontFamily: Fonts.bold,
   },
   modalDeleteBtnText: {
     color: '#FFFFFF',
-    fontWeight: '600',
+    fontFamily: Fonts.bold,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.27,
+    shadowRadius: 4.65,
   },
 });

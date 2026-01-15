@@ -1,6 +1,8 @@
+import { Fonts } from '@/constants/theme';
 import React from 'react';
-import { ScrollView, Pressable, Text, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { NotificationFilter } from '../../contexts/NotificationsContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface NotificationFiltersProps {
   filter: NotificationFilter;
@@ -8,6 +10,7 @@ interface NotificationFiltersProps {
 }
 
 export default function NotificationFilters({ filter, setFilter }: NotificationFiltersProps) {
+  const { theme } = useTheme();
   const filters: { id: NotificationFilter; label: string }[] = [
     { id: 'ALL', label: 'Todas' },
     { id: 'UNREAD', label: 'No leídas' },
@@ -20,17 +23,13 @@ export default function NotificationFilters({ filter, setFilter }: NotificationF
 
   return (
     <View style={styles.container}>
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false} 
-        contentContainerStyle={styles.scrollContent}
-      >
+      <View style={styles.wrapContent}>
         {filters.map((f) => (
           <Pressable
             key={f.id}
             style={[
               styles.chip,
-              filter === f.id && styles.chipSelected
+              filter === f.id && { backgroundColor: theme.primaryColor, borderColor: theme.primaryColor }
             ]}
             onPress={() => setFilter(f.id)}
           >
@@ -42,7 +41,7 @@ export default function NotificationFilters({ filter, setFilter }: NotificationF
             </Text>
           </Pressable>
         ))}
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -54,31 +53,27 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#EDF2F7',
   },
-  scrollContent: {
-    paddingHorizontal: 16,
+  wrapContent: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 4,
     gap: 8,
   },
   chip: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 12,
     backgroundColor: '#F7FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  chipSelected: {
-    backgroundColor: '#3182CE',
-    borderColor: '#3182CE',
-  },
   chipText: {
     fontSize: 14,
-    fontWeight: '500',
-    fontFamily: 'Inter-Medium',
+    fontFamily: Fonts.medium,
     color: '#718096',
   },
   chipTextSelected: {
     color: '#FFFFFF',
-    fontWeight: '600',
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: Fonts.bold,
   },
 });

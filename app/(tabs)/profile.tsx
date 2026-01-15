@@ -8,6 +8,7 @@ import { useCustomAlert } from '../../components/ui/CustomAlert';
 import LanguageSelector from '../../components/ui/LanguageSelector';
 import i18n from '../../constants/i18n';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import api from '../../services/api';
 
 export default function ProfileScreen() {
@@ -24,6 +25,7 @@ export default function ProfileScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const colorScheme = useColorScheme() ?? 'light';
   const { showAlert, AlertComponent } = useCustomAlert();
+  const { theme } = useTheme();
   
   // Definimos colores locales si el tema no carga correctamente, o usamos los del tema
   const textColor = Colors[colorScheme]?.text || '#000';
@@ -172,7 +174,7 @@ export default function ProfileScreen() {
             source={getProfileImageSource()}
             style={styles.avatar}
           />
-          <View style={styles.editIconBadge}>
+          <View style={[styles.editIconBadge, { backgroundColor: theme.primaryColor }]}>
             {isUploading ? <ActivityIndicator size="small" color="#FFF" /> : <FontAwesome5 name="camera" size={16} color="#FFF" />}
           </View>
         </Pressable>
@@ -181,14 +183,14 @@ export default function ProfileScreen() {
             {user?.username || i18n.t('common.username')}
           </Text>
           {(user?.permissions?.includes('ROLE_ADMIN')) && (
-            <FontAwesome5 name="crown" size={18} color="#D4AF37" style={{ marginLeft: 8 }} />
+            <FontAwesome5 name="crown" size={18} color={theme.primaryColor} style={{ marginLeft: 8 }} />
           )}
         </View>
         <Text style={[styles.email, { color: subTextColor }]}>
           {user?.email || 'email@example.com'}
         </Text>
         
-        <View style={styles.roleBadge}>
+        <View style={[styles.roleBadge, { backgroundColor: theme.primaryColor }]}>
           <Text style={styles.roleText}>{roleName}</Text>
         </View>
       </View>
@@ -306,7 +308,7 @@ export default function ProfileScreen() {
                 <Text style={styles.cancelButtonText}>{i18n.t('common.cancel')}</Text>
               </Pressable>
               <Pressable 
-                style={[styles.modalButton, styles.saveButton]} 
+                style={[styles.modalButton, styles.saveButton, { backgroundColor: theme.primaryColor }]} 
                 onPress={handleChangePassword}
                 disabled={isChangingPassword}
               >
@@ -350,7 +352,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: '#3182CE',
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -373,7 +374,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   roleBadge: {
-    backgroundColor: '#D4AF37', // Dorado corporativo
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderRadius: 20,
@@ -480,7 +480,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#EDF2F7',
   },
   saveButton: {
-    backgroundColor: '#3182CE',
   },
   saveButtonText: {
     color: '#FFFFFF',

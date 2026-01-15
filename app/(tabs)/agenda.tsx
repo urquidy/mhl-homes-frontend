@@ -1,14 +1,14 @@
 import { Feather } from '@expo/vector-icons';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
-import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useCustomAlert } from '../../components/ui/CustomAlert';
 import i18n from '../../constants/i18n';
 import { useAuth } from '../../contexts/AuthContext';
 import { CalendarEvent, useEvents } from '../../contexts/EventsContext';
 import { useNotifications } from '../../contexts/NotificationsContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import api from '../../services/api';
-import { HeaderActionContext } from './_layout';
 
 // --- Utilidades de Fecha ---
 const getDaysOfWeek = () => {
@@ -51,26 +51,19 @@ export default function AgendaScreen() {
   const [newEventType, setNewEventType] = useState<CalendarEvent['type']>('Meeting');
 
   const { showAlert, AlertComponent } = useCustomAlert();
-  const { setCustomAddAction } = useContext(HeaderActionContext);
+  const { theme } = useTheme();
 
-  // Configurar el botón "+" del Header para abrir el modal de evento
-  useFocusEffect(
-    useCallback(() => {
-      setCustomAddAction(() => () => {
-        // Pre-llenar fecha con la seleccionada
-        setEditingEventId(null);
-        setNewEventTitle('');
-        setNewEventDesc('');
-        setNewEventType(agendaTypes.length > 0 ? agendaTypes[0].name : 'Meeting');
-        setNewEventTime('09:00');
-        setIsModalVisible(true);
-        setInvitedUserIds([]);
-        setUserSearch('');
-        setShowUserSuggestions(false);
-      });
-      return () => setCustomAddAction(null);
-    }, [agendaTypes])
-  );
+  const handleOpenCreateModal = () => {
+    setEditingEventId(null);
+    setNewEventTitle('');
+    setNewEventDesc('');
+    setNewEventType(agendaTypes.length > 0 ? agendaTypes[0].name : 'Meeting');
+    setNewEventTime('09:00');
+    setIsModalVisible(true);
+    setInvitedUserIds([]);
+    setUserSearch('');
+    setShowUserSuggestions(false);
+  };
 
   // Efecto para manejar la navegación desde el Dashboard
   useEffect(() => {
@@ -297,16 +290,16 @@ export default function AgendaScreen() {
               style={[
                 styles.dayCell,
                 cellHeight,
-                isSelected && styles.dayCellSelected,
-                isToday && !isSelected && styles.dayCellToday
+                isSelected && { backgroundColor: '#F7FAFC' },
+                isToday && !isSelected && {}
               ]} 
               onPress={() => handleDayPress(date)}
             >
-              <View style={[styles.dayNumberContainer, isSelected && styles.dayNumberSelected]}>
+              <View style={[styles.dayNumberContainer, isSelected && { backgroundColor: theme.primaryColor }]}>
                 <Text style={[
                   styles.dayText, 
                   isSelected && styles.dayTextSelected,
-                  isToday && !isSelected && styles.dayTextToday
+                  isToday && !isSelected && { color: theme.primaryColor, fontWeight: 'bold' }
                 ]}>
                   {date.getDate()}
                 </Text>
@@ -331,6 +324,10 @@ export default function AgendaScreen() {
         })}
         </View>
       </View>
+
+      <Pressable style={[styles.fab, { backgroundColor: theme.primaryColor }]} onPress={handleOpenCreateModal}>
+        <Feather name="plus" size={24} color="#FFF" />
+      </Pressable>
 
       {/* --- Modal para Agregar Evento --- */}
       <Modal
@@ -428,7 +425,7 @@ export default function AgendaScreen() {
                 const user = availableUsers.find(u => u.id === id);
                 if (!user) return null;
                 return (
-                  <View key={id} style={styles.userChip}>
+                  <View key={id} style={[styles.userChip, { backgroundColor: theme.primaryColor }]}>
                     <Text style={styles.userChipText}>{user.username}</Text>
                     <Pressable onPress={() => setInvitedUserIds(prev => prev.filter(uid => uid !== id))}>
                       <Feather name="x" size={14} color="#FFF" />
@@ -479,7 +476,7 @@ export default function AgendaScreen() {
               )}
             </View>
 
-            <Pressable style={styles.saveButton} onPress={handleSaveEvent}>
+            <Pressable style={[styles.saveButton, { backgroundColor: theme.primaryColor }]} onPress={handleSaveEvent}>
               <Text style={styles.saveButtonText}>{editingEventId ? i18n.t('agenda.updateEvent') : i18n.t('agenda.saveEvent')}</Text>
             </Pressable>
           </View>
@@ -505,13 +502,9 @@ const styles = StyleSheet.create({
   calendarGrid: { flexDirection: 'row', flexWrap: 'wrap', height: '100%' },
   dayCell: { width: '14.28%', padding: 2, borderBottomWidth: 1, borderBottomColor: '#EDF2F7', borderRightWidth: 1, borderRightColor: '#EDF2F7' },
   emptyCell: { backgroundColor: '#FAFAFA' },
-  dayCellSelected: { backgroundColor: '#F7FAFC' },
   dayNumberContainer: { width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', alignSelf: 'center', marginBottom: 2 },
-  dayNumberSelected: { backgroundColor: '#3182CE' },
-  dayCellToday: { },
   dayText: { fontSize: 12, color: '#2D3748' },
   dayTextSelected: { color: '#FFFFFF', fontWeight: 'bold' },
-  dayTextToday: { color: '#3182CE', fontWeight: 'bold' },
   
   cellEventsContainer: { flex: 1, gap: 2 },
   eventBar: { borderRadius: 2, paddingHorizontal: 2, paddingVertical: 1, justifyContent: 'center' },
@@ -546,14 +539,29 @@ const styles = StyleSheet.create({
   typeOptionSelected: { backgroundColor: '#2D3748', borderColor: '#2D3748' }, // Fallback color, overridden inline
   typeOptionText: { fontSize: 12, fontWeight: '600' },
 
-  saveButton: { backgroundColor: '#3182CE', paddingVertical: 14, borderRadius: 8, alignItems: 'center', marginTop: 8 },
+  saveButton: { paddingVertical: 14, borderRadius: 8, alignItems: 'center', marginTop: 8 },
   saveButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
 
   // Estilos lista de usuarios
-  userChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#3182CE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+  userChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   userChipText: { color: '#FFF', fontSize: 12, marginRight: 4 },
   suggestionsContainer: { position: 'absolute', top: 50, left: 0, right: 0, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, elevation: 5, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, maxHeight: 150, zIndex: 20 },
   suggestionItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: '#EDF2F7' },
   suggestionText: { fontSize: 14, color: '#2D3748' },
   suggestionRole: { fontSize: 12, color: '#718096' },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.27,
+    shadowRadius: 4.65,
+  },
 });

@@ -7,6 +7,7 @@ import { disconnectSocket, initSocket } from '../services/socket';
 import { ChecklistItem, Project, ProjectBudget, ProjectStatus } from '../types';
 import { useAuth } from './AuthContext';
 
+
 // --- Creación del Contexto ---
 interface ProjectsContextType {
   projects: Project[];
@@ -434,7 +435,9 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     try {
         await api.post(`/api/projects/${projectId}/blueprints?groupName=${encodeURIComponent(groupName)}&replace=${replace}`, formData, {
-            headers: { 'Content-Type': Platform.OS === 'web' ? undefined : 'multipart/form-data' }
+            headers: { 
+              'Content-Type': Platform.OS === 'web' ? undefined : 'multipart/form-data',
+            }
         });
     } catch (error) {
         console.error('Error adding blueprint:', error);
@@ -507,7 +510,9 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     try {
       await api.put(`/api/projects/${id}`, formData, {
-        headers: { 'Content-Type': Platform.OS === 'web' ? undefined : 'multipart/form-data' },
+        headers: { 
+          'Content-Type': Platform.OS === 'web' ? undefined : 'multipart/form-data',
+        },
       });
 
       setProjects(prev => prev.map(p => 
@@ -665,7 +670,9 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     try {
       await api.post(`/api/checklist/${itemId}/evidence`, formData, {
-        headers: { 'Content-Type': Platform.OS === 'web' ? undefined : 'multipart/form-data' },
+        headers: { 
+          'Content-Type': Platform.OS === 'web' ? undefined : 'multipart/form-data',
+        },
       });
     } catch (error) {
       console.error('Error uploading evidence:', error);

@@ -3,27 +3,30 @@
  * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
  */
 
-import { Platform } from 'react-native';
 
-const goldColor = '#f3dc6f'; // Un dorado brillante y clásico
-const darkGoldColor = '#a78025'; // Un dorado más oscuro para mejor contraste sobre fondos claros
+const primaryGold = '#3182CE'; // A vibrant, standard gold
+const darkGold = '#2D3748'; // A darker gold for better contrast on light backgrounds
 
 export const Colors = {
   light: {
     text: '#11181C',
-    background: '#fff',
-    tint: darkGoldColor,
+    background: '#F5F5F5', // A softer, off-white background
+    tint: darkGold,
     icon: '#687076',
     tabIconDefault: '#687076',
-    tabIconSelected: darkGoldColor,
+    tabIconSelected: darkGold,
+    card: '#FFFFFF',
+    border: '#E0E0E0',
   },
   dark: {
-    text: '#ECEDEE',
-    background: '#080808', // Fondo negro puro
-    tint: goldColor,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
-    tabIconSelected: goldColor,
+    text: '#FFFFFF',
+    background: '#121212', // The deep grey from the loading screen
+    tint: primaryGold,
+    icon: '#A9A9A9',
+    tabIconDefault: '#A9A9A9',
+    tabIconSelected: primaryGold,
+    card: '#1E1E1E', // A slightly lighter grey for elevated surfaces
+    border: '#272727',
   },
 };
 
@@ -32,8 +35,9 @@ export const Fonts = {
   medium: 'DMSans-Medium',
   bold: 'DMSans-Bold',
 
-  // Alias semánticos
+  // Semantic aliases
   title: 'DMSans-Bold',
   subtitle: 'DMSans-Regular',
   body: 'DMSans-Regular',
 };
+

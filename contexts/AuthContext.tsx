@@ -1,5 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
-import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import api from '../services/api';
 import { User, UserRole } from '../types';
@@ -8,8 +8,9 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
-  login: (userData: { id: string; username: string; email: string; role: UserRole; imageUri?: string; permissions?: string[]; companyName?: string }, token: string, refreshToken: string) => Promise<void>;
+  login: (userData: { id: string; username: string; email: string; role: UserRole; imageUri?: string; permissions?: string[]; companyName?: string, tenantId?: string }, token: string, refreshToken: string) => Promise<void>;
   logout: () => Promise<void>;
+  signUp: (registrationData: any) => Promise<void>;
   updateUserImage: (uri: string) => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -39,7 +40,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setUser(JSON.parse(storedUser));
         }
       } catch (error) {
-        console.error('Error loading session:', error);
+        // console.error('Error loading session:', error);
       } finally {
         setIsLoading(false);
       }
@@ -47,14 +48,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     loadSession();
   }, []);
 
-  const login = async (userData: { id: string; username: string; email: string; role: UserRole; imageUri?: string; permissions?: string[]; companyName?: string }, newToken: string, refreshToken: string) => {
+  const login = async (userData: { id: string; username: string; email: string; role: UserRole; imageUri?: string; permissions?: string[]; companyName?: string, tenantId?: string }, newToken: string, refreshToken: string) => {
     const newUser: User = {
       id: userData.id,
       username: userData.username,
       email: userData.email,
       role: userData.role,
       permissions: userData.permissions || [],
-      companyName: userData.companyName || 'MHL Homes',
+      companyName: userData.companyName || 'EdBuild',
+      tenantId: userData.tenantId,
       imageUri: userData.imageUri || 'https://i.pravatar.cc/150?u=' + userData.email,
     };
 
@@ -72,7 +74,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     setUser(null);
     setToken(null);
     if (Platform.OS === 'web') {
@@ -84,6 +86,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       await SecureStore.deleteItemAsync('refreshToken');
       await SecureStore.deleteItemAsync('user');
     }
+  }, []);
+
+  // Configurar interceptor de Axios para manejar 401 globalmente
+  useEffect(() => {
+    const interceptorId = api.interceptors.response.use(
+      (response) => response,
+      async (error) => {
+        if (error.response?.status === 401) {
+          await logout();
+        }
+        return Promise.reject(error);
+      }
+    );
+
+    return () => {
+      api.interceptors.response.eject(interceptorId);
+    };
+  }, [logout]);
+
+  const signUp = async (registrationData: any) => {
+    await api.post('/api/tenants/register', registrationData);
   };
 
   const updateUserImage = async (uri: string) => {
@@ -125,7 +148,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await SecureStore.setItemAsync('user', JSON.stringify(refreshedUser));
       }
     } catch (error: any) {
-      console.error('Error refreshing user session:', error);
+      // console.error('Error refreshing user session:', error);
       if (error.response?.status === 401) {
         logout();
       }
@@ -133,7 +156,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, logout, updateUserImage, refreshUser }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, logout, signUp, updateUserImage, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

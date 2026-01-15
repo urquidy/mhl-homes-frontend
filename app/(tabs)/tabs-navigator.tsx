@@ -1,15 +1,15 @@
 import { Feather } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { useTenant } from '../../contexts/TenantContext';
+import { Colors } from '@/constants/theme';
 
 export default function TabsNavigator() {
-  const { tenant } = useTenant();
+  const colorScheme = 'dark';
   return (
     <Tabs
       screenOptions={{
         headerShown: false, // El header ya lo gestiona el Drawer.
-        tabBarActiveTintColor: tenant.primaryColor,
+        tabBarActiveTintColor: Colors[colorScheme].tint,
       }}
     >
       <Tabs.Screen

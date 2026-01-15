@@ -1,5 +1,5 @@
 services:
-  mhl-homes-web:
+  edbuild-web:
     build:
       context: .
       dockerfile: Dockerfile

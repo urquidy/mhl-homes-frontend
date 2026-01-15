@@ -5,6 +5,7 @@ import { ActivityIndicator, LayoutAnimation, Platform, Pressable, ScrollView, St
 import i18n from '../../constants/i18n';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProjects } from '../../contexts/ProjectsContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import api from '../../services/api';
 
 // Habilitar animaciones de layout en Android
@@ -15,6 +16,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 // Componente para el grupo de proyecto (Rama del árbol)
 const ProjectGroup = ({ project, items }: { project: any, items: any[] }) => {
   const [expanded, setExpanded] = useState(true);
+  const { theme } = useTheme();
 
   const toggleExpand = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -26,7 +28,7 @@ const ProjectGroup = ({ project, items }: { project: any, items: any[] }) => {
       <Pressable onPress={toggleExpand} style={styles.groupHeader}>
         <Feather name={expanded ? "chevron-down" : "chevron-right"} size={20} color="#4A5568" />
         <Text style={styles.groupTitle}>{project.name}</Text>
-        <View style={styles.badge}>
+        <View style={[styles.badge, { backgroundColor: theme.primaryColor }]}>
           <Text style={styles.badgeText}>{items.length}</Text>
         </View>
       </Pressable>
@@ -57,12 +59,13 @@ export default function ChecklistScreen() {
   const { token } = useAuth();
   const [myTasks, setMyTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { theme } = useTheme();
 
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
         <Pressable onPress={() => console.log('Nueva Tarea')} style={{ marginRight: 15 }}>
-          <Feather name="plus" size={24} color="#3182CE" />
+          <Feather name="plus" size={24} color={theme.primaryColor} />
         </Pressable>
       ),
     });
@@ -105,7 +108,7 @@ export default function ChecklistScreen() {
       <Text style={styles.subtitle}>{i18n.t('checklist.subtitle')}</Text>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#3182CE" style={{ marginTop: 20 }} />
+        <ActivityIndicator size="large" color={theme.primaryColor} style={{ marginTop: 20 }} />
       ) : (
         Object.keys(tasksByProject).map(projectId => {
           // Buscamos la info del proyecto en el contexto para obtener el nombre
@@ -154,7 +157,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   badge: {
-    backgroundColor: '#3182CE',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,

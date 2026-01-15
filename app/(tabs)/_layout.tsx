@@ -1,18 +1,18 @@
 import Header from '@/components/Header';
-import NewProjectModal from '@/components/projects/NewProjectModal';
 import { Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { usePathname, useRouter } from 'expo-router';
 import { Drawer } from 'expo-router/drawer';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import i18n from '../../constants/i18n';
+import { Fonts } from '../../constants/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { EventsProvider } from '../../contexts/EventsContext';
 import { LanguageProvider, useLanguage } from '../../contexts/LanguageContext';
 import { NotificationsProvider } from '../../contexts/NotificationsContext';
-import { useTenant } from '../../contexts/TenantContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import api from '../../services/api';
 
 // --- Datos y tipos movidos desde SideMenu.tsx ---
@@ -23,11 +23,6 @@ interface MenuItem {
   permission?: string;
   order?: number;
 }
-
-// Contexto para permitir que las pantallas cambien la acción del botón "Agregar" del Header
-export const HeaderActionContext = React.createContext<{
-  setCustomAddAction: (action: (() => void) | null) => void;
-}>({ setCustomAddAction: () => {} });
 
 // Contexto para permitir recargar el menú desde otras pantallas (ej. Dashboard)
 export const MenuContext = React.createContext<{
@@ -43,27 +38,26 @@ function AppLayoutContent() {
   const isLargeScreen = width >= 1024;
   const insets = useSafeAreaInsets();
   const { user, token } = useAuth();
-  const { tenant } = useTenant();
+  const { theme, isLoading: isThemeLoading } = useTheme();
   
-  // Estado para la acción personalizada del botón "Agregar"
-  const [customAddAction, setCustomAddAction] = useState<(() => void) | null>(null);
-  const [isNewProjectModalVisible, setIsNewProjectModalVisible] = useState(false);
   const [dynamicMenuItems, setDynamicMenuItems] = useState<MenuItem[]>([]);
   const [roleName, setRoleName] = useState('');
   const [isLoadingMenu, setIsLoadingMenu] = useState(true);
 
   // Función para cargar el menú desde la API
-  const fetchMenu = async () => {
+  const fetchMenu = useCallback(async () => {
     if (!token) return;
     try {
-      const response = await api.get('/api/menu');
+      const response = await api.get('/api/menu', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       const menuData = response.data || [];
       setDynamicMenuItems(menuData);
       await AsyncStorage.setItem('menu_cache', JSON.stringify(menuData));
     } catch (err) {
       console.error("Error fetching menu:", err);
     }
-  };
+  }, [token]);
 
   // Cargar menú desde la API al iniciar o cambiar token
   useEffect(() => {
@@ -88,7 +82,7 @@ function AppLayoutContent() {
     };
 
     loadInitialMenu();
-  }, [token]);
+  }, [token, fetchMenu]);
 
   // Resolver nombre del rol (igual que en profile.tsx)
   useEffect(() => {
@@ -151,18 +145,15 @@ function AppLayoutContent() {
     }
   }, [pathname, dynamicMenuItems, isLoadingMenu, token]);
 
-  const handleAddPress = customAddAction || (() => setIsNewProjectModalVisible(true));
-
-  if (isLoadingMenu) {
+  if (isLoadingMenu || isThemeLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1A202C' }}>
-        <ActivityIndicator size="large" color="#D4AF37" />
+        <ActivityIndicator size="large" color="#3182CE" />
       </View>
     );
   }
 
   return (
-    <HeaderActionContext.Provider value={{ setCustomAddAction }}>
       <MenuContext.Provider value={{ reloadMenu: fetchMenu }}>
       <EventsProvider>
       <NotificationsProvider>
@@ -174,22 +165,22 @@ function AppLayoutContent() {
         drawerContent={(props) => {
           return (
             // --- Contenido del SideMenu integrado directamente ---
-            <View style={[styles.container, { paddingTop: 15 + insets.top, paddingBottom: 15 + insets.bottom, backgroundColor: tenant.secondaryColor || '#1A202C' }]}>
+            <View style={[styles.container, { paddingTop: 15 + insets.top, paddingBottom: 15 + insets.bottom, backgroundColor: theme.menuColor || '#1A202C' }]}>
               <View style={styles.header}>
-                {tenant.logoUri ? (
+                {user && user.imageUri ? (
                   <Image 
-                    source={{ uri: tenant.logoUri }} 
+                    source={{ uri: user.imageUri }} 
                     style={styles.drawerLogo} 
                     resizeMode="contain" 
                   />
                 ) : (
                   <View style={styles.logoPlaceholder}>
-                    <Text style={styles.logoText}>{user?.companyName.charAt(0) || 'M'}</Text>
+                    <Text style={styles.logoText}>{user?.companyName?.charAt(0) || 'M'}</Text>
                   </View>
                 )}
                 <View style={styles.headerTextContainer}>
-                  <Text style={[styles.companyName, { color: tenant.primaryColor }]}>{user?.companyName || 'MHL Homes'}</Text>
-                  <Text style={[styles.userRole, { color: tenant.primaryColor }]}>{roleName}</Text>
+                  <Text style={[styles.companyName, { color: theme.primaryColor }]}>{user?.companyName || 'EdBuild'}</Text>
+                  <Text style={[styles.userRole, { color: theme.primaryColor }]}>{roleName}</Text>
                 </View>
               </View>
 
@@ -213,29 +204,14 @@ function AppLayoutContent() {
                     >
                       {({ pressed }) => (
                         <View style={[ styles.navItem, isActive && styles.navItemActive, pressed && styles.navItemPressed ]}>
-                          <Feather name={item.icon as keyof typeof Feather.glyphMap} size={22} color={tenant.primaryColor} />
-                          <Text style={[styles.navText, { color: tenant.primaryColor }, isActive && styles.navTextActive]}>{i18n.t(item.title)}</Text>
+                          <Feather name={item.icon as keyof typeof Feather.glyphMap} size={22} color={theme.primaryColor} />
+                          <Text style={[styles.navText, { color: theme.primaryColor }, isActive && styles.navTextActive]}>{i18n.t(item.title)}</Text>
                         </View>
                       )}
                     </Pressable>
                   );
                 })}
               </View>
-
-              {/* --- Botón de Nuevo Proyecto --- */}
-              {user?.permissions?.includes('PROJECT_CREATE') && (
-              <View style={styles.footer}>
-                <Pressable
-                  onPress={() => {
-                    props.navigation.closeDrawer();
-                    setIsNewProjectModalVisible(true);
-                  }}
-                  style={({ pressed }) => [styles.newProjectButton, { backgroundColor: tenant.primaryColor }, pressed && styles.buttonPressed]}>
-                  <Feather name="plus-circle" size={20} color="#ffffffff" />
-                  <Text style={styles.newProjectButtonText}>{i18n.t('nav.newProject')}</Text>
-                </Pressable>
-              </View>
-              )}
             </View>
           );
         }}
@@ -246,7 +222,6 @@ function AppLayoutContent() {
                 onMenuPress={isLargeScreen ? undefined : () => navigation.toggleDrawer()}
                 userImageUri={user?.imageUri}
                 token={token}
-                onAddPress={handleAddPress}
                 onProfilePress={() => router.push('/(tabs)/profile' as any)}
               />
             ),
@@ -255,6 +230,7 @@ function AppLayoutContent() {
             swipeEnabled: !isLargeScreen,
             // Elimina el fondo oscuro (overlay) cuando el menú está abierto.
             overlayColor: 'transparent',
+            sceneContainerStyle: { backgroundColor: theme.backgroundColor }
         })}
       >
         {/* Definimos aquí todas las pantallas que usará el Drawer y el menú */}
@@ -268,27 +244,9 @@ function AppLayoutContent() {
         <Drawer.Screen name="profile" options={{ title: 'Perfil', drawerItemStyle: { display: 'none' } }} />
       </Drawer>
 
-      {/* Modal Global de Nuevo Proyecto */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={isNewProjectModalVisible}
-        onRequestClose={() => setIsNewProjectModalVisible(false)}
-      >
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <View style={styles.modalContent}>
-            {/* Asegúrate de que NewProjectModal acepte la prop 'onClose' para cerrar el modal */}
-            <NewProjectModal onClose={() => setIsNewProjectModalVisible(false)} />
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
       </NotificationsProvider>
       </EventsProvider>
       </MenuContext.Provider>
-    </HeaderActionContext.Provider>
   );
 }
 
@@ -309,7 +267,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#1A202C',
-    padding: 15,
+    padding: 24,
   },
   header: {
     flexDirection: 'row',
@@ -328,24 +286,28 @@ const styles = StyleSheet.create({
   logoText: {
     color: '#FFFFFF',
     fontSize: 20,
-    fontWeight: 'bold',
+    fontFamily: Fonts.bold,
   },
   drawerLogo: {
     width: 50,
     height: 50,
-    marginRight: 12,
+    marginRight: 16,
+    borderRadius: 10,
   },
   headerTextContainer: {
     flexShrink: 1,
   },
   companyName: {
-    color: '#D4AF37',
-    fontSize: 16,
-    fontWeight: 'bold',
+    color: '#3182CE',
+    fontSize: 18,
+    fontFamily: Fonts.bold,
+    marginBottom: 2,
   },
   userRole: {
-    color: '#D4AF37',
-    fontSize: 14,
+    color: '#3182CE',
+    fontSize: 14, 
+    fontFamily: Fonts.regular,
+    opacity: 0.8,
   },
   navContainer: {
     flex: 1,
@@ -353,10 +315,10 @@ const styles = StyleSheet.create({
   navItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginBottom: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginBottom: 6,
   },
   navItemActive: {
     backgroundColor: '#2D3748',
@@ -365,13 +327,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#2D3748',
   },
   navText: {
-    color: '#D4AF37',
+    color: '#3182CE',
     fontSize: 16,
-    marginLeft: 12,
+    marginLeft: 16,
+    fontFamily: Fonts.medium,
   },
   navTextActive: {
-    color: '#D4AF37',
-    fontWeight: '600',
+    fontFamily: Fonts.bold,
   },
   footer: {
     paddingTop: 20,
@@ -379,41 +341,20 @@ const styles = StyleSheet.create({
     borderTopColor: '#2D3748',
   },
   newProjectButton: {
-    backgroundColor: '#D4AF37',
+    backgroundColor: '#3182CE',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 8,
+    paddingVertical: 16,
+    borderRadius: 12,
   },
   buttonPressed: {
-    backgroundColor: '#b89b30', // Dorado más oscuro al presionar
+    backgroundColor: '#2B6CB0', // Azul más oscuro al presionar
   },
   newProjectButtonText: {
     color: '#ffffffff',
     fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 8,
-  },
-  // Estilos para el Modal (similares a budgets.tsx)
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    width: '90%',
-    maxWidth: 500,
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 5,
-    overflow: 'hidden',
-    maxHeight: '90%',
-    flex: 1, // Asegura que el contenido interno (que usa flex: 1) tenga altura y no colapse
+    fontFamily: Fonts.bold,
+    marginLeft: 10,
   },
 });

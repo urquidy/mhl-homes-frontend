@@ -1,3 +1,4 @@
+import { Fonts } from '@/constants/theme';
 import { Feather } from '@expo/vector-icons';
 import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -77,7 +78,7 @@ const styles = StyleSheet.create({
     width: '85%',
     maxWidth: 350,
     backgroundColor: '#FFF',
-    borderRadius: 12,
+    borderRadius: 20,
     padding: 24,
     elevation: 5,
     shadowColor: '#000',
@@ -92,8 +93,8 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 20,
+    fontFamily: Fonts.title,
     color: '#1A202C',
   },
   languageOption: {
@@ -105,7 +106,7 @@ const styles = StyleSheet.create({
   },
   languageOptionSelected: {
     backgroundColor: '#F7FAFC',
-    borderRadius: 8,
+    borderRadius: 12,
     paddingHorizontal: 8,
     borderBottomWidth: 0,
   },
@@ -116,10 +117,11 @@ const styles = StyleSheet.create({
   languageLabel: {
     flex: 1,
     fontSize: 16,
+    fontFamily: Fonts.regular,
     color: '#4A5568',
   },
   languageLabelSelected: {
     color: '#3182CE',
-    fontWeight: 'bold',
+    fontFamily: Fonts.bold,
   },
 });

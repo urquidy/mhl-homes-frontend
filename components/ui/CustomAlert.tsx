@@ -1,5 +1,7 @@
-import React, { useState, useCallback } from 'react';
-import { Modal, View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { Fonts } from '@/constants/theme';
+import React, { useCallback, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export interface AlertButton {
   text: string;
@@ -22,6 +24,7 @@ export const useCustomAlert = () => {
     message: '',
     buttons: [],
   });
+  const { theme } = useTheme();
 
   const showAlert = useCallback((title: string, message?: string, buttons?: AlertButton[]) => {
     setAlertState({
@@ -55,7 +58,7 @@ export const useCustomAlert = () => {
                   key={index}
                   style={[
                     styles.button,
-                    btn.style === 'cancel' ? styles.cancelButton : styles.defaultButton,
+                    btn.style === 'cancel' ? styles.cancelButton : { backgroundColor: theme.primaryColor },
                     btn.style === 'destructive' ? styles.destructiveButton : {},
                     index < alertState.buttons.length - 1 ? { marginBottom: 8 } : {}
                   ]}
@@ -86,15 +89,14 @@ export const useCustomAlert = () => {
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  content: { width: '100%', maxWidth: 350, backgroundColor: '#FFF', borderRadius: 12, padding: 20, elevation: 5, alignItems: 'center' },
-  title: { fontSize: 18, fontWeight: 'bold', color: '#1A202C', marginBottom: 8, textAlign: 'center' },
-  message: { fontSize: 16, color: '#4A5568', marginBottom: 20, textAlign: 'center' },
+  content: { width: '100%', maxWidth: 350, backgroundColor: '#FFF', borderRadius: 20, padding: 24, elevation: 5, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4 },
+  title: { fontSize: 20, fontFamily: Fonts.title, color: '#1A202C', marginBottom: 8, textAlign: 'center' },
+  message: { fontSize: 16, fontFamily: Fonts.regular, color: '#4A5568', marginBottom: 24, textAlign: 'center' },
   buttonContainer: { flexDirection: 'column', width: '100%' },
-  button: { paddingVertical: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center', width: '100%' },
-  defaultButton: { backgroundColor: '#3182CE' },
+  button: { paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center', width: '100%' },
   cancelButton: { backgroundColor: '#EDF2F7' },
   destructiveButton: { backgroundColor: '#E53E3E' },
-  buttonText: { fontWeight: 'bold', fontSize: 16 },
+  buttonText: { fontFamily: Fonts.bold, fontSize: 16 },
   defaultText: { color: '#FFF' },
   cancelText: { color: '#4A5568' },
   destructiveText: { color: '#FFF' },
