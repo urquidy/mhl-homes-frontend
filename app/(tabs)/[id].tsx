@@ -248,6 +248,8 @@ export default function ProjectDetailScreen() {
   const [isAddGroupModalVisible, setIsAddGroupModalVisible] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [uploadMode, setUploadMode] = useState<'replace' | 'append' | 'newGroup'>('replace');
+  const [isStepsExpanded, setIsStepsExpanded] = useState(true);
+  const [collapsedStepGroups, setCollapsedStepGroups] = useState<Record<string, boolean>>({});
   
   // Estados para Documentos
   const [isDocModalVisible, setIsDocModalVisible] = useState(false);
@@ -608,6 +610,11 @@ export default function ProjectDetailScreen() {
   const toggleGroupCollapse = (groupId: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setCollapsedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
+  };
+
+  const toggleStepGroupCollapse = (groupId: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setCollapsedStepGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
   };
 
   // Helper para construir la fuente de la imagen (URI + Headers)
@@ -1479,6 +1486,37 @@ export default function ProjectDetailScreen() {
     setSelectedItemId(null);
   };
   
+  const allCatalogSteps = useMemo(() => {
+    return catalogGroups.flatMap(group => group.items.map(item => ({...item, categoryId: group.id})));
+  }, [catalogGroups]);
+
+  const handleCatalogStepClick = async (catalogStep: { id: string, name: string, categoryId: string }) => {
+      const existingItem = checklistItems.find(item => item.stepId === catalogStep.id);
+
+      if (existingItem) {
+          await toggleChecklistItem(projectId, existingItem.id);
+      } else {
+          await addChecklistItem(
+              projectId,
+              catalogStep.name, // text
+              undefined, // x
+              undefined, // y
+              undefined, // width
+              undefined, // height
+              undefined, // assignedTo
+              undefined, // shape
+              undefined, // deadline
+              undefined, // path
+              undefined, // color
+              catalogStep.id, // stepId
+              catalogStep.categoryId, // categoryId
+              undefined, // blueprintId
+              true // completed
+          );
+      }
+  };
+
+  
   // Sincronizar dimensiones base con el layout real renderizado para máxima precisión
   const onImageLayout = (event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
@@ -1703,6 +1741,50 @@ export default function ProjectDetailScreen() {
           categories={docCategories}
         />
       )}
+
+      {/* Sección de Pasos del Proyecto (Checklist Catálogo) */}
+      <View style={styles.section}>
+        <Pressable onPress={() => {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setIsStepsExpanded(!isStepsExpanded);
+        }} style={styles.collapsibleSectionHeader}>
+          <Text style={styles.sectionTitle}>Pasos del Proyecto</Text>
+          <Feather name={isStepsExpanded ? 'chevron-down' : 'chevron-right'} size={24} color="#1A202C" />
+        </Pressable>
+        
+        {isStepsExpanded && (
+          <View>
+            {catalogGroups.length > 0 ? (
+              catalogGroups.map(group => (
+                <View key={group.id} style={styles.stepGroupContainer}>
+                  <Pressable onPress={() => toggleStepGroupCollapse(group.id)} style={styles.stepGroupHeader}>
+                    <Text style={styles.stepGroupTitle}>{group.name}</Text>
+                    <Feather name={collapsedStepGroups[group.id] ? 'chevron-right' : 'chevron-down'} size={22} color="#4A5568" />
+                  </Pressable>
+
+                  {!collapsedStepGroups[group.id] && (
+                    <View style={styles.stepGroupItemsContainer}>
+                      {group.items.map(step => {
+                        const correspondingItem = checklistItems.find(item => item.stepId === step.id);
+                        const isCompleted = correspondingItem?.completed || false;
+                        
+                        return (
+                          <Pressable key={step.id} style={styles.simpleChecklistItem} onPress={() => handleCatalogStepClick({ ...step, categoryId: group.id })}>
+                            <Feather name={isCompleted ? 'check-square' : 'square'} size={24} color={isCompleted ? '#38A169' : '#A0AEC0'} />
+                            <Text style={[styles.simpleChecklistItemText, isCompleted && styles.simpleChecklistItemTextCompleted]}>{step.name}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+              ))
+            ) : (
+              <Text style={styles.placeholder}>{i18n.t('projectDetail.noCatalogSteps')}</Text>
+            )}
+          </View>
+        )}
+      </View>
 
       {/* Sección del Plano Arquitectónico */}
       <View style={styles.section}>
@@ -2413,7 +2495,41 @@ const styles = StyleSheet.create({
   },
   statusRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 32 },
   statusText: { fontSize: 16, color: '#718096', fontFamily: 'Inter-Regular' },
-  inlineStartButton: { flexDirection: 'row', alignItems: 'center', marginLeft: 12, backgroundColor: '#F0FFF4', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: '#C6F6D5' },
+  stepGroupContainer: {
+    marginBottom: 8,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    overflow: 'hidden',
+  },
+  stepGroupHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#F7FAFC',
+  },
+  stepGroupTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
+  stepGroupItemsContainer: {
+    paddingHorizontal: 12,
+    paddingBottom: 4,
+  },
+  inlineStartButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FFF4',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#9AE6B4'
+  },
+
   inlineStartButtonText: { color: '#38A169', fontWeight: 'bold', fontFamily: 'Inter-Bold', fontSize: 12, marginLeft: 4 },
   progressContainer: { marginBottom: 24 },
   progressBarBackground: { height: 10, backgroundColor: '#EDF2F7', borderRadius: 5, overflow: 'hidden' },
@@ -2615,4 +2731,26 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 16, backgroundColor: '#FFF' },
   label: { fontSize: 14, fontWeight: '600', color: '#4A5568', marginBottom: 8 },
   modalButtons: { flexDirection: 'row', justifyContent: 'flex-end' },
+  collapsibleSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  simpleChecklistItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EDF2F7',
+  },
+  simpleChecklistItemText: {
+    marginLeft: 12,
+    fontSize: 16,
+    color: '#2D3748',
+    fontFamily: 'Inter-Regular',
+  },
+  simpleChecklistItemTextCompleted: {
+    textDecorationLine: 'line-through',
+    color: '#A0AEC0',
+  },
 });

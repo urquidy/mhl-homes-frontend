@@ -20,7 +20,7 @@ interface ProjectsContextType {
   restoreProject: (id: string) => Promise<void>;
   startProject: (id: string) => Promise<void>;
   updateChecklistEvidence: (projectId: string, itemId: string, uri: string) => void;
-  addChecklistItem: (projectId: string, text: string, x?: number, y?: number, width?: number, height?: number, assignedTo?: string, shape?: 'rectangle' | 'circle' | 'pencil' | 'pin', deadline?: string, path?: string, color?: string, stepId?: string, categoryId?: string, blueprintId?: string) => Promise<void>;
+  addChecklistItem: (projectId: string, text: string, x?: number, y?: number, width?: number, height?: number, assignedTo?: string, shape?: 'rectangle' | 'circle' | 'pencil' | 'pin', deadline?: string, path?: string, color?: string, stepId?: string, categoryId?: string, blueprintId?: string, completed?: boolean) => Promise<void>;
   updateProjectPlan: (projectId: string, uri: string) => void;
   addChecklistEvidence: (projectId: string, itemId: string, type: 'image' | 'video', uri: string) => Promise<void>;
   deleteChecklistEvidence: (projectId: string, checklistId: string, evidenceId: string) => Promise<void>;
@@ -565,7 +565,7 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
     }));
   };
 
-  const addChecklistItem = async (projectId: string, text: string, x?: number, y?: number, width?: number, height?: number, assignedTo?: string, shape?: 'rectangle' | 'circle' | 'pencil' | 'pin', deadline?: string, path?: string, color?: string, stepId?: string, categoryId?: string, blueprintId?: string) => {
+  const addChecklistItem = async (projectId: string, text: string, x?: number, y?: number, width?: number, height?: number, assignedTo?: string, shape?: 'rectangle' | 'circle' | 'pencil' | 'pin', deadline?: string, path?: string, color?: string, stepId?: string, categoryId?: string, blueprintId?: string, completed: boolean = false) => {
     if (!token) return;
 
     const localId = Date.now().toString();
@@ -574,7 +574,7 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
       projectId,
       itemId: localId,
       text,
-      completed: false,
+      completed: completed,
       evidenceUri: "", 
       x: x || 0,
       y: y || 0,

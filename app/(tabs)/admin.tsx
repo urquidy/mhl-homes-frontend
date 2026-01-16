@@ -42,6 +42,21 @@ export default function AdminScreen() {
   const [docCategoryFormData, setDocCategoryFormData] = useState({ name: '', description: '' });
   const [editingDocCategory, setEditingDocCategory] = useState<any>(null);
 
+  // Estado para expandir/colapsar categorías
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+
+  const toggleCategory = (categoryId: string) => {
+    setExpandedCategories(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(categoryId)) {
+        newSet.delete(categoryId);
+      } else {
+        newSet.add(categoryId);
+      }
+      return newSet;
+    });
+  };
+
   const fetchUsers = async () => {
     setLoading(true);
     try {
@@ -438,6 +453,66 @@ export default function AdminScreen() {
     ]);
   };
 
+  const renderCategory = ({ item: category }: { item: any }) => {
+    const isExpanded = expandedCategories.has(category.id);
+    return (
+      <View key={category.id} style={styles.treeNode}>
+        {/* Nodo Categoría */}
+        <View style={styles.treeNodeHeader}>
+          <Pressable onPress={() => toggleCategory(category.id)} style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+            <View style={[styles.treeNodeIcon, { backgroundColor: '#EBF8FF' }]}>
+              <Feather name="folder" size={20} color="#3182CE" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.treeNodeTitle} numberOfLines={1}>{category.name}</Text>
+              <Text style={styles.treeNodeSubtitle} numberOfLines={1}>{category.description}</Text>
+            </View>
+            <Feather name={isExpanded ? "chevron-down" : "chevron-right"} size={22} color="#718096" style={{ marginLeft: 8 }} />
+          </Pressable>
+          <View style={styles.treeNodeActions}>
+            {hasPermission('CATALOG_MANAGE') && (
+            <Pressable onPress={() => openCreateStepModal(category.id)} style={styles.actionButton}>
+              <Feather name="plus" size={18} color="#38A169" />
+            </Pressable>
+            )}
+            {hasPermission('CATALOG_UPDATE') && (
+            <Pressable onPress={() => openEditStepModal(category)} style={styles.actionButton}>
+              <Feather name="edit-2" size={18} color="#3182CE" />
+            </Pressable>
+            )}
+            {hasPermission('CATALOG_DELETE') && (
+            <Pressable onPress={() => handleDeleteStep(category.id)} style={styles.actionButton}>
+              <Feather name="trash-2" size={18} color="#E53E3E" />
+            </Pressable>
+            )}
+          </View>
+        </View>
+
+        {/* Nodos Hijos (Pasos) */}
+        {isExpanded && category.children && category.children.map((step: any) => (
+          <View key={step.id} style={styles.treeChildNode}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+              <Feather name="corner-down-right" size={16} color="#A0AEC0" style={{ marginRight: 8 }} />
+              <Text style={styles.treeChildTitle} numberOfLines={1}>{step.name}</Text>
+            </View>
+            <View style={styles.treeNodeActions}>
+              {hasPermission('CATALOG_UPDATE') && (
+              <Pressable onPress={() => openEditStepModal(step)} style={styles.actionButton}>
+                <Feather name="edit-2" size={16} color="#718096" />
+              </Pressable>
+              )}
+              {hasPermission('CATALOG_DELETE') && (
+              <Pressable onPress={() => handleDeleteStep(step.id)} style={styles.actionButton}>
+                <Feather name="trash-2" size={16} color="#E53E3E" />
+              </Pressable>
+              )}
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
   const renderUserItem = ({ item }: { item: any }) => {
     // Resolver nombre del rol para mostrar (si item.role es un ID)
     const roleObj = roles.find(r => r.id === item.role || r.name === item.role);
@@ -589,64 +664,14 @@ export default function AdminScreen() {
         {loading ? (
           <ActivityIndicator size="large" color="#3182CE" style={{ marginTop: 20 }} />
         ) : (
-          <ScrollView contentContainerStyle={styles.listContent}>
-            {projectSteps.map((category) => (
-              <View key={category.id} style={styles.treeNode}>
-                {/* Nodo Categoría */}
-                <View style={styles.treeNodeHeader}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
-                    <View style={[styles.treeNodeIcon, { backgroundColor: '#EBF8FF' }]}>
-                      <Feather name="folder" size={20} color="#3182CE" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.treeNodeTitle} numberOfLines={1}>{category.name}</Text>
-                      <Text style={styles.treeNodeSubtitle} numberOfLines={1}>{category.description}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.treeNodeActions}>
-                    {hasPermission('CATALOG_MANAGE') && (
-                    <Pressable onPress={() => openCreateStepModal(category.id)} style={styles.actionButton}>
-                      <Feather name="plus" size={18} color="#38A169" />
-                    </Pressable>
-                    )}
-                    {hasPermission('CATALOG_UPDATE') && (
-                    <Pressable onPress={() => openEditStepModal(category)} style={styles.actionButton}>
-                      <Feather name="edit-2" size={18} color="#3182CE" />
-                    </Pressable>
-                    )}
-                    {hasPermission('CATALOG_DELETE') && (
-                    <Pressable onPress={() => handleDeleteStep(category.id)} style={styles.actionButton}>
-                      <Feather name="trash-2" size={18} color="#E53E3E" />
-                    </Pressable>
-                    )}
-                  </View>
-                </View>
-
-                {/* Nodos Hijos (Pasos) */}
-                {category.children && category.children.map((step: any) => (
-                  <View key={step.id} style={styles.treeChildNode}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
-                      <Feather name="corner-down-right" size={16} color="#A0AEC0" style={{ marginRight: 8 }} />
-                      <Text style={styles.treeChildTitle} numberOfLines={1}>{step.name}</Text>
-                    </View>
-                    <View style={styles.treeNodeActions}>
-                      {hasPermission('CATALOG_UPDATE') && (
-                      <Pressable onPress={() => openEditStepModal(step)} style={styles.actionButton}>
-                        <Feather name="edit-2" size={16} color="#718096" />
-                      </Pressable>
-                      )}
-                      {hasPermission('CATALOG_DELETE') && (
-                      <Pressable onPress={() => handleDeleteStep(step.id)} style={styles.actionButton}>
-                        <Feather name="trash-2" size={16} color="#E53E3E" />
-                      </Pressable>
-                      )}
-                    </View>
-                  </View>
-                ))}
-              </View>
-            ))}
-            {projectSteps.length === 0 && <Text style={styles.emptyText}>{i18n.t('admin.noSteps')}</Text>}
-          </ScrollView>
+          <FlatList
+            data={projectSteps}
+            renderItem={renderCategory}
+            keyExtractor={(item) => item.id.toString()}
+            extraData={expandedCategories}
+            contentContainerStyle={styles.listContent}
+            ListEmptyComponent={<Text style={styles.emptyText}>{i18n.t('admin.noSteps')}</Text>}
+          />
         )}
 
         {hasPermission('CATALOG_MANAGE') && (
