@@ -9,6 +9,8 @@ export const usePermission = () => {
    */
   const hasPermission = (permission: string): boolean => {
     if (!user?.permissions) return false;
+    // Admin has all permissions
+    if (user.permissions.includes('ROLE_ADMIN') || user.permissions.includes('ADMIN')) return true;
     return user.permissions.includes(permission);
   };
 

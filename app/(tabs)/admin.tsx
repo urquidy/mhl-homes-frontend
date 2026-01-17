@@ -11,14 +11,29 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { usePermission } from '../../hooks/usePermission';
 import api from '../../services/api';
 
+import * as WebBrowser from 'expo-web-browser';
+
+interface SubscriptionStatus {
+  status: string;
+  planName: string;
+  nextBillingDate: string;
+  daysLeft: number;
+  isExpired: boolean;
+  maxProjects: number;
+  maxUsers: number;
+  maxStorageMB: number;
+  currency: string;
+}
+
 export default function AdminScreen() {
   const { user } = useAuth();
   const { hasPermission } = usePermission();
   const { reloadTheme, theme } = useTheme();
-  const [currentView, setCurrentView] = useState<'menu' | 'users' | 'project-steps' | 'roles' | 'agenda-types' | 'document-categories' | 'site-config'>('menu');
+  const [currentView, setCurrentView] = useState<'menu' | 'users' | 'project-steps' | 'roles' | 'agenda-types' | 'document-categories' | 'site-config' | 'subscription'>('menu');
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
   
   const { showAlert, AlertComponent } = useCustomAlert();
   // Estado para Modal de Edición
@@ -125,6 +140,44 @@ export default function AdminScreen() {
     }
   };
 
+  const fetchSubscriptionStatus = async () => {
+    setLoading(true);
+    try {
+      const response = await api.get('/api/subscription/status');
+      setSubscriptionStatus(response.data);
+    } catch (error) {
+      console.error('Error fetching subscription status:', error);
+      showAlert(i18n.t('common.error'), 'Error al cargar los detalles de la suscripción.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleManagePayments = async () => {
+    if (!subscriptionStatus) {
+        showAlert('Error', 'No se han cargado los datos de la suscripción.');
+        return;
+    }
+    try {
+        const payload = {
+            planId: subscriptionStatus.planName,
+            currency: subscriptionStatus.currency,
+        };
+        const response = await api.post('/api/stripe/create-checkout-session', payload);
+        const { url } = response.data;
+        if (url) {
+            await WebBrowser.openBrowserAsync(url);
+        }
+        else {
+            showAlert('Error', 'No se pudo obtener el enlace de pago.');
+        }
+    }
+    catch (error) {
+        console.error('Error getting payment portal link:', error);
+        showAlert('Error', 'No se pudo obtener el enlace de pago.');
+    }
+  };
+
   useEffect(() => {
     if (currentView === 'users') {
       fetchUsers();
@@ -137,6 +190,8 @@ export default function AdminScreen() {
       fetchDocumentCategories();
     } else if (currentView === 'site-config') {
       fetchSiteConfigs();
+    } else if (currentView === 'subscription') {
+      fetchSubscriptionStatus();
     }
   }, [currentView]);
 
@@ -1167,10 +1222,90 @@ export default function AdminScreen() {
     return <RolesManager onBack={() => setCurrentView('menu')} />;
   }
 
+  if (currentView === 'subscription') {
+    return (
+      <View style={styles.container}>
+        <View style={styles.headerRow}>
+          <Pressable onPress={() => setCurrentView('menu')} style={styles.backButton}>
+            <Feather name="arrow-left" size={24} color="#4A5568" />
+          </Pressable>
+          <Text style={styles.title}>Mi Plan y Facturación</Text>
+        </View>
+
+        {loading ? (
+          <ActivityIndicator size="large" color={theme.primaryColor} style={{ marginTop: 20 }} />
+        ) : subscriptionStatus ? (
+          <ScrollView>
+            <View style={styles.subscriptionCard}>
+              <View style={styles.subscriptionCardHeader}>
+                <Text style={styles.subscriptionCardTitle}>{subscriptionStatus.planName}</Text>
+                <View style={[styles.statusBadge, { backgroundColor: subscriptionStatus.isExpired ? '#FED7D7' : '#C6F6D5' }]}>
+                  <Text style={[styles.statusBadgeText, { color: subscriptionStatus.isExpired ? '#9B2C2C' : '#22543D' }]}>{subscriptionStatus.status}</Text>
+                </View>
+              </View>
+              <View style={styles.subscriptionCardBody}>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Próximo cobro:</Text>
+                  <Text style={styles.detailValue}>{new Date(subscriptionStatus.nextBillingDate).toLocaleDateString()}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Días restantes:</Text>
+                  <Text style={styles.detailValue}>{subscriptionStatus.daysLeft}</Text>
+                </View>
+                <View style={styles.separator} />
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Proyectos máximos:</Text>
+                  <Text style={styles.detailValue}>{subscriptionStatus.maxProjects}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Usuarios máximos:</Text>
+                  <Text style={styles.detailValue}>{subscriptionStatus.maxUsers}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Almacenamiento:</Text>
+                  <Text style={styles.detailValue}>{subscriptionStatus.maxStorageMB} MB</Text>
+                </View>
+              </View>
+            </View>
+            <Pressable style={[styles.manageButton, { backgroundColor: theme.primaryColor }]} onPress={handleManagePayments}>
+              <Feather name="credit-card" size={20} color="#FFF" style={{ marginRight: 12 }}/>
+              <Text style={styles.manageButtonText}>Gestionar Pagos y Subscripciones</Text>
+            </Pressable>
+          </ScrollView>
+        ) : (
+          <View style={styles.centeredMessage}>
+            <Feather name="alert-circle" size={48} color="#A0AEC0" />
+            <Text style={styles.emptyText}>No se pudo cargar la información de la suscripción.</Text>
+            <Pressable onPress={fetchSubscriptionStatus} style={{ marginTop: 16 }}>
+              <Text style={{ color: theme.primaryColor, fontFamily: 'Inter-SemiBold' }}>Reintentar</Text>
+            </Pressable>
+          </View>
+        )}
+        <AlertComponent />
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.title}>{i18n.t('nav.administrator')}</Text>
       <Text style={styles.subtitle}>{i18n.t('admin.subtitle')}</Text>
+
+      {hasPermission('BILLING_VIEW') && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Suscripción</Text>
+          <Pressable style={styles.card} onPress={() => setCurrentView('subscription')}>
+              <View style={[styles.cardIcon, { backgroundColor: '#EBF8FF'}]}>
+                  <Feather name="credit-card" size={24} color="#3182CE" />
+              </View>
+              <View style={styles.cardContent}>
+                  <Text style={styles.cardTitle}>Mi Plan y Facturación</Text>
+                  <Text style={styles.cardDescription}>Ver detalles de la suscripción y gestionar pagos.</Text>
+              </View>
+              <Feather name="chevron-right" size={24} color="#CBD5E0" />
+          </Pressable>
+        </View>
+      )}
 
       {hasPermission('CATALOG_MANAGE') && (
       <View style={styles.section}>
@@ -1383,4 +1518,89 @@ const styles = StyleSheet.create({
   iconPickerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 },
   iconOption: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center', backgroundColor: '#F7FAFC' },
   iconOptionSelected: { borderWidth: 0, transform: [{ scale: 1.1 }] },
+  
+  // Subscription View Styles
+  subscriptionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  subscriptionCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EDF2F7',
+  },
+  subscriptionCardTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    fontFamily: 'Inter-Bold',
+    color: '#1A202C',
+  },
+  subscriptionCardBody: {
+    padding: 16,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  detailLabel: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#718096',
+  },
+  detailValue: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#2D3748',
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusBadgeText: {
+    fontSize: 12,
+    fontFamily: 'Inter-Bold',
+    textTransform: 'uppercase',
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#EDF2F7',
+    marginVertical: 12,
+  },
+  manageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  manageButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+  },
+  centeredMessage: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
 });

@@ -5,6 +5,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import api from '@/services/api';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
@@ -19,6 +20,7 @@ export default function SelectPlanScreen() {
     const isLargeScreen = width >= 768;
     const { showAlert, AlertComponent } = useCustomAlert();
     const { theme } = useTheme();
+    const [redirecting, setRedirecting] = useState(false);
 
     useEffect(() => {
         const fetchPlans = async () => {
@@ -43,8 +45,13 @@ export default function SelectPlanScreen() {
         fetchPlans();
     }, []);
 
-    const handleSelectPlan = (planId: string) => {
-        router.push({ pathname: '/(auth)/register', params: { plan: planId, currency } });
+    const handleSelectPlan = (plan: any) => {
+        // The new flow is to always register the user first.
+        // The registration screen will then handle the payment process if the plan is not free.
+        router.push({ 
+            pathname: '/(auth)/register', 
+            params: { planId: plan.id, currency } 
+        });
     };
     
     if (loading) {
@@ -120,11 +127,16 @@ export default function SelectPlanScreen() {
 
                                     <Pressable 
                                         style={[styles.selectButton, isSelected && { backgroundColor: '#2D3748' }]} 
-                                        onPress={() => handleSelectPlan(plan.id)}
+                                        onPress={() => handleSelectPlan(plan)}
+                                        disabled={redirecting}
                                     >
-                                        <Text style={[styles.selectButtonText, isSelected && styles.selectButtonTextSelected]}>
-                                            {i18n.t('plan.getStarted')}
-                                        </Text>
+                                        {redirecting && isSelected ? (
+                                            <ActivityIndicator color="#FFFFFF" />
+                                        ) : (
+                                            <Text style={[styles.selectButtonText, isSelected && styles.selectButtonTextSelected]}>
+                                                {i18n.t('plan.getStarted')}
+                                            </Text>
+                                        )}
                                     </Pressable>
                                 </View>
                             </Pressable>

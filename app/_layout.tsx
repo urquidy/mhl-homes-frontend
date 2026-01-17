@@ -5,6 +5,7 @@ import { ActivityIndicator, Animated, Image, LogBox, StyleSheet, Text, View } fr
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { EventsProvider } from '../contexts/EventsContext';
 import { ProjectsProvider } from '../contexts/ProjectsContext';
+import StripeProviderWrapper from '@/components/StripeProviderWrapper';
 import { ThemeProvider } from '../contexts/ThemeContext';
 
 // Filtrar errores de consola de Axios para evitar ruido en dispositivos
@@ -103,6 +104,7 @@ function InitialLayout() {
 
 export default function RootLayout() {
   return (
+    <StripeProviderWrapper>
       <ThemeProvider>
         <AuthProvider>
           <ProjectsProvider>
@@ -112,6 +114,7 @@ export default function RootLayout() {
           </ProjectsProvider>
         </AuthProvider>
       </ThemeProvider>
+    </StripeProviderWrapper>
   );
 }
 

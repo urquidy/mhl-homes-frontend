@@ -10,7 +10,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDim
 
 export default function RegisterScreen() {
     const router = useRouter();
-    const { plan, currency } = useLocalSearchParams();
+    const { planId, currency } = useLocalSearchParams();
     const { signUp } = useAuth();
     const { showAlert, AlertComponent } = useCustomAlert();
     const { width } = useWindowDimensions();
@@ -30,6 +30,7 @@ export default function RegisterScreen() {
     const [passwordStrength, setPasswordStrength] = useState(0);
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [emailError, setEmailError] = useState('');
 
     const calculateStrength = (pass: string) => {
         let score = 0;
@@ -60,6 +61,19 @@ export default function RegisterScreen() {
         setTenantId(sanitized);
     };
 
+    const handleAdminUsernameChange = (text: string) => {
+        const sanitized = text.replace(/[^a-zA-Z0-9_.]/g, '');
+        setAdminUsername(sanitized);
+    };
+
+    const validateEmail = () => {
+        if (adminEmail && !/\S+@\S+\.\S+/.test(adminEmail)) {
+            setEmailError(i18n.t('login.invalidEmail'));
+        } else {
+            setEmailError('');
+        }
+    };
+
     const handleRegister = async () => {
         if (!tenantId || !adminUsername || !adminEmail || !adminPassword || !confirmPassword || !companyName) {
             showAlert(i18n.t('register.incompleteForm'), i18n.t('register.fillAllFields'));
@@ -68,7 +82,7 @@ export default function RegisterScreen() {
 
         // Validar formato de email
         if (!/\S+@\S+\.\S+/.test(adminEmail)) {
-            showAlert(i18n.t('common.error'), i18n.t('login.invalidEmail'));
+            setEmailError(i18n.t('login.invalidEmail'));
             return;
         }
 
@@ -92,7 +106,7 @@ export default function RegisterScreen() {
             adminEmail,
             adminPassword,
             companyName,
-            plan,
+            plan: planId,
             currency,
         };
 
@@ -124,7 +138,7 @@ export default function RegisterScreen() {
             <AlertComponent />
             <Stack.Screen 
                 options={{
-                    title: isLargeScreen ? '' : `${i18n.t('register.title')} for ${plan}`,
+                    title: isLargeScreen ? '' : `${i18n.t('register.title')} for ${planId}`,
                     headerShown: !isLargeScreen,
                 }} 
             />
@@ -183,21 +197,26 @@ export default function RegisterScreen() {
                                 placeholder={i18n.t('register.adminUsername')}
                                 placeholderTextColor={theme.icon}
                                 value={adminUsername}
-                                onChangeText={setAdminUsername}
+                                onChangeText={handleAdminUsernameChange}
                                 autoCapitalize="none"
                             />
                         </View>
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>{i18n.t('register.adminEmail')}</Text>
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, !!emailError && styles.inputError]}
                                 placeholder={i18n.t('register.adminEmail')}
                                 placeholderTextColor={theme.icon}
                                 value={adminEmail}
-                                onChangeText={setAdminEmail}
+                                onChangeText={(text) => {
+                                    setAdminEmail(text);
+                                    if (emailError) setEmailError('');
+                                }}
+                                onBlur={validateEmail}
                                 keyboardType="email-address"
                                 autoCapitalize="none"
                             />
+                            {!!emailError && <Text style={styles.errorText}>{emailError}</Text>}
                         </View>
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>{i18n.t('register.adminPassword')}</Text>
@@ -247,6 +266,7 @@ export default function RegisterScreen() {
                         title={i18n.t('register.complete')}
                         onPress={handleRegister}
                         isLoading={loading}
+                        disabled={!planId || !tenantId || !adminUsername || !adminEmail || !adminPassword || !confirmPassword || !companyName || !!emailError}
                         variant="primary"
                         fullWidth
                     />
@@ -351,6 +371,15 @@ const getThemedStyles = (scheme: 'light' | 'dark' | null | undefined) => {
             color: theme.text,
             borderWidth: 1,
             borderColor: theme.border,
+        },
+        inputError: {
+            borderColor: '#E53E3E',
+        },
+        errorText: {
+            color: '#E53E3E',
+            fontSize: 12,
+            fontFamily: Fonts.regular,
+            marginTop: 4,
         },
         passwordContainer: {
             flexDirection: 'row',
