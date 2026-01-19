@@ -26,6 +26,7 @@ interface ProjectsContextType {
   deleteChecklistEvidence: (projectId: string, checklistId: string, evidenceId: string) => Promise<void>;
   addChecklistComment: (projectId: string, itemId: string, text: string) => Promise<void>;
   deleteChecklistItem: (projectId: string, itemId: string) => Promise<void>;
+  updateChecklistItemDates: (projectId: string, itemId: string, startDate: string | null, endDate: string | null) => Promise<void>;
   addProjectBlueprint: (projectId: string, file: any, groupName: string, replace?: boolean) => Promise<void>;
   refreshProjects: (search?: string, active?: boolean, clearList?: boolean) => Promise<void>;
   loadMoreProjects: () => Promise<void>;
@@ -344,6 +345,8 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
         shape: item.shape || 'rectangle',
         assignedTo: item.assignedTo,
         deadline: item.deadline,
+        startDate: item.startDate,
+        endDate: item.endDate,
         path: item.path,
         color: item.color,
         stepId: item.stepId,
@@ -598,12 +601,15 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
         id: data.itemId || data.id,
         text: data.text,
         completed: data.completed,
+        itemId: localId,
         x: data.x,
         y: data.y,
         evidenceUri: data.evidenceUri,
         // Mantenemos los datos locales que la API básica no devolvió para que la UI no se rompa
         width, height, assignedTo, shape: shape || 'rectangle', path, deadline, color, stepId: data.stepId || stepId, categoryId: data.categoryId || categoryId, blueprintId: data.blueprintId || blueprintId,
-        evidence: [],
+        startDate: data.startDate,
+        endDate: data.endDate,
+        evidence: [], // Aseguramos que sea un array vacío si no viene del backend
         comments: [],
       };
 
@@ -760,11 +766,33 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
   };
 
+  const updateChecklistItemDates = async (projectId: string, itemId: string, startDate: string | null, endDate: string | null) => {
+    if (!token) return;
+
+    const currentList = checklists[projectId] || [];
+    const originalList = JSON.parse(JSON.stringify(currentList)); // Deep copy for revert
+
+    const updatedList = currentList.map(i =>
+      i.id === itemId ? { ...i, startDate: startDate || undefined, endDate: endDate || undefined } : i
+    );
+
+    setChecklists(prev => ({ ...prev, [projectId]: updatedList }));
+
+    try {
+      await api.patch(`/api/checklist/${itemId}`, { startDate, endDate });
+    } catch (error) {
+      console.error('Error updating checklist item dates:', error);
+      // Revert on failure
+      setChecklists(prev => ({ ...prev, [projectId]: originalList }));
+      throw error; // Re-throw to be caught by the UI
+    }
+  };
+
   const value = {
     projects, addProject, checklists, budgets,
     getProjectById, getChecklistByProjectId, deleteProject, restoreProject, startProject,
     toggleChecklistItem, updateChecklistEvidence, addChecklistItem, updateProjectPlan, refreshBudgets, isBudgetsLoading, deleteChecklistEvidence, addProjectBlueprint,
-    addChecklistEvidence, addChecklistComment, deleteChecklistItem, refreshProjects, loadMoreProjects, hasMoreProjects, isLoading, fetchProjectChecklist, clearProjectChecklist
+    addChecklistEvidence, addChecklistComment, deleteChecklistItem, updateChecklistItemDates, refreshProjects, loadMoreProjects, hasMoreProjects, isLoading, fetchProjectChecklist, clearProjectChecklist
   };
 
   return (

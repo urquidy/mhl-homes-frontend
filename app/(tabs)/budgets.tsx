@@ -664,6 +664,7 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
   const [totalAmount, setTotalAmount] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [categoryPercentages, setCategoryPercentages] = useState<Record<string, string>>({});
+  const [categoryAmounts, setCategoryAmounts] = useState<Record<string, string>>({});
   const { showAlert, AlertComponent } = useCustomAlert();
 
   const toggleCategory = (catName: string) => {
@@ -671,6 +672,11 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
       const newPercentages = { ...categoryPercentages };
       delete newPercentages[catName];
       setCategoryPercentages(newPercentages);
+
+      const newAmounts = { ...categoryAmounts };
+      delete newAmounts[catName];
+      setCategoryAmounts(newAmounts);
+
       setSelectedCategories(selectedCategories.filter(c => c !== catName));
     } else {
       setSelectedCategories([...selectedCategories, catName]);
@@ -681,6 +687,7 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
     setTotalAmount('');
     setSelectedCategories([]);
     setCategoryPercentages({});
+    setCategoryAmounts({});
     onClose();
   };
 
@@ -698,40 +705,71 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
   }, [visible, availableProjects, projectId]);
 
   const updatePercentage = (catName: string, value: string) => {
-    setCategoryPercentages(prev => ({ ...prev, [catName]: value }));
+    const cleanValue = value.replace(/[^0-9.]/g, '');
+    setCategoryPercentages(prev => ({ ...prev, [catName]: cleanValue }));
+
+    const rawTotal = parseFloat(totalAmount.replace(/,/g, '')) || 0;
+    const percentage = parseFloat(cleanValue) || 0;
+    
+    if (rawTotal > 0) {
+      const newAmount = rawTotal * (percentage / 100);
+      setCategoryAmounts(prev => ({ ...prev, [catName]: formatInputCurrency(newAmount.toFixed(2)) }));
+    } else {
+      setCategoryAmounts(prev => ({ ...prev, [catName]: '' }));
+    }
   };
+
+  const updateAmount = (catName: string, value: string) => {
+    const cleanValue = value.replace(/[^0-9.]/g, '');
+    setCategoryAmounts(prev => ({...prev, [catName]: formatInputCurrency(cleanValue)}));
+    
+    const rawTotal = parseFloat(totalAmount.replace(/,/g, '')) || 0;
+    const amount = parseFloat(cleanValue) || 0;
+
+    if (rawTotal > 0) {
+      const newPercentage = (amount / rawTotal) * 100;
+      setCategoryPercentages(prev => ({ ...prev, [catName]: newPercentage.toFixed(2).replace(/\.00$/, '') }));
+    } else {
+      setCategoryPercentages(prev => ({ ...prev, [catName]: '0' }));
+    }
+  };
+
 
   const handleDistributeRemaining = () => {
     const currentTotal = Object.values(categoryPercentages).reduce((acc, val) => acc + (parseFloat(val) || 0), 0);
     const remaining = Math.max(0, 100 - currentTotal);
 
-    // Identificar categorías seleccionadas que no tienen valor asignado o es 0
     const targets = selectedCategories.filter(cat => !categoryPercentages[cat] || parseFloat(categoryPercentages[cat]) === 0);
 
     if (targets.length === 0) {
-      showAlert(i18n.t('common.info'), remaining > 0 
+      showAlert(i18n.t('common.info'), remaining > 0.1
         ? `Queda un ${remaining.toFixed(1)}% por asignar, pero no hay categorías vacías seleccionadas.` 
         : 'El 100% ya está asignado.');
       return;
     }
 
     const newPercentages = { ...categoryPercentages };
+    const newAmounts = { ...categoryAmounts };
+    const rawTotal = parseFloat(totalAmount.replace(/,/g, '')) || 0;
     const share = remaining / targets.length;
     let distributed = 0;
 
     targets.forEach((cat, index) => {
       let val = 0;
       if (index === targets.length - 1) {
-        // Al último le damos lo que sobra exacto para evitar problemas de redondeo
         val = remaining - distributed;
       } else {
         val = parseFloat(share.toFixed(2));
       }
       newPercentages[cat] = val.toFixed(2).replace(/\.00$/, '');
+      if(rawTotal > 0) {
+        newAmounts[cat] = formatInputCurrency((rawTotal * (val / 100)).toFixed(2));
+      }
       distributed += val;
     });
 
     setCategoryPercentages(newPercentages);
+    setCategoryAmounts(newAmounts);
   };
 
   const handleSave = () => {
@@ -744,20 +782,23 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
       return;
     }
     
-    // Validar que la suma de porcentajes sea 100%
-    const currentTotalPercentage = Object.values(categoryPercentages).reduce((acc, val) => acc + (parseFloat(val) || 0), 0);
-    if (Math.abs(currentTotalPercentage - 100) > 0.1) {
-      showAlert(i18n.t('common.warning'), `La suma de los porcentajes es ${currentTotalPercentage}%. Debería ser 100%.`);
-      return;
+    const rawTotal = parseFloat(totalAmount.replace(/,/g, ''));
+    const totalAllocated = selectedCategories.reduce((acc, cat) => {
+        return acc + (parseFloat(categoryAmounts[cat]?.replace(/,/g, '') || '0'));
+    }, 0);
+
+    if (Math.abs(totalAllocated - rawTotal) > 0.01) { // Permitir pequeñas discrepancias por redondeo
+        showAlert(i18n.t('common.warning'), `La suma de las partidas (${formatCurrency(totalAllocated)}) no coincide con el monto total (${formatCurrency(rawTotal)}).`);
+        return;
     }
 
     const budgetData = {
       projectId,
-      totalAmount: parseFloat(totalAmount.replace(/,/g, '')),
+      totalAmount: rawTotal,
       categories: selectedCategories.map(cat => ({
         name: cat,
         percentage: parseFloat(categoryPercentages[cat] || '0'),
-        allocated: (parseFloat(totalAmount.replace(/,/g, '')) * (parseFloat(categoryPercentages[cat] || '0') / 100))
+        allocated: parseFloat(categoryAmounts[cat]?.replace(/,/g, '') || '0')
       }))
     };
 
@@ -765,7 +806,7 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
     setTotalAmount('');
     setSelectedCategories([]);
     setCategoryPercentages({});
-    // onClose se llama desde el padre después de guardar
+    setCategoryAmounts({});
   };
 
   return (
@@ -809,11 +850,8 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
           <ScrollView style={styles.categoriesList} nestedScrollEnabled={true}>
             {categories.map((cat) => {
               const isSelected = selectedCategories.includes(cat.name);
-              const percentage = categoryPercentages[cat.name] || ''; // This is a string
-              const rawTotal = parseFloat(totalAmount.replace(/,/g, '')) || 0;
-              const calculatedAmount = (rawTotal && percentage)
-                ? (rawTotal * (parseFloat(percentage) / 100)) 
-                : 0;
+              const percentage = categoryPercentages[cat.name] || '';
+              const amount = categoryAmounts[cat.name] || '';
 
               return (
                 <View key={cat.id}>
@@ -828,19 +866,22 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
                   
                   {isSelected && (
                     <View style={styles.percentageRow}>
-                      <Text style={styles.percentageLabel}>{i18n.t('budgets.assign')}</Text>
                       <TextInput
                         style={styles.percentageInput}
                         placeholder="0"
-                        keyboardType="numeric"
-                        maxLength={3}
+                        keyboardType="decimal-pad"
                         value={percentage}
                         onChangeText={(text) => updatePercentage(cat.name, text)}
                       />
                       <Text style={styles.percentageSymbol}>%</Text>
-                      <Text style={styles.calculatedAmountText}>
-                        {calculatedAmount > 0 ? formatCurrency(calculatedAmount) : '$0.00'}
-                      </Text>
+
+                      <TextInput
+                        style={[styles.percentageInput, styles.amountInput]}
+                        placeholder="0.00"
+                        keyboardType="decimal-pad"
+                        value={amount}
+                        onChangeText={(text) => updateAmount(cat.name, text)}
+                      />
                     </View>
                   )}
                 </View>
@@ -1381,9 +1422,10 @@ const styles = StyleSheet.create({
   // Estilos para inputs de porcentaje
   percentageRow: { flexDirection: 'row', alignItems: 'center', marginLeft: 34, marginBottom: 8 },
   percentageLabel: { fontSize: 12, color: '#718096', marginRight: 8 },
-  percentageInput: { backgroundColor: '#F7FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 4, paddingVertical: 4, paddingHorizontal: 8, width: 50, textAlign: 'center', fontSize: 14, color: '#2D3748' },
+  percentageInput: { backgroundColor: '#F7FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 4, paddingVertical: 4, paddingHorizontal: 8, width: 60, textAlign: 'center', fontSize: 14, color: '#2D3748' },
   percentageSymbol: { fontSize: 14, color: '#4A5568', marginLeft: 4, marginRight: 12 },
   calculatedAmountText: { fontSize: 12, fontWeight: 'bold', color: '#3182CE' },
+  amountInput: { flex: 1, textAlign: 'right' },
 
   // Estilos para botones del modal de confirmación
   modalButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12, marginTop: 8 },

@@ -17,6 +17,7 @@ import HistoryModal from '../../components/project-detail/HistoryModal';
 import NewTaskModal, { NewTaskData } from '../../components/project-detail/NewTaskModal';
 import PlanUploadModal from '../../components/project-detail/PlanUploadModal';
 import ProjectDocuments from '../../components/project-detail/ProjectDocuments';
+import TaskDateModal from '../../components/project-detail/TaskDateModal';
 import { useCustomAlert } from '../../components/ui/CustomAlert';
 import ItemDetailModal from '../../components/ui/ItemDetailModal';
 import i18n from '../../constants/i18n';
@@ -24,6 +25,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useProjects } from '../../contexts/ProjectsContext';
 import { usePermission } from '../../hooks/usePermission';
 import api from '../../services/api';
+import { ChecklistItem } from '../../types';
 
 const getDaysInMonth = (month: number, year: number) => new Date(year, month + 1, 0).getDate();
 const getFirstDayOfMonth = (month: number, year: number) => new Date(year, month, 1).getDay();
@@ -1490,30 +1492,64 @@ export default function ProjectDetailScreen() {
     return catalogGroups.flatMap(group => group.items.map(item => ({...item, categoryId: group.id})));
   }, [catalogGroups]);
 
-  const handleCatalogStepClick = async (catalogStep: { id: string, name: string, categoryId: string }) => {
-      const existingItem = checklistItems.find(item => item.stepId === catalogStep.id);
+  const [isTaskDateModalVisible, setIsTaskDateModalVisible] = useState(false);
+  const [selectedTaskForModal, setSelectedTaskForModal] = useState<ChecklistItem | null>(null);
 
-      if (existingItem) {
-          await toggleChecklistItem(projectId, existingItem.id);
-      } else {
-          await addChecklistItem(
-              projectId,
-              catalogStep.name, // text
-              undefined, // x
-              undefined, // y
-              undefined, // width
-              undefined, // height
-              undefined, // assignedTo
-              undefined, // shape
-              undefined, // deadline
-              undefined, // path
-              undefined, // color
-              catalogStep.id, // stepId
-              catalogStep.categoryId, // categoryId
-              undefined, // blueprintId
-              true // completed
-          );
-      }
+  const handleSaveTaskModal = async (data: { startDate: string | null; endDate: string | null; completed: boolean }) => {
+    if (!selectedTaskForModal) return;
+
+    try {
+        setIsSaving(true);
+        if (selectedTaskForModal.id) { // UPDATE with PUT
+            const payload = {
+                startDate: data.startDate,
+                endDate: data.endDate,
+                completed: data.completed,
+                deadline: data.endDate,
+            };
+            await api.put(`/api/checklist/${selectedTaskForModal.id}`, payload);
+        } else { // CREATE with POST
+           const localId = Date.now().toString();
+            const payload = {
+                itemId: localId,
+                text: selectedTaskForModal.text,
+                projectId: projectId,
+                stepId: selectedTaskForModal.stepId,
+                categoryId: selectedTaskForModal.categoryId,
+                completed: data.completed,
+                startDate: data.startDate,
+                endDate: data.endDate,
+                deadline: data.endDate,
+            };
+            await api.post(`/api/checklist`, payload);
+        }
+        await fetchProjectChecklist(projectId);
+    } catch (error) {
+        console.error("Error saving checklist item:", error);
+        showAlert(i18n.t('common.error'), i18n.t('projectDetail.taskDatesError'));
+    } finally {
+        setIsSaving(false);
+        setIsTaskDateModalVisible(false);
+        setSelectedTaskForModal(null);
+    }
+  };
+
+  const handleCatalogStepClick = async (catalogStep: { id: string, name: string, categoryId: string }) => {
+    const existingItem = checklistItems.find(item => item.stepId === catalogStep.id);
+
+    if (existingItem) {
+        setSelectedTaskForModal(existingItem);
+        setIsTaskDateModalVisible(true);
+    } else {
+        const newItem: Partial<ChecklistItem> = {
+            text: catalogStep.name,
+            stepId: catalogStep.id,
+            categoryId: catalogStep.categoryId,
+            completed: false,
+        };
+        setSelectedTaskForModal(newItem as ChecklistItem);
+        setIsTaskDateModalVisible(true);
+    }
   };
 
   
@@ -2474,6 +2510,15 @@ export default function ProjectDetailScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+      <TaskDateModal
+        visible={isTaskDateModalVisible}
+        onClose={() => {
+            setIsTaskDateModalVisible(false);
+            setSelectedTaskForModal(null);
+        }}
+        onSave={handleSaveTaskModal}
+        task={selectedTaskForModal}
+      />
     </View>
   );
 }

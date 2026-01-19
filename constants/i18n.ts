@@ -71,6 +71,7 @@ const i18n = new I18n({
       imageSizeLimit: 'Image exceeds 50MB limit.',
       pdfSizeLimit: 'PDF document exceeds 50MB limit.',
       new: 'New',
+      notSet: 'Not set',
     },
     nav: {
       dashboard: 'Dashboard',
@@ -261,6 +262,12 @@ const i18n = new I18n({
       outOfBoundsMessage: 'Cannot create task outside plan area.',
       projectUpdated: 'Project updated successfully.',
       updateError: 'Could not update project.',
+      selectDates: 'Select start and end dates',
+      startDate: 'Start Date',
+      endDate: 'End Date',
+      taskDatesUpdated: 'Task dates updated successfully.',
+      taskDatesError: 'Could not update task dates.',
+      markAsCompleted: 'Mark as Completed',
     },
     profile: {
       photoUpdated: 'Profile photo updated.',
@@ -452,6 +459,11 @@ const i18n = new I18n({
       saveError: 'Could not save role.',
       empty: 'No roles configured.',
     },
+    errors: {
+      unexpectedErrorTitle: 'Oops! Something Went Wrong',
+      unexpectedErrorMessage: 'An unexpected error occurred in the application. You can try reloading the app.',
+      reloadApp: 'Reload Application',
+    },
   },
   es: {
     common: {
@@ -503,6 +515,7 @@ const i18n = new I18n({
       imageSizeLimit: 'La imagen excede el límite de 50MB.',
       pdfSizeLimit: 'El documento PDF excede el límite de 50MB.',
       new: 'Nuevo',
+      notSet: 'No asignada',
     },
     nav: {
       dashboard: 'Tablero',
@@ -637,6 +650,12 @@ const i18n = new I18n({
       noElements: 'No hay elementos disponibles.',
       searchCategory: 'Buscar categoría...',
       noCategoriesFound: 'No se encontraron categorías.',
+      selectDates: 'Selecciona las fechas de inicio y fin',
+      startDate: 'Fecha de Inicio',
+      endDate: 'Fecha de Fin',
+      taskDatesUpdated: 'Fechas de la tarea actualizadas correctamente.',
+      taskDatesError: 'No se pudieron actualizar las fechas de la tarea.',
+      markAsCompleted: 'Marcar como Completado',
     },
     profile: {
       photoUpdated: 'Foto de perfil actualizada.',
@@ -818,6 +837,11 @@ const i18n = new I18n({
       desc: 'Descripción',
       descPlaceholder: 'Ingresa la descripción del rol',
       updateSuccess: 'Rol actualizado correctamente.',
+    },
+    errors: {
+      unexpectedErrorTitle: '¡Oops! Algo salió mal',
+      unexpectedErrorMessage: 'Se ha producido un error inesperado en la aplicación. Puedes intentar recargar la aplicación.',
+      reloadApp: 'Recargar Aplicación',
     },
   },
   eu: {
@@ -1071,6 +1095,12 @@ const i18n = new I18n({
       outOfBoundsMessage: 'Ezin da zeregina sortu planoaren eremutik kanpo.',
       projectUpdated: 'Proiektua behar bezala eguneratu da.',
       updateError: 'Ezin izan da proiektua eguneratu.',
+      selectDates: 'Hautatu hasiera eta amaiera datak',
+      startDate: 'Hasiera Data',
+      endDate: 'Amaiera Data',
+      taskDatesUpdated: 'Zereginaren datak behar bezala eguneratu dira.',
+      taskDatesError: 'Ezin izan dira zereginaren datak eguneratu.',
+      markAsCompleted: 'Osatuta markatu',
     },
     profile: {
       photoUpdated: 'Profileko argazkia eguneratu da.',

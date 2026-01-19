@@ -48,6 +48,7 @@ export interface Comment {
 export interface ChecklistItem {
   id: string;
   text: string;
+  itemId: string;
   completed: boolean;
   evidenceUri?: string; // URI de la imagen de evidencia (Legacy)
   x?: number; // Coordenada X en porcentaje (0-100)
@@ -60,6 +61,8 @@ export interface ChecklistItem {
   evidence?: Evidence[];
   comments?: Comment[];
   deadline?: string; // Fecha de vencimiento
+  startDate?: string;
+  endDate?: string;
   color?: string; // Color personalizado para el trazo
   categoryId: string; // ID de la categoría de checklist
   stepId?: string; // ID del paso al que pertenece
