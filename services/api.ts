@@ -4,8 +4,27 @@ import { Platform, Alert } from 'react-native';
 import { router } from 'expo-router';
 
 // URL base dinámica
-// Priorizamos la variable de entorno. Si no existe, usamos localhost para Web y tu IP local para Móvil.
-const API_URL = process.env.EXPO_PUBLIC_API_URL || (Platform.OS === 'web' ? 'http://localhost:8080' : 'http://192.168.100.59:8080');
+let API_URL: string | undefined;
+
+// En producción, SIEMPRE usamos la variable de entorno.
+if (!__DEV__) {
+  API_URL = process.env.EXPO_PUBLIC_API_URL;
+} else {
+  // En desarrollo, permitimos un fallback para conveniencia.
+  API_URL = process.env.EXPO_PUBLIC_API_URL || (Platform.OS === 'web' ? 'http://localhost:8080' : 'http://192.168.100.59:8080');
+}
+
+// Para depuración: Muestra la URL de la API que se está utilizando.
+console.log('Connecting to API:', API_URL);
+
+// Si después de la lógica anterior, la URL no está definida en producción, lanzamos un error.
+if (!API_URL && !__DEV__) {
+  // En lugar de un error que crashea, mostramos una alerta al usuario.
+  Alert.alert(
+    "Error de Configuración",
+    "La dirección del servidor no está configurada. Contacte a soporte."
+  );
+}
 
 const api = axios.create({
   baseURL: API_URL,

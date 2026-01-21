@@ -201,6 +201,7 @@ const i18n = new I18n({
       checklistLog: 'Checklist / Log',
       attachments: 'attachments',
       noTasks: 'No checklist tasks for this project.',
+      noBlueprintTasks: 'No checklist tasks found for this blueprint.',
       newTaskTitle: 'New Task on Plan',
       taskDescPlaceholder: 'Describe the task (e.g. Fix crack)',
       assignToPlaceholder: 'Assign to (e.g. John Doe)',
@@ -463,6 +464,7 @@ const i18n = new I18n({
       unexpectedErrorTitle: 'Oops! Something Went Wrong',
       unexpectedErrorMessage: 'An unexpected error occurred in the application. You can try reloading the app.',
       reloadApp: 'Reload Application',
+      endDateBeforeStartDate: 'End date cannot be before start date.',
     },
   },
   es: {
@@ -842,6 +844,7 @@ const i18n = new I18n({
       unexpectedErrorTitle: '¡Oops! Algo salió mal',
       unexpectedErrorMessage: 'Se ha producido un error inesperado en la aplicación. Puedes intentar recargar la aplicación.',
       reloadApp: 'Recargar Aplicación',
+      endDateBeforeStartDate: 'La fecha de fin no puede ser anterior a la fecha de inicio.',
     },
   },
   eu: {

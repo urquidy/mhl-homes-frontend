@@ -17,11 +17,12 @@ interface ItemDetailModalProps {
   userRole?: string;
   getPlanImageSource: (uri: string) => any;
   onViewImage: (source: any, type: 'image' | 'pdf') => void;
+  onEditDates: (item: any) => void;
 }
 
 export default function ItemDetailModal({
   visible, item, onClose, onToggleStatus, onDelete, onAddEvidence, onDeleteEvidence,
-  onPostComment, newComment, setNewComment, userRole, getPlanImageSource, onViewImage
+  onPostComment, newComment, setNewComment, userRole, getPlanImageSource, onViewImage, onEditDates
 }: ItemDetailModalProps) {
   if (!item) return null;
 
@@ -48,6 +49,9 @@ export default function ItemDetailModal({
                 <Text style={[styles.statusButtonText, { color: item.completed ? '#38A169' : '#E53E3E' }]}>
                   {item.completed ? i18n.t('common.completed') : i18n.t('common.pending')}
                 </Text>
+              </Pressable>
+              <Pressable onPress={() => onEditDates(item)} style={{ marginLeft: 'auto', padding: 8 }}>
+                <Feather name="edit-3" size={20} color="#718096" />
               </Pressable>
             </View>
 

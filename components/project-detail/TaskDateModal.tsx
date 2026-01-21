@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
-import { View, Text, Modal, Pressable, StyleSheet, Switch } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import React, { useEffect, useState } from 'react';
+import { Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import i18n from '../../constants/i18n';
 import CalendarPickerModal from '../ui/CalendarPickerModal';
 
@@ -16,9 +16,10 @@ interface TaskDateModalProps {
     endDate?: string | null;
     completed?: boolean;
   } | null;
+  showAlert: (title: string, message?: string) => void;
 }
 
-export default function TaskDateModal({ visible, onClose, onSave, task }: TaskDateModalProps) {
+export default function TaskDateModal({ visible, onClose, onSave, task, showAlert }: TaskDateModalProps) {
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
   const [isCompleted, setIsCompleted] = useState(false);
@@ -46,9 +47,9 @@ export default function TaskDateModal({ visible, onClose, onSave, task }: TaskDa
         setEndDate(null);
       }
     } else {
-      // If end date is before start date, don't set it
+      // If end date is before start date, show an alert
       if (startDate && new Date(date) < new Date(startDate)) {
-        // Maybe show an alert here
+        showAlert(i18n.t('common.error'), i18n.t('errors.endDateBeforeStartDate'));
       } else {
         setEndDate(date);
       }
@@ -63,11 +64,11 @@ export default function TaskDateModal({ visible, onClose, onSave, task }: TaskDa
   
   const formatDate = (dateString: string | null) => {
     if (!dateString) return i18n.t('common.notSet');
-    // a simple reformat from YYYY-MM-DD to DD/MM/YYYY
+    // Reformat from YYYY-MM-DD to MM/DD/YYYY for US style
     try {
       const [year, month, day] = dateString.split('-');
       if (!year || !month || !day) return dateString;
-      return `${day}/${month}/${year}`;
+      return `${month}/${day}/${year}`;
     } catch(e) {
       return dateString; // if format is different, show original
     }

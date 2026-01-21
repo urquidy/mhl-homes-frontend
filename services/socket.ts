@@ -1,5 +1,4 @@
 import io from 'socket.io-client';
-import { Platform } from 'react-native';
 
 // Usamos la misma lógica de URL que en tu api.ts o login
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.100.59:8080';

@@ -177,7 +177,9 @@ export default function ProjectDetailScreen() {
 
   const projectId = Array.isArray(id) ? id[0] : (id ?? '');
   const project = projectId ? getProjectById(projectId) : undefined;
-  const checklistItems = projectId ? getChecklistByProjectId(projectId) : [];
+  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
+  const [blueprintChecklistItems, setBlueprintChecklistItems] = useState<ChecklistItem[]>([]);
+
 
   const totalTasks = checklistItems.length;
   const completedTasks = checklistItems.filter(i => i.completed).length;
@@ -252,6 +254,8 @@ export default function ProjectDetailScreen() {
   const [uploadMode, setUploadMode] = useState<'replace' | 'append' | 'newGroup'>('replace');
   const [isStepsExpanded, setIsStepsExpanded] = useState(true);
   const [collapsedStepGroups, setCollapsedStepGroups] = useState<Record<string, boolean>>({});
+  const [isBlueprintStepsExpanded, setIsBlueprintStepsExpanded] = useState(true);
+  const [collapsedBlueprintStepGroups, setCollapsedBlueprintStepGroups] = useState<Record<string, boolean>>({});
   
   // Estados para Documentos
   const [isDocModalVisible, setIsDocModalVisible] = useState(false);
@@ -542,6 +546,15 @@ export default function ProjectDetailScreen() {
     };
   }, [projectId, token]);
 
+  useEffect(() => {
+    const allChecklistItems = getChecklistByProjectId(projectId) || [];
+    const blueprintItems = allChecklistItems.filter(item => item.blueprintId);
+    const regularItems = allChecklistItems.filter(item => !item.blueprintId);
+    
+    setBlueprintChecklistItems(blueprintItems);
+    setChecklistItems(regularItems);
+  }, [getChecklistByProjectId, projectId]);
+
 
   // Cargar Catálogo de Pasos
   useEffect(() => {
@@ -574,18 +587,20 @@ export default function ProjectDetailScreen() {
   }, [token]);
 
   // Filtrar catálogo: Excluir items que ya están en el checklist
+  const allChecklistItems = useMemo(() => [...checklistItems, ...blueprintChecklistItems], [checklistItems, blueprintChecklistItems]);
+
   const filteredCatalogGroups = useMemo(() => {
     return catalogGroups.map(group => ({
       ...group,
       items: group.items.filter(catItem => 
-        !checklistItems.some(checkItem => checkItem.text === catItem.name)
+        !allChecklistItems.some(checkItem => checkItem.text === catItem.name)
       )
     })).filter(group => group.items.length > 0);
-  }, [catalogGroups, checklistItems]);
+  }, [catalogGroups, allChecklistItems]);
 
   // Items filtrados por categoría seleccionada (para el mapa y la lista)
   const filteredChecklistItems = useMemo(() => {
-    let items = checklistItems;
+    let items = blueprintChecklistItems;
 
     // Filtrar por página del plano (si existen blueprints paginados)
     if (blueprintPages.length > 0) {
@@ -597,7 +612,7 @@ export default function ProjectDetailScreen() {
 
     if (selectedCategoryFilter) items = items.filter(item => item.categoryId === selectedCategoryFilter);
     return items;
-  }, [checklistItems, selectedCategoryFilter, blueprintPages, currentPage]);
+  }, [blueprintChecklistItems, selectedCategoryFilter, blueprintPages, currentPage]);
 
   // Helper para obtener color de categoría
   const getCategoryColor = (categoryId?: string) => {
@@ -671,7 +686,7 @@ export default function ProjectDetailScreen() {
   // Estados para el Modal de Detalle de Item
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [newComment, setNewComment] = useState('');
-  const selectedItem = selectedItemId ? checklistItems.find(i => i.id === selectedItemId) : null;
+  const selectedItem = selectedItemId ? allChecklistItems.find(i => i.id === selectedItemId) : null;
   const [startModalVisible, setStartModalVisible] = useState(false);
 
   // Refs para acceder al estado actualizado dentro del PanResponder (que no se recrea)
@@ -939,6 +954,7 @@ export default function ProjectDetailScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
+      setDocsLastUpdate(Date.now());
       const promises = [refreshProjects(), fetchBlueprints()];
       if (projectId) {
         promises.push(fetchProjectChecklist(projectId));
@@ -949,7 +965,7 @@ export default function ProjectDetailScreen() {
     } finally {
       setRefreshing(false);
     }
-  }, [projectId, refreshProjects, fetchProjectChecklist]);
+  }, [projectId, refreshProjects, fetchProjectChecklist, fetchBlueprints]);
 
   // Mostrar Skeleton si se está cargando y aún no tenemos el proyecto
   if (isLoading && !project) {
@@ -1534,8 +1550,15 @@ export default function ProjectDetailScreen() {
     }
   };
 
+  const handleEditItemDates = (item: ChecklistItem) => {
+    if (!item) return;
+    setSelectedItemId(null); // Close ItemDetailModal
+    setSelectedTaskForModal(item);
+    setIsTaskDateModalVisible(true);
+  };
+
   const handleCatalogStepClick = async (catalogStep: { id: string, name: string, categoryId: string }) => {
-    const existingItem = checklistItems.find(item => item.stepId === catalogStep.id);
+    const existingItem = allChecklistItems.find(item => item.stepId === catalogStep.id);
 
     if (existingItem) {
         setSelectedTaskForModal(existingItem);
@@ -1801,13 +1824,31 @@ export default function ProjectDetailScreen() {
                   {!collapsedStepGroups[group.id] && (
                     <View style={styles.stepGroupItemsContainer}>
                       {group.items.map(step => {
-                        const correspondingItem = checklistItems.find(item => item.stepId === step.id);
+                        const correspondingItem = allChecklistItems.find(item => item.stepId === step.id);
                         const isCompleted = correspondingItem?.completed || false;
                         
                         return (
                           <Pressable key={step.id} style={styles.simpleChecklistItem} onPress={() => handleCatalogStepClick({ ...step, categoryId: group.id })}>
                             <Feather name={isCompleted ? 'check-square' : 'square'} size={24} color={isCompleted ? '#38A169' : '#A0AEC0'} />
-                            <Text style={[styles.simpleChecklistItemText, isCompleted && styles.simpleChecklistItemTextCompleted]}>{step.name}</Text>
+                            <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginLeft: 12 }}>
+                              <Text style={[styles.simpleChecklistItemText, { marginLeft: 0 }, isCompleted && styles.simpleChecklistItemTextCompleted]}>{step.name}</Text>
+                              {correspondingItem && (correspondingItem.startDate || (isCompleted && correspondingItem.endDate)) ? (
+                                <View>
+                                  {correspondingItem.startDate && (
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                          <Text style={styles.stepDateLabel}>{i18n.t('projectDetail.startDate')}:</Text>
+                                          <Text style={styles.stepDateText}>{new Date(correspondingItem.startDate).toLocaleDateString()}</Text>
+                                      </View>
+                                  )}
+                                  {isCompleted && correspondingItem.endDate && (
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 2 }}>
+                                          <Text style={styles.stepDateLabel}>{i18n.t('projectDetail.endDate')}:</Text>
+                                          <Text style={styles.stepDateText}>{new Date(correspondingItem.endDate).toLocaleDateString()}</Text>
+                                      </View>
+                                  )}
+                                </View>
+                              ) : null}
+                            </View>
                           </Pressable>
                         );
                       })}
@@ -2212,13 +2253,37 @@ export default function ProjectDetailScreen() {
                     size={24}
                     color={item.completed ? '#38A169' : '#A0AEC0'}
                   />
-                  <View>
+                  <View style={{ flex: 1, justifyContent: 'center' }}>
                     <Text style={[styles.checklistItemText, item.completed && styles.checklistItemTextCompleted]}>{item.text}</Text>
                     {item.assignedTo && (
                       <Text style={styles.assignedToText}>{i18n.t('projectDetail.assignedTo')}: {
                         availableUsers.find(u => u.id === item.assignedTo)?.username || item.assignedTo
                       }</Text>
                     )}
+                    <View style={{marginLeft: 16, marginTop: 4}}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Text style={styles.stepDateLabel}>{i18n.t('projectDetail.startDate')}:</Text>
+                          <Text style={styles.stepDateText}>
+                              {item.startDate ? new Date(item.startDate).toLocaleDateString() : i18n.t('common.notSet')}
+                          </Text>
+                      </View>
+                      {item.completed && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                              <Text style={styles.stepDateLabel}>{i18n.t('projectDetail.endDate')}:</Text>
+                              <Text style={styles.stepDateText}>
+                                  {item.endDate ? new Date(item.endDate).toLocaleDateString() : i18n.t('common.pending')}
+                              </Text>
+                          </View>
+                      )}
+                      {item.deadline && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                            <Text style={styles.stepDateLabel}>{i18n.t('newTask.deadline')}:</Text>
+                            <Text style={styles.stepDateText}>
+                                {new Date(item.deadline).toLocaleDateString()}
+                            </Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
                 </Pressable>
                 <Pressable onPress={() => handleToggleItem(item.id)} style={styles.cameraButton}>
@@ -2310,6 +2375,7 @@ export default function ProjectDetailScreen() {
           setViewingImageSource(source);
           setViewingMediaType(type);
         }}
+        onEditDates={handleEditItemDates}
       />
 
       {/* Modal de Edición de Proyecto */}
@@ -2518,6 +2584,7 @@ export default function ProjectDetailScreen() {
         }}
         onSave={handleSaveTaskModal}
         task={selectedTaskForModal}
+        showAlert={showAlert}
       />
     </View>
   );
@@ -2797,5 +2864,16 @@ const styles = StyleSheet.create({
   simpleChecklistItemTextCompleted: {
     textDecorationLine: 'line-through',
     color: '#A0AEC0',
+  },
+  stepDateLabel: {
+    fontSize: 12,
+    color: '#A0AEC0',
+    fontFamily: 'Inter-SemiBold',
+    marginRight: 4,
+  },
+  stepDateText: {
+    fontSize: 12,
+    color: '#718096',
+    fontFamily: 'Inter-Regular',
   },
 });

@@ -1,9 +1,10 @@
-import { Colors, Fonts } from '@/constants/theme'; // Ajusta la ruta si es necesario
+import { useCustomAlert } from '@/components/ui/CustomAlert';
+import { Colors, Fonts } from '@/constants/theme';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Pressable,
   StyleSheet,
@@ -23,27 +24,24 @@ export default function LoginScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { login } = useAuth();
+  const { showAlert, AlertComponent } = useCustomAlert();
+  const { i18n } = useLanguage();
 
   const handleSignIn = async () => {
     if (!username || !password) {
-      Alert.alert('Error', 'Por favor ingresa usuario y contraseña');
+      showAlert(i18n.t('common.error'), i18n.t('login.enterCredentials'));
       return;
     }
 
-    // Validación simple de email (opcional, si el usuario ingresó un correo)
     if (username.includes('@') && !/\S+@\S+\.\S+/.test(username)) {
-      Alert.alert('Error', 'El formato del correo electrónico no es válido');
+      showAlert(i18n.t('common.error'), i18n.t('login.invalidEmailFormat'));
       return;
     }
 
     setIsLoading(true);
     try {
-      // Usamos api.post en lugar de fetch para usar la configuración centralizada
       const response = await api.post('/auth/login', { username, password });
       const data = response.data;
-
-      // Estructura actualizada: { token, refreshToken, id, username, email, role, imageUri }
-      // Renombramos username a resUsername para evitar conflicto con el estado local
       const { token, refreshToken, id, username: resUsername, email, role, imageUri, permissions, companyName } = data;
       
       await login({
@@ -59,44 +57,39 @@ export default function LoginScreen() {
 
     } catch (error: any) {
       console.error(error);
-      const message = error.response?.data?.message || 'Credenciales inválidas';
-      Alert.alert('Login Fallido', message);
+      const message = error.response?.data?.message || i18n.t('login.invalidCredentials');
+      showAlert(i18n.t('login.loginFailed'), message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Determina si estamos en una pantalla grande (típicamente web en un desktop)
   const isLargeScreen = width > 768;
 
-  // Estilos dinámicos que dependen del tema (claro/oscuro) y del tamaño de la pantalla
   const styles = StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: Colors[colorScheme].background,
       flexDirection: 'column',
-      justifyContent: 'center', // Centra todo el contenido verticalmente
+      justifyContent: 'center',
     },
-    // Contenedor para la imagen del logo
     logoContainer: {
       justifyContent: 'center',
       alignItems: 'center',
-      paddingBottom: 40, // Espacio entre el logo y el formulario
+      paddingBottom: 40,
     },
     logo: {
       width: isLargeScreen ? 250 : 200,
       height: isLargeScreen ? 250 : 200,
     },
-    // Contenedor para el formulario
     formContainer: {
       justifyContent: 'center',
-      alignItems: 'center', // Centra el contenido horizontalmente
+      alignItems: 'center',
       padding: 32,
     },
-    // Contenedor para limitar el ancho del formulario
     formWrapper: {
       width: '100%',
-      maxWidth: 400, // El formulario no será más ancho que 400px
+      maxWidth: 400,
     },
     title: {
       fontFamily: Fonts.title,
@@ -128,25 +121,21 @@ export default function LoginScreen() {
     buttonText: {
       fontSize: 18,
       fontFamily: Fonts.bold,
-      // El texto del botón será negro sobre dorado, y blanco sobre dorado oscuro
       color: colorScheme === 'dark' ? '#080808' : '#FFFFFF',
     },
   });
 
   return (
     <View style={styles.container}>
-      {/* --- Columna del Logo --- */}
+      <AlertComponent />
       <View style={styles.logoContainer}>
         <Image
-          // ¡IMPORTANTE! Asegúrate de que tu imagen 'mhl_homes.jpg'
-          // se encuentre en la carpeta 'assets/images'.
           source={require('@/assets/images/mhl_homes.jpg')}
           style={styles.logo}
           resizeMode="contain"
         />
       </View>
 
-      {/* --- Columna del Formulario --- */}
       <View style={styles.formContainer}>
         <View style={styles.formWrapper}>
           <Text style={styles.title}>Welcome</Text>
