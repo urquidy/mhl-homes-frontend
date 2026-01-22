@@ -77,7 +77,7 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   // Recalcular progreso inicial al montar el componente
   useEffect(() => {
-    console.log('🔌 API URL configurada:', process.env.EXPO_PUBLIC_API_URL);
+    //console.log('🔌 API URL configurada:', process.env.EXPO_PUBLIC_API_URL);
     projects.forEach(p => {
       const items = checklists[p.id] || [];
       updateProjectProgress(p.id, items);
@@ -235,8 +235,8 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
     // 3. Escuchar Eventos del Servidor
     // Registramos listeners ANTES de conectar para asegurar que capturamos eventos iniciales
     socket.on('connect', () => {
-      console.log('✅ Socket Conectado Exitosamente!');
-      console.log('🆔 Session ID:', socket.id);
+      // console.log('✅ Socket Conectado Exitosamente!');
+      // console.log('🆔 Session ID:', socket.id); // Se elimina para no exponer el ID de sesión en la consola
       fetchAllData(); // Re-sincronizar al conectar por si hubo cambios offline
     });
 

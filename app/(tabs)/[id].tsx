@@ -261,6 +261,14 @@ export default function ProjectDetailScreen() {
   const [isAddGroupModalVisible, setIsAddGroupModalVisible] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [uploadMode, setUploadMode] = useState<'replace' | 'append' | 'newGroup'>('replace');
+
+  // Hooks movidos aquí para cumplir las reglas de React (no llamar hooks después de un return condicional)
+  const allCatalogSteps = useMemo(() => {
+    return catalogGroups.flatMap(group => group.items.map(item => ({...item, categoryId: group.id})));
+  }, [catalogGroups]);
+
+  const [isTaskDateModalVisible, setIsTaskDateModalVisible] = useState(false);
+  const [selectedTaskForModal, setSelectedTaskForModal] = useState<ChecklistItem | null>(null);
   const [isStepsExpanded, setIsStepsExpanded] = useState(true);
   const [collapsedStepGroups, setCollapsedStepGroups] = useState<Record<string, boolean>>({});
   const [isBlueprintStepsExpanded, setIsBlueprintStepsExpanded] = useState(true);
@@ -1522,13 +1530,6 @@ export default function ProjectDetailScreen() {
     setNewComment('');
     setSelectedItemId(null);
   };
-  
-  const allCatalogSteps = useMemo(() => {
-    return catalogGroups.flatMap(group => group.items.map(item => ({...item, categoryId: group.id})));
-  }, [catalogGroups]);
-
-  const [isTaskDateModalVisible, setIsTaskDateModalVisible] = useState(false);
-  const [selectedTaskForModal, setSelectedTaskForModal] = useState<ChecklistItem | null>(null);
 
   const handleSaveTaskModal = async (data: { startDate: string | null; endDate: string | null; completed: boolean }) => {
     if (!selectedTaskForModal) return;
@@ -1723,7 +1724,7 @@ export default function ProjectDetailScreen() {
       >
       {/* Usamos Stack.Screen para configurar el título de la cabecera dinámicamente */}
       <Stack.Screen options={{ title: project.name, headerBackTitle: 'Proyectos' }} />
-
+      <Stack.Screen options={{ title: project.name, headerBackTitle: i18n.t('nav.projects') }} />
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginBottom: 8 }}>
           <Text style={[styles.title, { marginBottom: 0, flexShrink: 1 }]}>{project.name}</Text>
@@ -1826,7 +1827,7 @@ export default function ProjectDetailScreen() {
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
           setIsStepsExpanded(!isStepsExpanded);
         }} style={styles.collapsibleSectionHeader}>
-          <Text style={styles.sectionTitle}>Pasos del Proyecto</Text>
+          <Text style={styles.sectionTitle}>{i18n.t('projectDetail.projectSteps')}</Text>
           <Feather name={isStepsExpanded ? 'chevron-down' : 'chevron-right'} size={24} color="#1A202C" />
         </Pressable>
         

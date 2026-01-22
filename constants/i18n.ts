@@ -268,6 +268,7 @@ const i18n = new I18n({
       endDate: 'End Date',
       taskDatesUpdated: 'Task dates updated successfully.',
       taskDatesError: 'Could not update task dates.',
+      projectSteps: 'Project Steps',
       markAsCompleted: 'Mark as Completed',
     },
     profile: {
@@ -658,6 +659,7 @@ const i18n = new I18n({
       endDate: 'Fecha de Fin',
       taskDatesUpdated: 'Fechas de la tarea actualizadas correctamente.',
       taskDatesError: 'No se pudieron actualizar las fechas de la tarea.',
+      projectSteps: 'Pasos del Proyecto',
       markAsCompleted: 'Marcar como Completado',
     },
     profile: {
@@ -1105,6 +1107,7 @@ const i18n = new I18n({
       endDate: 'Amaiera Data',
       taskDatesUpdated: 'Zereginaren datak behar bezala eguneratu dira.',
       taskDatesError: 'Ezin izan dira zereginaren datak eguneratu.',
+      projectSteps: 'Proiektuaren Urratsak',
       markAsCompleted: 'Osatuta markatu',
     },
     profile: {

@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import NotificationFilters from '../../components/ui/NotificationFilters';
 import i18n from '../../constants/i18n';
 import { CalendarEvent, useEvents } from '../../contexts/EventsContext';
+import { useLanguage } from '../../contexts/LanguageContext';
 import { AppNotification, NotificationFilter, useNotifications } from '../../contexts/NotificationsContext';
 import { useProjects } from '../../contexts/ProjectsContext'; // Assuming useProjects is correctly imported
 import api from '../../services/api';
@@ -46,7 +47,7 @@ const ProjectListItem = React.forwardRef<View, { item: Project } & React.Compone
         </View>
 
         {/* Dirección */}
-        <Text style={styles.projectAddress}>{item.address || 'No address assigned'}</Text>
+        <Text style={styles.projectAddress}>{item.address || i18n.t('project.noAddress')}</Text>
 
         {/* Barra de Progreso */}
         <View style={styles.progressSection}>
@@ -178,7 +179,7 @@ const Notifications: React.FC<{
                 pId = response.data.projectId;
               }
             } catch (error) {
-              console.error("Error fetching task details for navigation:", error);
+              // console.error("Error fetching task details for navigation:", error); // Log eliminado
             } finally {
               setProcessingNotifId(null);
             }
@@ -251,6 +252,7 @@ const Notifications: React.FC<{
 // --- Componente para la sección de Próximos Hitos ---
 const UpcomingMilestones: React.FC<{ milestones: CalendarEvent[] }> = ({ milestones }) => {
   const router = useRouter();
+  const { language } = useLanguage();
 
   return (
     <View style={styles.sidebarSection}>
@@ -267,7 +269,7 @@ const UpcomingMilestones: React.FC<{ milestones: CalendarEvent[] }> = ({ milesto
             onPress={() => router.push({ pathname: '/(tabs)/agenda', params: { date: milestone.date } })}
           >
             <View style={styles.calendarIcon}>
-              <Text style={styles.calendarMonth}>{dateObj.toLocaleString('es-ES', { month: 'short' }).toUpperCase()}</Text>
+              <Text style={styles.calendarMonth}>{dateObj.toLocaleString(language, { month: 'short' }).toUpperCase()}</Text>
               <Text style={styles.calendarDay}>{d}</Text>
             </View>
             <View style={styles.milestoneDetails}>
@@ -412,7 +414,7 @@ export default function DashboardScreen() {
         refreshEvents()
       ]);
     } catch (error) {
-      console.error("Error refreshing dashboard:", error);
+      // console.error("Error refreshing dashboard:", error); // Log eliminado
     } finally {
       setRefreshing(false);
     }

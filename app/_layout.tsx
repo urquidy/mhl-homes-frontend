@@ -1,12 +1,15 @@
-import { Slot, useRouter, useSegments } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, View, Image, StyleSheet, Animated } from 'react-native';
 import { useFonts } from 'expo-font';
+import { Slot, useRouter, useSegments } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Image, StyleSheet, View } from 'react-native';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
-import { ProjectsProvider } from '../contexts/ProjectsContext';
 import { EventsProvider } from '../contexts/EventsContext';
 import { LanguageProvider } from '../contexts/LanguageContext';
+import { ProjectsProvider } from '../contexts/ProjectsContext';
 
+// Prevent the native splash screen from auto-hiding before asset loading is complete.
+SplashScreen.preventAutoHideAsync();
 function InitialLayout() {
   const { user, isLoading } = useAuth();
   const segments = useSegments();
@@ -32,6 +35,9 @@ function InitialLayout() {
       // Si hay usuario y estamos en login, redirigir a la app principal (tabs)
       router.replace('/(tabs)');
     }
+
+    // Hide the native splash screen once everything is loaded and ready to transition to the custom splash
+    SplashScreen.hideAsync();
 
     // Iniciar animación de desvanecimiento cuando termina de cargar
     Animated.timing(fadeAnim, {

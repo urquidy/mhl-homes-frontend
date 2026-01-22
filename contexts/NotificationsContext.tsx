@@ -119,24 +119,24 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
 
     // Asegurar que el socket esté conectado (por si otros contextos no lo hicieron)
     if (!socket.connected) {
-      console.log('🔌 Conectando socket desde NotificationsContext...');
+      // console.log('🔌 Conectando socket desde NotificationsContext...');
       socket.connect();
     }
 
     socket.on('connect', () => {
-      console.log('✅ Socket Conectado para Notificaciones!');
+      // console.log('✅ Socket Conectado para Notificaciones!');
       refreshNotifications(); // Re-sincronizar al conectar (asegura consistencia)
     });
 
     socket.on('disconnect', (reason: any) => {
-      console.log('❌ Socket Desconectado (Notifications):', reason);
+      // console.log('❌ Socket Desconectado (Notifications):', reason);
     });
 
     const handleNotification = (data: any) => {
-      console.log("🔔 EVENTO RECIBIDO:", data);
+      // console.log("🔔 EVENTO RECIBIDO:", data);
       const currentUserId = user?.id;
-      console.log("Mi ID:", currentUserId);
-      console.log("Destinatario:", data.recipientId);
+      // console.log("Mi ID:", currentUserId); // Exponía ID de usuario
+      // console.log("Destinatario:", data.recipientId);
       
       const processNotification = () => {
         const newNotif = processNotificationData(data);
@@ -149,7 +149,7 @@ export const NotificationsProvider = ({ children }: { children: ReactNode }) => 
       } else if (data.recipientId === null) {
         processNotification();
       } else {
-        console.log('Notificación ignorada: No es para este usuario.');
+        // console.log('Notificación ignorada: No es para este usuario.');
       }
     };
 

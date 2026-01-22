@@ -13,7 +13,7 @@ if (API_URL && API_URL.includes('mhlhomes.ddns.net')) {
   SOCKET_URL = DEV_API_URL.replace(':8080', ':9092');
 }
 
-console.log('Connecting to Socket.IO on:', SOCKET_URL);
+//console.log('Connecting to Socket.IO on:', SOCKET_URL);
 
 let socket: any; // Usamos 'any' para evitar conflictos de tipos estrictos entre versiones
 

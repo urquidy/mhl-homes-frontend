@@ -62,7 +62,7 @@ export default function AppLayoutContent() {
       setDynamicMenuItems(menuData);
       await AsyncStorage.setItem('menu_cache', JSON.stringify(menuData));
     } catch (err) {
-      console.error("Error fetching menu:", err);
+      // console.error("Error fetching menu:", err); // Log eliminado para mayor seguridad
     }
   };
 
@@ -95,7 +95,7 @@ export default function AppLayoutContent() {
   useEffect(() => {
     const resolveRoleName = async () => {
       if (!user?.role) {
-        setRoleName(user?.permissions?.includes('ROLE_ADMIN') ? 'Admin' : 'User');
+        setRoleName(user?.permissions?.includes('ROLE_ADMIN') ? i18n.t('roles.admin') : i18n.t('roles.user'));
         return;
       }
       try {
@@ -181,7 +181,7 @@ export default function AppLayoutContent() {
                   <Text style={styles.logoText}>{user?.companyName.charAt(0) || 'M'}</Text>
                 </View>
                 <View style={styles.headerTextContainer}>
-                  <Text style={styles.companyName}>{user?.companyName || 'MHL Homes'}</Text>
+                  <Text style={styles.companyName}>{user?.companyName || i18n.t('company.defaultName')}</Text>
                   <Text style={styles.userRole}>{roleName}</Text>
                 </View>
               </View>
@@ -255,10 +255,10 @@ export default function AppLayoutContent() {
         <Drawer.Screen name="projects" options={{ title: i18n.t('nav.projects') }} />
         <Drawer.Screen name="budgets" options={{ title: i18n.t('nav.budgets') }} />
         <Drawer.Screen name="checklist" options={{ title: i18n.t('nav.checklist') }} />
-        <Drawer.Screen name="agenda" options={{ title: 'Agenda' }} />
+        <Drawer.Screen name="agenda" options={{ title: i18n.t('nav.agenda') }} />
         <Drawer.Screen name="reports" options={{ title: i18n.t('nav.reports') }} />
-        <Drawer.Screen name="admin" options={{ title: 'nav.administrator' }} />
-        <Drawer.Screen name="profile" options={{ title: 'Perfil', drawerItemStyle: { display: 'none' } }} />
+        <Drawer.Screen name="admin" options={{ title: i18n.t('nav.administrator') }} />
+        <Drawer.Screen name="profile" options={{ title: i18n.t('nav.profile'), drawerItemStyle: { display: 'none' } }} />
       </Drawer>
 
       {/* Modal Global de Nuevo Proyecto */}

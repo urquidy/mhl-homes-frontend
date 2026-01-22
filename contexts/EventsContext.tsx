@@ -61,12 +61,12 @@ export const EventsProvider = ({ children }: { children: ReactNode }) => {
 
     // 3. Escuchar Eventos del Servidor
     socket.on('connect', () => {
-      console.log('✅ Socket Conectado para Agenda!');
+      // console.log('✅ Socket Conectado para Agenda!');
       fetchEvents(); // Re-sincronizar al conectar (asegura consistencia)
     });
 
     const handleAgendaChange = () => {
-      console.log('Real-time: Agenda change detected');
+      // console.log('Real-time: Agenda change detected');
       fetchEvents();
     };
     socket.on('agenda_updated', handleAgendaChange);

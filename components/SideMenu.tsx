@@ -1,7 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
-import { Link, usePathname } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import { Link, usePathname } from 'expo-router';
+import React from 'react';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import i18n from '../constants/i18n'; // Asegúrate que la ruta a i18n sea correcta
 
 // --- Tipos para las props y los ítems del menú ---
 interface SideMenuProps {
@@ -20,11 +21,11 @@ interface MenuItem {
 // --- Datos de los ítems del menú ---
 const menuItems: MenuItem[] = [
   // Mock de roles: 'Admin', 'Project Manager', 'Viewer'
-  { href: '/(tabs)/', name: 'Dashboard', icon: 'grid' }, // Visible para todos
-  { href: '/(tabs)/projects', name: 'Projects', icon: 'briefcase' }, // Visible para todos
-  { href: '/(tabs)/budgets', name: 'Presupuestos', icon: 'clipboard', roles: ['Admin', 'Project Manager'] },
-  { href: '/(tabs)/checklist', name: 'CheckList', icon: 'check-square', roles: ['Admin', 'Project Manager'] },
-  { href: '/(tabs)/reports', name: 'Reports', icon: 'bar-chart-2', roles: ['Admin', 'Viewer'] },
+  { href: '/(tabs)/', name: i18n.t('nav.dashboard'), icon: 'grid' }, // Visible para todos
+  { href: '/(tabs)/projects', name: i18n.t('nav.projects'), icon: 'briefcase' }, // Visible para todos
+  { href: '/(tabs)/budgets', name: i18n.t('nav.budgets'), icon: 'clipboard', roles: ['Admin', 'Project Manager'] },
+  { href: '/(tabs)/checklist', name: i18n.t('nav.checklist'), icon: 'check-square', roles: ['Admin', 'Project Manager'] },
+  { href: '/(tabs)/reports', name: i18n.t('nav.reports'), icon: 'bar-chart-2', roles: ['Admin', 'Viewer'] },
 ];
 
 const SideMenu: React.FC<SideMenuProps> = ({ companyName, userName, userRole }) => {
@@ -70,7 +71,7 @@ const SideMenu: React.FC<SideMenuProps> = ({ companyName, userName, userRole }) 
       <View style={styles.footer}>
         <Pressable style={({ pressed }) => [styles.newProjectButton, pressed && styles.buttonPressed]}>
           <Feather name="plus-circle" size={20} color="#FFFFFF" />
-          <Text style={styles.newProjectButtonText}>New Project</Text>
+          <Text style={styles.newProjectButtonText}>{i18n.t('nav.newProject')}</Text>
         </Pressable>
       </View>
     </View>
