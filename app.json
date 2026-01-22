@@ -30,7 +30,8 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.bgastudio.mhlhomes",
-      "usesCleartextTraffic": true
+      "usesCleartextTraffic": true,
+      "versionCode": 5
     },
     "web": {
       "output": "static",
