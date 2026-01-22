@@ -46,6 +46,15 @@ const getFittedDimensions = (containerW: number, containerH: number, imgRatio: n
     : { width: containerW, height: containerW / imgRatio };
 };
 
+const formatDate = (dateString: string | null | undefined) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+  const day = date.getUTCDate().toString().padStart(2, '0');
+  const year = date.getUTCFullYear();
+  return `${month}/${day}/${year}`;
+};
+
 // Función para actualizar el proyecto con imagen (PUT)
 const updateProjectWithFile = async (id: string, projectData: any, imageFile: { uri: string, name: string, type: string, blob?: Blob } | null, onProgress?: (percent: number) => void, signal?: AbortSignal) => {
   const formData = new FormData();
@@ -1847,13 +1856,13 @@ export default function ProjectDetailScreen() {
                                   {correspondingItem.startDate && (
                                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }}>
                                           <Text style={styles.stepDateLabel}>{i18n.t('projectDetail.startDate')}:</Text>
-                                          <Text style={styles.stepDateText}>{new Date(correspondingItem.startDate).toLocaleDateString()}</Text>
+                                          <Text style={styles.stepDateText}>{formatDate(correspondingItem.startDate)}</Text>
                                       </View>
                                   )}
                                   {isCompleted && correspondingItem.endDate && (
                                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 2 }}>
                                           <Text style={styles.stepDateLabel}>{i18n.t('projectDetail.endDate')}:</Text>
-                                          <Text style={styles.stepDateText}>{new Date(correspondingItem.endDate).toLocaleDateString()}</Text>
+                                          <Text style={styles.stepDateText}>{formatDate(correspondingItem.endDate)}</Text>
                                       </View>
                                   )}
                                 </View>
@@ -2274,14 +2283,14 @@ export default function ProjectDetailScreen() {
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                           <Text style={styles.stepDateLabel}>{i18n.t('projectDetail.startDate')}:</Text>
                           <Text style={styles.stepDateText}>
-                              {item.startDate ? new Date(item.startDate).toLocaleDateString() : i18n.t('common.notSet')}
+                              {item.startDate ? formatDate(item.startDate) : i18n.t('common.notSet')}
                           </Text>
                       </View>
                       {item.completed && (
                           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
                               <Text style={styles.stepDateLabel}>{i18n.t('projectDetail.endDate')}:</Text>
                               <Text style={styles.stepDateText}>
-                                  {item.endDate ? new Date(item.endDate).toLocaleDateString() : i18n.t('common.pending')}
+                                  {item.endDate ? formatDate(item.endDate) : i18n.t('common.pending')}
                               </Text>
                           </View>
                       )}
@@ -2289,7 +2298,7 @@ export default function ProjectDetailScreen() {
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
                             <Text style={styles.stepDateLabel}>{i18n.t('newTask.deadline')}:</Text>
                             <Text style={styles.stepDateText}>
-                                {new Date(item.deadline).toLocaleDateString()}
+                                {formatDate(item.deadline)}
                             </Text>
                         </View>
                       )}

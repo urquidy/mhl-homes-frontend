@@ -3,6 +3,15 @@ import { View, Text, Modal, Pressable, ScrollView, Image, TextInput, StyleSheet 
 import { Feather } from '@expo/vector-icons';
 import i18n from '../../constants/i18n';
 
+const formatDate = (dateString: string | null | undefined) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+  const day = date.getUTCDate().toString().padStart(2, '0');
+  const year = date.getUTCFullYear();
+  return `${month}/${day}/${year}`;
+};
+
 interface ItemDetailModalProps {
   visible: boolean;
   item: any;
@@ -41,7 +50,7 @@ export default function ItemDetailModal({
               {item.deadline && (
                 <View style={styles.deadlineBadge}>
                   <Feather name="calendar" size={14} color="#E53E3E" style={{ marginRight: 4 }} />
-                  <Text style={styles.deadlineText}>{item.deadline}</Text>
+                  <Text style={styles.deadlineText}>{formatDate(item.deadline)}</Text>
                 </View>
               )}
               <Text style={styles.statusLabel}>{i18n.t('common.status')}:</Text>
@@ -86,7 +95,7 @@ export default function ItemDetailModal({
                     {comment.author || 'Usuario'} 
                     {comment.role ? <Text style={{ fontWeight: 'normal', color: '#A0AEC0' }}> • {comment.role}</Text> : null}
                   </Text>
-                  <Text style={styles.commentDate}>{new Date(comment.date).toLocaleDateString()} {new Date(comment.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
+                  <Text style={styles.commentDate}>{formatDate(comment.date)} {new Date(comment.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
                 </View>
                 <Text style={styles.commentText}>{comment.text}</Text>
               </View>

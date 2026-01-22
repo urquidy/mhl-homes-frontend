@@ -6,7 +6,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 if (API_URL && API_URL.includes('mhlhomes.ddns.net')) {
   // En producción, usamos la URL específica para el socket
-  SOCKET_URL = 'https://mhlhomes.ddns.net:9092';
+  SOCKET_URL = 'https://mhlhomes.ddns.net';
 } else {
   // En desarrollo, usamos la IP local o la que venga de las variables de entorno
   const DEV_API_URL = API_URL || 'http://192.168.100.59:8080';
