@@ -555,6 +555,16 @@ export default function ProjectDetailScreen() {
     setChecklistItems(regularItems);
   }, [getChecklistByProjectId, projectId]);
 
+  useEffect(() => {
+    if (projectId && token) {
+      api.get(`/api/checklist/project/${projectId}?source=BLUEPRINT`)
+        .then(res => {
+          setBlueprintChecklistItems(res.data || []);
+        })
+        .catch(err => console.log('Error fetching blueprint checklist:', err));
+    }
+  }, [projectId, token]);
+
 
   // Cargar Catálogo de Pasos
   useEffect(() => {
@@ -2467,7 +2477,6 @@ export default function ProjectDetailScreen() {
       {/* Modal de Carga de Evidencia */}
       <EvidenceUploadModal visible={isEvidenceUploading} />
 
-      <AlertComponent />
       </ScrollView>
 
       {/* Panel de Catálogo (Bottom Sheet simulado) - AHORA FUERA DEL SCROLLVIEW */}

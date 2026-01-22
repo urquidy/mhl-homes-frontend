@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import i18n from '../../constants/i18n';
 import { useAuth } from '../../contexts/AuthContext';
 import { EventsProvider } from '../../contexts/EventsContext';
-import { LanguageProvider, useLanguage } from '../../contexts/LanguageContext';
+import { useLanguage } from '../../contexts/LanguageContext';
 import { NotificationsProvider } from '../../contexts/NotificationsContext';
 import api from '../../services/api';
 
@@ -33,8 +33,11 @@ export const MenuContext = React.createContext<{
   reloadMenu: () => Promise<void>;
 }>({ reloadMenu: async () => {} });
 
-// Componente interno que consume el contexto de idioma
-function AppLayoutContent() {
+/**
+ * Este es el layout principal de la aplicación autenticada.
+ * Define un Drawer que contiene el SideMenu y el Header.
+ */
+export default function AppLayoutContent() {
   const { language } = useLanguage();
   const pathname = usePathname();
   const router = useRouter();
@@ -279,18 +282,6 @@ function AppLayoutContent() {
       </EventsProvider>
       </MenuContext.Provider>
     </HeaderActionContext.Provider>
-  );
-}
-
-/**
- * Este es el layout principal de la aplicación autenticada.
- * Define un Drawer que contiene el SideMenu y el Header.
- */
-export default function AppLayout() {
-  return (
-    <LanguageProvider>
-      <AppLayoutContent />
-    </LanguageProvider>
   );
 }
 

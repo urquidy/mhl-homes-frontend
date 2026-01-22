@@ -5,6 +5,7 @@ import { useFonts } from 'expo-font';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { ProjectsProvider } from '../contexts/ProjectsContext';
 import { EventsProvider } from '../contexts/EventsContext';
+import { LanguageProvider } from '../contexts/LanguageContext';
 
 function InitialLayout() {
   const { user, isLoading } = useAuth();
@@ -70,7 +71,9 @@ export default function RootLayout() {
     <AuthProvider>
       <ProjectsProvider>
         <EventsProvider>
-          <InitialLayout />
+          <LanguageProvider>
+            <InitialLayout />
+          </LanguageProvider>
         </EventsProvider>
       </ProjectsProvider>
     </AuthProvider>
