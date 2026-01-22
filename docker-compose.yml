@@ -5,7 +5,8 @@ services:
       dockerfile: Dockerfile
       args:
         # Aquí pones la URL real de tu backend en AWS
-        - EXPO_PUBLIC_API_URL=http://ec2-3-150-188-129.us-east-2.compute.amazonaws.com:8080
+        - EXPO_PUBLIC_API_URL=https://mhlhomes.ddns.net
     ports:
       - "8081:80"   # Puerto estándar HTTP
+      - "443:443" # Si usas HTTPS
     restart: always
