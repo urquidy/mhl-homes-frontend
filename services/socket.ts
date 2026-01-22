@@ -1,26 +1,34 @@
 import io from 'socket.io-client';
 
-// Usamos la misma lógica de URL que en tu api.ts o login
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.100.59:8080';
+// Lógica de URL más directa para Socket.IO
+let SOCKET_URL: string;
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-// Ajustamos el puerto para Socket.IO (9092) en lugar del de la API (8080)
-const SOCKET_URL = API_URL.replace('8080', '9092');
+if (API_URL && API_URL.includes('mhlhomes.ddns.net')) {
+  // En producción, usamos la URL específica para el socket
+  SOCKET_URL = 'https://mhlhomes.ddns.net:9092';
+} else {
+  // En desarrollo, usamos la IP local o la que venga de las variables de entorno
+  const DEV_API_URL = API_URL || 'http://192.168.100.59:8080';
+  SOCKET_URL = DEV_API_URL.replace(':8080', ':9092');
+}
+
+console.log('Connecting to Socket.IO on:', SOCKET_URL);
 
 let socket: any; // Usamos 'any' para evitar conflictos de tipos estrictos entre versiones
 
 export const initSocket = (token: string) => {
   if (!socket) {
     socket = io(SOCKET_URL, {
-      query: { token }, // En v2, el token SIEMPRE va en query
-      transports: ['websocket'], // Forzamos websocket para mejor rendimiento en mobile
+      path: '/socket.io/', // Aseguramos que la ruta termine en slash
+      auth: { token },
+      transports: ['websocket'],
       autoConnect: false,
-      reconnection: true, // Habilitar reconexión automática interna
-      reconnectionAttempts: Infinity, // Intentar reconectar indefinidamente
-      reconnectionDelay: 1000, // Esperar 1s antes del primer intento
-      reconnectionDelayMax: 5000, // Espera máxima de 5s entre intentos
-      timeout: 20000, // Tiempo de espera antes de considerar error de conexión
-      forceNew: true, // Fuerza una nueva conexión
-      jsonp: false, // Deshabilitar JSONP
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
     } as any);
   }
   return socket;
