@@ -8,5 +8,4 @@ services:
         - EXPO_PUBLIC_API_URL=https://mhlhomes.ddns.net
     ports:
       - "8081:80"   # Puerto estándar HTTP
-      - "8081:443" # Si usas HTTPS
     restart: always
