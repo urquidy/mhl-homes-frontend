@@ -348,6 +348,7 @@ const i18n = new I18n({
       noDocumentCategories: 'No document categories configured.',
       newDocCategory: 'New Category',
       editDocCategory: 'Edit Category',
+      deleteConfirmation: 'Are you sure you want to delete this?',
     },
     agenda: {
       titleRequired: 'Title is required',
@@ -739,6 +740,7 @@ const i18n = new I18n({
       noDocumentCategories: 'No hay categorías de documentos configuradas.',
       newDocCategory: 'Nueva Categoría',
       editDocCategory: 'Editar Categoría',
+      deleteConfirmation: '¿Estás seguro de eliminar este item?',
     },
     agenda: {
       titleRequired: 'El título es obligatorio',
@@ -1187,6 +1189,7 @@ const i18n = new I18n({
       noDocumentCategories: 'Ez dago dokumentu kategoriarik konfiguratuta.',
       newDocCategory: 'Kategoria Berria',
       editDocCategory: 'Editatu Kategoria',
+      deleteConfirmation: 'Ziur zaude ezabatu nahi duzula?',
     },
     agenda: {
       titleRequired: 'Izenburua derrigorrezkoa da',

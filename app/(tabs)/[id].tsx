@@ -1851,9 +1851,11 @@ export default function ProjectDetailScreen() {
                           <Pressable key={step.id} style={styles.simpleChecklistItem} onPress={() => handleCatalogStepClick({ ...step, categoryId: group.id })}>
                             <Feather name={isCompleted ? 'check-square' : 'square'} size={24} color={isCompleted ? '#38A169' : '#A0AEC0'} />
                             <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginLeft: 12 }}>
-                              <Text style={[styles.simpleChecklistItemText, { marginLeft: 0 }, isCompleted && styles.simpleChecklistItemTextCompleted]}>{step.name}</Text>
+                              <View style={{ flex: 1, marginRight: 8 }}>
+                                <Text style={[styles.simpleChecklistItemText, { marginLeft: 0 }, isCompleted && styles.simpleChecklistItemTextCompleted]}>{step.name}</Text>
+                              </View>
                               {correspondingItem && (correspondingItem.startDate || (isCompleted && correspondingItem.endDate)) ? (
-                                <View>
+                                <View style={{ flexShrink: 0 }}>
                                   {correspondingItem.startDate && (
                                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }}>
                                           <Text style={styles.stepDateLabel}>{i18n.t('projectDetail.startDate')}:</Text>
