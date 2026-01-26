@@ -5,12 +5,13 @@ import { ActivityIndicator, LayoutAnimation, Platform, Pressable, ScrollView, St
 import { useCustomAlert } from '../../components/ui/CustomAlert';
 import i18n from '../../constants/i18n';
 import api from '../../services/api';
+import VideoPlayerModal from './VideoPlayerModal';
 
 interface ProjectDocumentsProps {
   projectId: string;
   userRole?: string;
   projectStatus?: string;
-  onViewDocument: (uri: string, name: string, type?: string) => void;
+  onViewDocument: (uri: string, name:string, type?: string) => void;
   onRefreshProjects?: () => void;
   onRefreshChecklist?: () => void;
   canEdit?: boolean;
@@ -35,6 +36,7 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
   const [hasMore, setHasMore] = useState(true);
   const LIMIT = 5;
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [videoModal, setVideoModal] = useState<{ isVisible: boolean, uri: string }>({ isVisible: false, uri: '' });
 
   const toggleExpand = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -189,7 +191,18 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
     const type = mimeType?.toLowerCase() || '';
     if (type.includes('pdf')) return 'file-text';
     if (type.includes('image')) return 'image';
+    if (type.includes('video')) return 'video';
     return 'file';
+  };
+
+  const handleDocumentPress = (doc: any) => {
+    const type = doc.type?.toLowerCase() || '';
+    if (type.includes('video')) {
+      const videoUrl = doc.uri.startsWith('http') ? doc.uri : `${api.defaults.baseURL}${doc.uri}`;
+      setVideoModal({ isVisible: true, uri: videoUrl });
+    } else {
+      onViewDocument(doc.uri, doc.name, doc.type);
+    }
   };
 
   return (
@@ -237,7 +250,7 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
           ) : (
             <View style={styles.list}>
               {documents.map((doc) => (
-                <Pressable key={doc.id} style={styles.docItem} onPress={() => onViewDocument(doc.uri, doc.name, doc.type)}>
+                <Pressable key={doc.id} style={styles.docItem} onPress={() => handleDocumentPress(doc)}>
                   <View style={styles.docIcon}>
                     <Feather name={getIcon(doc.type)} size={24} color="#4A5568" />
                   </View>
@@ -263,6 +276,11 @@ export default function ProjectDocuments({ projectId, userRole, projectStatus, o
         </>
       )}
       <AlertComponent />
+      <VideoPlayerModal 
+        isVisible={videoModal.isVisible}
+        videoUri={videoModal.uri}
+        onClose={() => setVideoModal({ isVisible: false, uri: '' })}
+      />
     </View>
   );
 }

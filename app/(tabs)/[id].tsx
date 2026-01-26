@@ -1711,6 +1711,7 @@ export default function ProjectDetailScreen() {
     // El ScrollView principal se deshabilita si estamos dibujando para evitar conflictos, 
     // pero permitimos scroll si estamos en modo dibujo pero haciendo zoom/pan (manejado por los scrollviews internos)
     <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+      <AlertComponent />
       <ScrollView 
         style={styles.container} 
         contentContainerStyle={{ 

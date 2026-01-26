@@ -1,6 +1,5 @@
 import { useCustomAlert } from '@/components/ui/CustomAlert';
 import { Colors, Fonts } from '@/constants/theme';
-import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -11,8 +10,14 @@ import {
   Text,
   TextInput,
   View,
-  useWindowDimensions
+  useWindowDimensions,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard,
+  Platform,
+  ScrollView
 } from 'react-native';
+import i18n from '../../constants/i18n';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 
@@ -25,7 +30,6 @@ export default function LoginScreen() {
   const { width } = useWindowDimensions();
   const { login } = useAuth();
   const { showAlert, AlertComponent } = useCustomAlert();
-  const { i18n } = useLanguage();
 
   const handleSignIn = async () => {
     if (!username || !password) {
@@ -70,7 +74,9 @@ export default function LoginScreen() {
     container: {
       flex: 1,
       backgroundColor: Colors[colorScheme].background,
-      flexDirection: 'column',
+    },
+    scrollContainer: {
+      flexGrow: 1,
       justifyContent: 'center',
     },
     logoContainer: {
@@ -125,9 +131,10 @@ export default function LoginScreen() {
     },
   });
 
-  return (
-    <View style={styles.container}>
-      <AlertComponent />
+  const RootComponent = Platform.OS === 'web' ? View : KeyboardAvoidingView;
+
+  const scrollView = (
+    <ScrollView contentContainerStyle={styles.scrollContainer}>
       <View style={styles.logoContainer}>
         <Image
           source={require('@/assets/images/mhl_homes.jpg')}
@@ -174,6 +181,23 @@ export default function LoginScreen() {
           </Pressable>
         </View>
       </View>
-    </View>
+    </ScrollView>
+  );
+
+  return (
+    <RootComponent
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.container}
+    >
+      <AlertComponent />
+      {Platform.OS === 'web'
+        ? scrollView
+        : (
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            {scrollView}
+          </TouchableWithoutFeedback>
+        )
+      }
+    </RootComponent>
   );
 }

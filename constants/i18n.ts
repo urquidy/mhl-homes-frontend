@@ -468,6 +468,12 @@ const i18n = new I18n({
       reloadApp: 'Reload Application',
       endDateBeforeStartDate: 'End date cannot be before start date.',
     },
+    login: {
+      enterCredentials: 'Please enter your username and password.',
+      invalidEmailFormat: 'The email format is invalid.',
+      loginFailed: 'Login Failed',
+      invalidCredentials: 'Invalid credentials provided.',
+    },
   },
   es: {
     common: {
@@ -850,6 +856,12 @@ const i18n = new I18n({
       unexpectedErrorMessage: 'Se ha producido un error inesperado en la aplicación. Puedes intentar recargar la aplicación.',
       reloadApp: 'Recargar Aplicación',
       endDateBeforeStartDate: 'La fecha de fin no puede ser anterior a la fecha de inicio.',
+    },
+    login: {
+      enterCredentials: 'Por favor, introduce tu usuario y contraseña.',
+      invalidEmailFormat: 'El formato del correo electrónico no es válido.',
+      loginFailed: 'Error al Iniciar Sesión',
+      invalidCredentials: 'Las credenciales proporcionadas no son válidas.',
     },
   },
   eu: {

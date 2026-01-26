@@ -12,7 +12,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tuempresa.mhlhomes",
-      "buildNumber":"5",
+      "buildNumber": "7",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSAppTransportSecurity": {
@@ -31,7 +31,7 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.bgastudio.mhlhomes",
       "usesCleartextTraffic": true,
-      "versionCode": 5
+      "versionCode": 7
     },
     "web": {
       "output": "static",
@@ -52,7 +52,18 @@
           }
         }
       ],
-      "expo-secure-store"
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "La aplicación necesita acceso a tus fotos para que puedas seleccionar evidencia.",
+          "cameraPermission": "La aplicación necesita acceso a tu cámara para poder tomar fotos para evidencia.",
+          "microphonePermission": "La aplicación necesita acceso a tu micrófono para poder grabar videos para evidencia."
+        }
+      ],
+      "expo-secure-store",
+      "expo-video",
+      "expo-audio",
+      "expo-build-properties"
     ],
     "experiments": {
       "typedRoutes": true,

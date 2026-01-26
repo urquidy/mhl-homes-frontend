@@ -1,8 +1,10 @@
 import { Feather } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import i18n from '../../constants/i18n';
+import { useCustomAlert } from '../ui/CustomAlert';
 
 interface DocumentUploadModalProps {
   visible: boolean;
@@ -17,8 +19,18 @@ export default function DocumentUploadModal({ visible, onClose, onUpload, catego
   const [file, setFile] = useState<any>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [showCategories, setShowCategories] = useState(false);
+  const { showAlert, AlertComponent } = useCustomAlert();
 
-  const handlePickFile = async () => {
+  const setFileFromAsset = (asset: any) => {
+    setFile(asset);
+    if (!name) {
+      const fileName = asset.name || asset.uri.split('/').pop();
+      const nameWithoutExt = fileName.split('.').slice(0, -1).join('.');
+      setName(nameWithoutExt);
+    }
+  };
+
+  const pickDocument = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: '*/*',
@@ -27,20 +39,86 @@ export default function DocumentUploadModal({ visible, onClose, onUpload, catego
 
       if (result.canceled) return;
       
-      const asset = result.assets[0];
-      setFile(asset);
-      // Autocompletar nombre si está vacío
-      if (!name) {
-        const fileName = asset.name.split('.').slice(0, -1).join('.');
-        setName(fileName);
-      }
+      setFileFromAsset(result.assets[0]);
     } catch (err) {
       console.log('Error picking document:', err);
+      showAlert(i18n.t('common.error'), i18n.t('documents.error'));
     }
   };
 
+  const pickMedia = async (source: 'camera' | 'gallery', cameraType?: 'image' | 'video') => {
+    let result;
+    const options: ImagePicker.ImagePickerOptions = {
+      mediaTypes: cameraType === 'image' 
+          ? ImagePicker.MediaTypeOptions.Images 
+          : cameraType === 'video' 
+          ? ImagePicker.MediaTypeOptions.Videos
+          : ImagePicker.MediaTypeOptions.All,
+      quality: 0.8,
+    };
+
+    try {
+        if (source === 'camera') {
+            const permission = await ImagePicker.requestCameraPermissionsAsync();
+            if (!permission.granted) {
+                showAlert(i18n.t('common.error'), i18n.t('common.permissionCamera'));
+                return;
+            }
+            if (cameraType === 'video') {
+                const micPermission = await ImagePicker.requestCameraPermissionsAsync();
+                if (!micPermission.granted) {
+                    showAlert(i18n.t('common.error'), i18n.t('common.permissionMicrophone'));
+                    return;
+                }
+            }
+            result = await ImagePicker.launchCameraAsync(options);
+        } else {
+            const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!permission.granted) {
+                showAlert(i18n.t('common.error'), i18n.t('common.permissionGallery'));
+                return;
+            }
+            result = await ImagePicker.launchImageLibraryAsync(options);
+        }
+
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+            const asset = result.assets[0];
+            const assetWithName = {
+                ...asset,
+                name: asset.fileName || asset.uri.split('/').pop()
+            };
+            setFileFromAsset(assetWithName);
+        }
+    } catch (err) {
+        console.log('Error picking media:', err);
+        showAlert(i18n.t('common.error'), i18n.t('documents.error'));
+    }
+  };
+
+  const handlePickFile = async () => {
+    if (Platform.OS === 'web') {
+      pickDocument();
+      return;
+    }
+
+    showAlert(
+      i18n.t('projectDetail.selectFile'),
+      i18n.t('projectDetail.fileTypeQuestion'),
+      [
+        { text: i18n.t('projectDetail.takePhoto'), onPress: () => pickMedia('camera', 'image') },
+        { text: i18n.t('projectDetail.recordVideo'), onPress: () => pickMedia('camera', 'video') },
+        { text: i18n.t('projectDetail.gallery'), onPress: () => pickMedia('gallery') },
+        { text: 'Explorar archivos...', onPress: () => pickDocument() },
+        { text: i18n.t('common.cancel'), style: 'cancel' }
+      ]
+    );
+  };
+
   const handleUpload = async () => {
-    if (!name || !category || !file) return;
+    if (!name || !category || !file) {
+      showAlert(i18n.t('common.error'), i18n.t('common.fillAllFields'));
+      return;
+    }
     
     setIsUploading(true);
     try {
@@ -48,6 +126,7 @@ export default function DocumentUploadModal({ visible, onClose, onUpload, catego
       handleClose();
     } catch (error) {
       console.error(error);
+      showAlert(i18n.t('common.error'), i18n.t('documents.uploadError'));
     } finally {
       setIsUploading(false);
     }
@@ -66,6 +145,7 @@ export default function DocumentUploadModal({ visible, onClose, onUpload, catego
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
       <View style={styles.overlay}>
         <View style={styles.content}>
+          <AlertComponent />
           <View style={styles.header}>
             <Text style={styles.title}>{i18n.t('documents.uploadTitle')}</Text>
             <Pressable onPress={handleClose}><Feather name="x" size={24} color="#4A5568" /></Pressable>

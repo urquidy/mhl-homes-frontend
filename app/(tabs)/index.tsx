@@ -90,6 +90,8 @@ const ProjectListItem = React.forwardRef<View, { item: Project } & React.Compone
   );
 });
 
+ProjectListItem.displayName = 'ProjectListItem';
+
 // --- Componente Animado para Ítem de Notificación ---
 const AnimatedNotificationItem: React.FC<{ 
   notif: AppNotification; 

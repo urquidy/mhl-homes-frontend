@@ -98,7 +98,7 @@ export default function HistoryModal({ visible, onClose, isLoading, auditLogs }:
                         <Text style={styles.logDate}>{new Date(item.timestamp).toLocaleDateString()} {new Date(item.timestamp).toLocaleTimeString()}</Text>
                       </View>
                       <Text style={styles.logUser}>{i18n.t('history.by')} {item.username || i18n.t('history.system')}</Text>
-                      {item.description && <Text style={styles.logDescription}>"{item.description}"</Text>}
+                      {item.description && <Text style={styles.logDescription}>&quot;{item.description}&quot;</Text>}
                     </View>
                   );
                 })
