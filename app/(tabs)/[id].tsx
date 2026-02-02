@@ -288,8 +288,23 @@ export default function ProjectDetailScreen() {
     }
   }, [token]);
 
-  const handleDocumentUpload = async (data: { name: string; category: string; file: any }) => {
-    // Preparar FormData para subida
+    const handleDocumentUpload = async (data: { name: string; category: string; file: any }) => {
+
+      // Validación de tamaño de archivo (100MB)
+
+          const fileSize = data.file.size || data.file.fileSize;
+
+          if (fileSize && fileSize > 100 * 1024 * 1024) {
+
+            showAlert(i18n.t('common.error'), i18n.t('common.fileSizeError'));
+
+            return;
+
+          }
+
+  
+
+      // Preparar FormData para subida
     const formData = new FormData();
     
     // Append file
@@ -1357,8 +1372,8 @@ export default function ProjectDetailScreen() {
     if (!result.canceled) {
       const asset = result.assets[0];
 
-      // Validación de tamaño: 50MB
-      if (asset.fileSize && asset.fileSize > 50 * 1024 * 1024) {
+      // Validación de tamaño: 100MB
+      if (asset.fileSize && asset.fileSize > 100 * 1024 * 1024) {
         showAlert(i18n.t('common.error'), i18n.t('common.imageSizeLimit'));
         return;
       }
@@ -1382,8 +1397,8 @@ export default function ProjectDetailScreen() {
 
       const asset = result.assets[0];
 
-      // Validación de tamaño: 50MB
-      if (asset.size && asset.size > 50 * 1024 * 1024) {
+      // Validación de tamaño: 100MB
+      if (asset.size && asset.size > 100 * 1024 * 1024) {
         showAlert(i18n.t('common.error'), i18n.t('common.pdfSizeLimit'));
         return;
       }
