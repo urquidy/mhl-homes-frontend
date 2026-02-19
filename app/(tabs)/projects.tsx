@@ -66,7 +66,7 @@ export default function ProjectsScreen() {
         showAlert(i18n.t('common.success'), i18n.t('projects.projectRestored'));
         // Redirigir a la lista de proyectos activos
         setShowDeleted(false);
-        refreshProjects(searchText, true, true); // Limpiar lista al cambiar de contexto
+        refreshProjects(searchText, true); // Limpiar lista al cambiar de contexto
       } catch (error) {
         showAlert(i18n.t('common.error'), i18n.t('projects.restoreError'));
       }
@@ -99,7 +99,7 @@ export default function ProjectsScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      if (refreshProjects) await refreshProjects(searchText, !showDeleted, false); // No limpiar en pull-to-refresh para mantener UX suave
+      if (refreshProjects) await refreshProjects(searchText, !showDeleted); // No limpiar en pull-to-refresh para mantener UX suave
     } catch (error) {
       console.error("Error refreshing projects:", error);
     } finally {
@@ -113,7 +113,7 @@ export default function ProjectsScreen() {
     
     if (searchTimer) clearTimeout(searchTimer);
     const timer = setTimeout(() => {
-      refreshProjects(text, !showDeleted, true); // Limpiar al buscar para feedback visual claro
+      refreshProjects(text, !showDeleted); // Limpiar al buscar para feedback visual claro
     }, 500);
     setSearchTimer(timer);
   };
@@ -121,7 +121,7 @@ export default function ProjectsScreen() {
   const toggleShowDeleted = () => {
     const newValue = !showDeleted;
     setShowDeleted(newValue);
-    refreshProjects(searchText, !newValue, true); // Limpiar lista al cambiar filtro (Activos <-> Eliminados)
+    refreshProjects(searchText, !newValue); // Limpiar lista al cambiar filtro (Activos <-> Eliminados)
   };
 
   const isNewProject = (dateString?: string) => {

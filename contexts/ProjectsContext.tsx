@@ -28,7 +28,7 @@ interface ProjectsContextType {
   deleteChecklistItem: (projectId: string, itemId: string) => Promise<void>;
   updateChecklistItemDates: (projectId: string, itemId: string, startDate: string | null, endDate: string | null) => Promise<void>;
   addProjectBlueprint: (projectId: string, file: any, groupName: string, replace?: boolean) => Promise<void>;
-  refreshProjects: (search?: string, active?: boolean, clearList?: boolean) => Promise<void>;
+  refreshProjects: (search?: string, active?: boolean) => Promise<void>;
   loadMoreProjects: () => Promise<void>;
   hasMoreProjects: boolean;
   refreshBudgets: () => Promise<void>;
@@ -48,7 +48,6 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [budgets, setBudgets] = useState<Record<string, ProjectBudget>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isBudgetsLoading, setIsBudgetsLoading] = useState(false);
-  const [page, setPage] = useState(1);
   const [hasMoreProjects, setHasMoreProjects] = useState(true);
   const [lastSearch, setLastSearch] = useState('');
   const [lastActive, setLastActive] = useState(true);
@@ -85,16 +84,15 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
   }, []);
 
   // Función centralizada para refrescar proyectos desde la API
-  const refreshProjects = async (search = '', active = true, clearList = false) => {
+  const refreshProjects = async (search = '', active = true) => {
     if (!token) return;
     setIsLoading(true);
-    if (clearList) setProjects([]); // Limpiar lista para evitar mostrar datos stale durante la transición
-    setPage(1);
+    setProjects([]); // Limpiar lista para evitar mostrar datos stale durante la transición
     setLastSearch(search);
     setLastActive(active);
     try {
-      // Enviamos parámetros de paginación y búsqueda
-      let endpoint = `/api/projects?page=1&limit=10&search=${encodeURIComponent(search)}`;
+      // No enviamos parámetros de paginación
+      let endpoint = `/api/projects?search=${encodeURIComponent(search)}`;
       if (active) {
         endpoint += '&deleted=false';
       } else {
@@ -124,8 +122,8 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
         createdAt: p.createdAt,
       }));
       setProjects(mappedProjects);
-      // Si devolvió menos de 10, asumimos que no hay más
-      setHasMoreProjects(data.length >= 10);
+      // Desactivamos la paginación
+      setHasMoreProjects(false);
     } catch (err) {
       console.error('Error fetching projects:', err);
       if (Platform.OS === 'web') {
@@ -137,50 +135,8 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   const loadMoreProjects = async () => {
-    if (!token || !hasMoreProjects || isLoading) return;
-    
-    const nextPage = page + 1;
-    try {
-      let endpoint = `/api/projects?page=${nextPage}&limit=10&search=${encodeURIComponent(lastSearch)}`;
-      if (lastActive) {
-        endpoint += '&deleted=false';
-      } else {
-        endpoint += '&deleted=true';
-      }
-      const response = await api.get(endpoint);
-      const data = Array.isArray(response.data) ? response.data : (response.data.data || []);
-      
-      if (data.length === 0) {
-        setHasMoreProjects(false);
-        return;
-      }
-
-      const newProjects: Project[] = data.map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        client: p.client,
-        status: (p.status === 'IN_PROGRESS' || p.status === 'In Progress') ? 'In Progress' : 
-                (p.status === 'DELAYED' || p.status === 'Delayed') ? 'Delayed' : 
-                (p.status === 'COMPLETED' || p.status === 'Completed') ? 'Completed' : 
-                (p.status === 'ON_TIME' || p.status === 'On Time') ? 'On Time' : 
-                (p.status === 'NOT_STARTED' || p.status === 'Not Started') ? 'Not Started' : 'In Progress',
-        address: p.address,
-        progress: p.progress,
-        participants: p.participants || [],
-        architecturalPlanUri: p.architecturalPlanUri || p.imageUri,
-        imageUri: p.imageUri,
-        startDate: p.startDate,
-        endDate: p.endDate,
-        blueprints: p.blueprints,
-        createdAt: p.createdAt,
-      }));
-
-      setProjects(prev => [...prev, ...newProjects]);
-      setPage(nextPage);
-      setHasMoreProjects(data.length >= 10);
-    } catch (err) {
-      console.error('Error loading more projects:', err);
-    }
+    // La paginación ha sido desactivada. Esta función ya no es necesaria.
+    return;
   };
 
   // Fetch de Presupuestos
@@ -328,12 +284,27 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
   const fetchProjectChecklist = async (projectId: string) => {
     if (!token) return;
     try {
-      // Asumimos GET /api/checklist/{projectId} para obtener la lista
-      const response = await api.get(`/api/checklist/project/${projectId}`);
-      const data = response.data;
+      // Fetch regular and blueprint checklist items in parallel
+      const [regularResponse, blueprintResponse] = await Promise.all([
+        api.get(`/api/checklist/project/${projectId}`),
+        api.get(`/api/checklist/project/${projectId}?source=BLUEPRINT`)
+      ]);
+      
+      const regularData = regularResponse.data || [];
+      const blueprintData = blueprintResponse.data || [];
+
+      // Merge and map, avoiding duplicates
+      const allData = [...regularData];
+      const existingIds = new Set(regularData.map((item: any) => item.itemId || item.id));
+      
+      blueprintData.forEach((item: any) => {
+        if (!existingIds.has(item.itemId || item.id)) {
+          allData.push(item);
+        }
+      });
       
       // Mapear respuesta del backend a ChecklistItem local
-      const mappedItems: ChecklistItem[] = data.map((item: any) => ({
+      const mappedItems: ChecklistItem[] = allData.map((item: any) => ({
         id: item.itemId || item.id, // Usamos itemId si existe, sino id
         text: item.text,
         completed: item.completed,
