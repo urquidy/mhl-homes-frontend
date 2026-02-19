@@ -143,7 +143,7 @@ export const ProjectsProvider: React.FC<{ children: ReactNode }> = ({ children }
     try {
       let endpoint = `/api/projects?page=${nextPage}&limit=10&search=${encodeURIComponent(lastSearch)}`;
       if (lastActive) {
-        endpoint += '&active=true';
+        endpoint += '&deleted=false';
       } else {
         endpoint += '&deleted=true';
       }
