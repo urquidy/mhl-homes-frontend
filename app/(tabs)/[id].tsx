@@ -493,7 +493,7 @@ export default function ProjectDetailScreen() {
       let finalUri = uri;
       if (!uri.startsWith('http')) {
         // Fallback para desarrollo local en móvil
-        const defaultBaseURL = process.env.EXPO_PUBLIC_API_URL || (Platform.OS === 'web' ? 'http://localhost:8080' : 'http://192.168.100.59:8080');
+        const defaultBaseURL = process.env.EXPO_PUBLIC_API_URL || (Platform.OS === 'web' ? 'http://localhost:8080' : 'http://192.168.100.4:8080');
         const baseURL = api.defaults.baseURL || defaultBaseURL;
         if (!uri.includes('/')) {
           finalUri = `${baseURL}/api/files/${uri}`;

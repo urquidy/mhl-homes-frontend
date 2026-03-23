@@ -154,7 +154,7 @@ export default function ProfileScreen() {
     }
 
     // Construir URL para ID de archivo o ruta relativa
-    const defaultBaseURL = process.env.EXPO_PUBLIC_API_URL || (Platform.OS === 'web' ? 'http://localhost:8080' : 'http://192.168.100.59:8080');
+    const defaultBaseURL = process.env.EXPO_PUBLIC_API_URL || (Platform.OS === 'web' ? 'http://localhost:8080' : 'http://192.168.100.4:8080');
     const baseURL = api.defaults.baseURL || defaultBaseURL;
     
     const finalUri = uri.includes('/') 

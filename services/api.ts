@@ -1,7 +1,7 @@
 import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
-import { Platform, Alert } from 'react-native';
 import { router } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import { Alert, Platform } from 'react-native';
 
 // URL base dinámica
 let API_URL: string | undefined;
@@ -11,7 +11,7 @@ if (!__DEV__) {
   API_URL = process.env.EXPO_PUBLIC_API_URL;
 } else {
   // En desarrollo, permitimos un fallback para conveniencia.
-  API_URL = process.env.EXPO_PUBLIC_API_URL || (Platform.OS === 'web' ? 'http://localhost:8080' : 'http://192.168.100.59:8080');
+  API_URL = process.env.EXPO_PUBLIC_API_URL || (Platform.OS === 'web' ? 'http://localhost:8080' : 'http://192.168.100.4:8080');
 }
 
 // Para depuración: Muestra la URL de la API que se está utilizando.
@@ -140,5 +140,9 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+export const deleteBudget = (budgetId: string) => {
+  return api.delete(`/api/budgets/${budgetId}`);
+};
 
 export default api;

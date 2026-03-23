@@ -9,7 +9,7 @@ import i18n from '../../constants/i18n';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProjects } from '../../contexts/ProjectsContext';
 import { usePermission } from '../../hooks/usePermission';
-import api from '../../services/api';
+import api, { deleteBudget } from '../../services/api';
 import { BudgetCategory, Expense, ProjectBudget } from '../../types';
 import { HeaderActionContext } from './_layout';
 
@@ -409,8 +409,22 @@ const ProjectBudgetGroup = ({
   onEditExpense,
   onViewAttachment,
   canUpdate,
-  canDelete
-}: { project: any, onAddExpense: () => void, extraExpenses?: Expense[], customBudget?: any, deletedExpenseIds?: string[], updatedExpenses?: Expense[], onDeleteExpense: (id: string) => void, onEditExpense: (expense: Expense) => void, onViewAttachment: (attachmentId: string) => void, canUpdate?: boolean, canDelete?: boolean }) => {
+  canDelete,
+  onDeleteBudget
+}: { 
+  project: any, 
+  onAddExpense: () => void, 
+  extraExpenses?: Expense[], 
+  customBudget?: any, 
+  deletedExpenseIds?: string[], 
+  updatedExpenses?: Expense[], 
+  onDeleteExpense: (id: string) => void, 
+  onEditExpense: (expense: Expense) => void, 
+  onViewAttachment: (attachmentId: string) => void, 
+  canUpdate?: boolean, 
+  canDelete?: boolean,
+  onDeleteBudget: (budgetId: string) => void
+}) => {
   const [expanded, setExpanded] = useState(false);
   
   // Usamos useMemo para que los datos mockeados no cambien en cada renderizado
@@ -485,11 +499,16 @@ const ProjectBudgetGroup = ({
       <Pressable onPress={toggleExpand} style={styles.groupHeader}>
         <Feather name={expanded ? "chevron-down" : "chevron-right"} size={20} color="#4A5568" />
         <Text style={styles.groupTitle}>{project.name}</Text>
-        <View style={[styles.badge, { backgroundColor: expanded ? '#3182CE' : '#E2E8F0' }]}>
+        <View style={[styles.badge, { backgroundColor: expanded ? '#3182CE' : '#E2E8F0', marginRight: canDelete ? 8 : 0 }]}>
           <Text style={[styles.badgeText, { color: expanded ? '#FFF' : '#4A5568' }]}>
             {formatCurrency(totalSpent)}
           </Text>
         </View>
+        {canDelete && (
+          <Pressable style={styles.actionButton} onPress={() => onDeleteBudget(project.id)}>
+            <Feather name="trash-2" size={16} color="#E53E3E" />
+          </Pressable>
+        )}
       </Pressable>
       
       {expanded && (
@@ -662,24 +681,24 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
 
   const [projectId, setProjectId] = useState('');
   const [totalAmount, setTotalAmount] = useState('');
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<{ id: string, name: string }[]>([]);
   const [categoryPercentages, setCategoryPercentages] = useState<Record<string, string>>({});
   const [categoryAmounts, setCategoryAmounts] = useState<Record<string, string>>({});
   const { showAlert, AlertComponent } = useCustomAlert();
 
-  const toggleCategory = (catName: string) => {
-    if (selectedCategories.includes(catName)) {
+  const toggleCategory = (cat: { id: string, name: string }) => {
+    if (selectedCategories.some(c => c.id === cat.id)) {
       const newPercentages = { ...categoryPercentages };
-      delete newPercentages[catName];
+      delete newPercentages[cat.name];
       setCategoryPercentages(newPercentages);
 
       const newAmounts = { ...categoryAmounts };
-      delete newAmounts[catName];
+      delete newAmounts[cat.name];
       setCategoryAmounts(newAmounts);
 
-      setSelectedCategories(selectedCategories.filter(c => c !== catName));
+      setSelectedCategories(selectedCategories.filter(c => c.id !== cat.id));
     } else {
-      setSelectedCategories([...selectedCategories, catName]);
+      setSelectedCategories([...selectedCategories, cat]);
     }
   };
 
@@ -739,7 +758,7 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
     const currentTotal = Object.values(categoryPercentages).reduce((acc, val) => acc + (parseFloat(val) || 0), 0);
     const remaining = Math.max(0, 100 - currentTotal);
 
-    const targets = selectedCategories.filter(cat => !categoryPercentages[cat] || parseFloat(categoryPercentages[cat]) === 0);
+    const targets = selectedCategories.filter(cat => !categoryPercentages[cat.name] || parseFloat(categoryPercentages[cat.name]) === 0);
 
     if (targets.length === 0) {
       showAlert(i18n.t('common.info'), remaining > 0.1
@@ -761,9 +780,9 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
       } else {
         val = parseFloat(share.toFixed(2));
       }
-      newPercentages[cat] = val.toFixed(2).replace(/\.00$/, '');
+      newPercentages[cat.name] = val.toFixed(2).replace(/\.00$/, '');
       if(rawTotal > 0) {
-        newAmounts[cat] = formatInputCurrency((rawTotal * (val / 100)).toFixed(2));
+        newAmounts[cat.name] = formatInputCurrency((rawTotal * (val / 100)).toFixed(2));
       }
       distributed += val;
     });
@@ -784,7 +803,7 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
     
     const rawTotal = parseFloat(totalAmount.replace(/,/g, ''));
     const totalAllocated = selectedCategories.reduce((acc, cat) => {
-        return acc + (parseFloat(categoryAmounts[cat]?.replace(/,/g, '') || '0'));
+        return acc + (parseFloat(categoryAmounts[cat.name]?.replace(/,/g, '') || '0'));
     }, 0);
 
     if (Math.abs(totalAllocated - rawTotal) > 0.01) { // Permitir pequeñas discrepancias por redondeo
@@ -796,9 +815,10 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
       projectId,
       totalAmount: rawTotal,
       categories: selectedCategories.map(cat => ({
-        name: cat,
-        percentage: parseFloat(categoryPercentages[cat] || '0'),
-        allocated: parseFloat(categoryAmounts[cat]?.replace(/,/g, '') || '0')
+        name: cat.name,
+        budgetCatalogId: cat.id,
+        percentage: parseFloat(categoryPercentages[cat.name] || '0'),
+        allocated: parseFloat(categoryAmounts[cat.name]?.replace(/,/g, '') || '0')
       }))
     };
 
@@ -849,13 +869,13 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
           <Text style={styles.helperText}>{i18n.t('budgets.selectCategories')}</Text>
           <ScrollView style={styles.categoriesList} nestedScrollEnabled={true}>
             {categories.map((cat) => {
-              const isSelected = selectedCategories.includes(cat.name);
+              const isSelected = selectedCategories.some(c => c.id === cat.id);
               const percentage = categoryPercentages[cat.name] || '';
               const amount = categoryAmounts[cat.name] || '';
 
               return (
                 <View key={cat.id}>
-                  <Pressable style={styles.categoryCheckboxRow} onPress={() => toggleCategory(cat.name)}>
+                  <Pressable style={styles.categoryCheckboxRow} onPress={() => toggleCategory(cat)}>
                     <Feather 
                       name={isSelected ? "check-square" : "square"} 
                       size={20} 
@@ -900,17 +920,17 @@ const CreateBudgetModal = ({ visible, onClose, projects, existingBudgetIds, onSa
 };
 
 // --- Componente Modal de Confirmación de Eliminación ---
-const DeleteConfirmationModal = ({ visible, onClose, onConfirm }: { visible: boolean, onClose: () => void, onConfirm: () => void }) => {
+const DeleteConfirmationModal = ({ visible, onClose, onConfirm, title, message }: { visible: boolean, onClose: () => void, onConfirm: () => void, title?: string, message?: string }) => {
   return (
     <Modal animationType="fade" transparent={true} visible={visible} onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <View style={[styles.modalContent, { maxWidth: 350 }]}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{i18n.t('common.delete')}</Text>
+            <Text style={styles.modalTitle}>{title || i18n.t('common.delete')}</Text>
             <Pressable onPress={onClose}><Feather name="x" size={24} color="#4A5568" /></Pressable>
           </View>
           <Text style={{ fontSize: 16, color: '#4A5568', marginBottom: 24 }}>
-            {i18n.t('budgets.deleteExpenseConfirmation')}
+            {message || i18n.t('budgets.deleteExpenseConfirmation')}
           </Text>
           <View style={styles.modalButtons}>
             <Pressable style={[styles.modalButton, styles.cancelButton]} onPress={onClose}>
@@ -983,6 +1003,7 @@ export default function BudgetsScreen() {
   const [updatedExpenses, setUpdatedExpenses] = useState<(Expense & { projectId: string })[]>([]);
   const [expenseToEdit, setExpenseToEdit] = useState<(Expense & { projectId: string }) | null>(null);
   const [expenseToDelete, setExpenseToDelete] = useState<{ id: string, projectId: string } | null>(null);
+  const [budgetToDeleteId, setBudgetToDeleteId] = useState<string | null>(null);
   const [viewingAttachmentId, setViewingAttachmentId] = useState<string | null>(null);
   const { showAlert, AlertComponent } = useCustomAlert();
 
@@ -990,8 +1011,14 @@ export default function BudgetsScreen() {
   React.useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await api.get('/api/project-steps/type/CATEGORY');
-        if (response.data) setCategoriesCatalog(response.data);
+        const response = await api.get('/api/budget-catalogs');
+        if (response.data) {
+          const adaptedCategories = response.data.map((cat: any) => ({
+            id: cat.id || cat._id,
+            name: cat.name || cat.value,
+          }));
+          setCategoriesCatalog(adaptedCategories);
+        }
       } catch (error) {
         console.error('Error fetching categories catalog:', error);
       }
@@ -1011,6 +1038,7 @@ export default function BudgetsScreen() {
         totalBudget: data.totalAmount,
         categories: data.categories.map((c: any) => ({
           name: c.name,
+          budgetCatalogId: c.budgetCatalogId,
           allocated: c.allocated,
           spent: 0
         })),
@@ -1045,7 +1073,7 @@ export default function BudgetsScreen() {
         date: new Date().toISOString().split('T')[0],
         concept: data.concept,
         category: data.category,
-        projectStepId: projectStepId,
+        budgetCatalogId: projectStepId,
         amount: data.amount,
         // Si hay URI nueva es true. Si no hay URI nueva pero hay ID existente, también es true.
         attachment: !!data.attachmentUri || (!!existingAttachmentId && !data.attachmentUri),
@@ -1131,6 +1159,20 @@ export default function BudgetsScreen() {
     }
   };
 
+  const confirmDeleteBudget = async () => {
+    if (budgetToDeleteId) {
+      try {
+        await deleteBudget(budgetToDeleteId);
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        await refreshBudgets();
+      } catch (error) {
+        console.error('Error deleting budget:', error);
+        showAlert(i18n.t('common.error'), i18n.t('budgets.errorDeletingBudget', { defaultValue: 'Error deleting budget.' }));
+      }
+      setBudgetToDeleteId(null);
+    }
+  };
+
   const openEditModal = (expense: Expense, projectId: string) => {
     setExpenseToEdit({ ...expense, projectId });
     setSelectedProjectForExpense(projectId);
@@ -1205,6 +1247,7 @@ export default function BudgetsScreen() {
           onViewAttachment={handleViewAttachment}
           canUpdate={hasPermission('BUDGET_UPDATE')}
           canDelete={hasPermission('BUDGET_DELETE')}
+          onDeleteBudget={(id) => setBudgetToDeleteId(id)}
         />
       )) : (
         <View style={{ padding: 40, alignItems: 'center', opacity: 0.7 }}>
@@ -1244,9 +1287,14 @@ export default function BudgetsScreen() {
 
       {/* Modal de Confirmación de Eliminación */}
       <DeleteConfirmationModal 
-        visible={!!expenseToDelete} 
-        onClose={() => setExpenseToDelete(null)} 
-        onConfirm={confirmDeleteExpense} 
+        visible={!!expenseToDelete || !!budgetToDeleteId} 
+        onClose={() => {
+          setExpenseToDelete(null);
+          setBudgetToDeleteId(null);
+        }} 
+        onConfirm={expenseToDelete ? confirmDeleteExpense : confirmDeleteBudget}
+        title={budgetToDeleteId ? i18n.t('budgets.deleteBudgetTitle', {defaultValue: 'Delete Budget'}) : i18n.t('common.delete')}
+        message={budgetToDeleteId ? i18n.t('budgets.deleteBudgetConfirmation', {defaultValue: 'Are you sure you want to delete this budget? This action cannot be undone.'}) : i18n.t('budgets.deleteExpenseConfirmation')}
       />
 
       <AttachmentViewerModal

@@ -11,7 +11,7 @@ import api from '../../services/api';
 export default function AdminScreen() {
   const { user } = useAuth();
   const { hasPermission } = usePermission();
-  const [currentView, setCurrentView] = useState<'menu' | 'users' | 'project-steps' | 'roles' | 'agenda-types' | 'document-categories'>('menu');
+  const [currentView, setCurrentView] = useState<'menu' | 'users' | 'project-steps' | 'roles' | 'agenda-types' | 'document-categories' | 'budget-catalogs'>('menu');
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -41,6 +41,12 @@ export default function AdminScreen() {
   const [docCategoryModalVisible, setDocCategoryModalVisible] = useState(false);
   const [docCategoryFormData, setDocCategoryFormData] = useState({ name: '', description: '' });
   const [editingDocCategory, setEditingDocCategory] = useState<any>(null);
+
+  // Estado para Catálogos de Presupuesto
+  const [budgetCatalogs, setBudgetCatalogs] = useState<any[]>([]);
+  const [budgetCatalogModalVisible, setBudgetCatalogModalVisible] = useState(false);
+  const [budgetCatalogFormData, setBudgetCatalogFormData] = useState({ name: '', description: '' });
+  const [editingBudgetCatalog, setEditingBudgetCatalog] = useState<any>(null);
 
   // Estado para expandir/colapsar categorías
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
@@ -116,6 +122,19 @@ export default function AdminScreen() {
     }
   };
 
+  const fetchBudgetCatalogs = async () => {
+    setLoading(true);
+    try {
+      const response = await api.get('/api/budget-catalogs');
+      setBudgetCatalogs(response.data || []);
+    } catch (error) {
+      console.error('Error fetching budget catalogs:', error);
+      showAlert(i18n.t('common.error'), 'Error al cargar los catálogos de presupuesto.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (currentView === 'users') {
       fetchUsers();
@@ -126,6 +145,8 @@ export default function AdminScreen() {
       fetchAgendaTypes();
     } else if (currentView === 'document-categories') {
       fetchDocumentCategories();
+    } else if (currentView === 'budget-catalogs') {
+      fetchBudgetCatalogs();
     }
   }, [currentView]);
 
@@ -447,6 +468,65 @@ export default function AdminScreen() {
           showAlert(i18n.t('common.success'), i18n.t('admin.elementDeleted'));
         } catch (error) {
           console.error('Error deleting document category:', error);
+          showAlert(i18n.t('common.error'), i18n.t('admin.errorDeletingElement'));
+        }
+      }}
+    ]);
+  };
+
+  // --- FUNCIONES PARA CATÁLOGOS DE PRESUPUESTO ---
+  const openCreateBudgetCatalogModal = () => {
+    setEditingBudgetCatalog(null);
+    setBudgetCatalogFormData({ name: '', description: '' });
+    setBudgetCatalogModalVisible(true);
+  };
+
+  const openEditBudgetCatalogModal = (item: any) => {
+    setEditingBudgetCatalog(item);
+    setBudgetCatalogFormData({
+      name: item.name,
+      description: item.description || '',
+    });
+    setBudgetCatalogModalVisible(true);
+  };
+
+  const handleSaveBudgetCatalog = async () => {
+    if (!budgetCatalogFormData.name.trim()) {
+      showAlert(i18n.t('common.error'), i18n.t('admin.nameRequired'));
+      return;
+    }
+
+    try {
+      const payload = {
+        name: budgetCatalogFormData.name,
+        description: budgetCatalogFormData.description,
+      };
+
+      if (editingBudgetCatalog) {
+        await api.put(`/api/budget-catalogs/${editingBudgetCatalog.id}`, payload);
+        showAlert(i18n.t('common.success'), i18n.t('admin.elementUpdated'));
+      } else {
+        await api.post('/api/budget-catalogs', payload);
+        showAlert(i18n.t('common.success'), i18n.t('admin.elementCreated'));
+      }
+      setBudgetCatalogModalVisible(false);
+      fetchBudgetCatalogs();
+    } catch (error) {
+      console.error('Error saving budget catalog:', error);
+      showAlert(i18n.t('common.error'), i18n.t('admin.errorSavingElement'));
+    }
+  };
+
+  const handleDeleteBudgetCatalog = (id: string) => {
+    showAlert(i18n.t('admin.deleteElement'), i18n.t('admin.deleteConfirmation'), [
+      { text: i18n.t('common.cancel'), style: 'cancel' },
+      { text: i18n.t('common.delete'), style: 'destructive', onPress: async () => {
+        try {
+          await api.delete(`/api/budget-catalogs/${id}`);
+          fetchBudgetCatalogs();
+          showAlert(i18n.t('common.success'), i18n.t('admin.elementDeleted'));
+        } catch (error) {
+          console.error('Error deleting budget catalog:', error);
           showAlert(i18n.t('common.error'), i18n.t('admin.errorDeletingElement'));
         }
       }}
@@ -899,6 +979,77 @@ export default function AdminScreen() {
     );
   }
 
+  if (currentView === 'budget-catalogs') {
+    return (
+      <View style={styles.container}>
+        <View style={styles.headerRow}>
+          <Pressable onPress={() => setCurrentView('menu')} style={styles.backButton}>
+            <Feather name="arrow-left" size={24} color="#4A5568" />
+          </Pressable>
+          <Text style={styles.title}>Catálogos de Presupuesto</Text>
+        </View>
+
+        {loading ? (
+          <ActivityIndicator size="large" color="#3182CE" style={{ marginTop: 20 }} />
+        ) : (
+          <FlatList
+            data={budgetCatalogs}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.listContent}
+            ListEmptyComponent={<Text style={styles.emptyText}>No hay catálogos de presupuesto.</Text>}
+            renderItem={({ item }) => (
+              <View style={styles.userRow}>
+                <View style={[styles.colorPreview, { backgroundColor: '#38A169', justifyContent: 'center', alignItems: 'center' }]}>
+                  <Feather name="dollar-sign" size={14} color="#FFF" />
+                </View>
+                <View style={styles.userInfo}>
+                  <Text style={styles.userName}>{item.name}</Text>
+                  <Text style={styles.userEmail}>{item.description}</Text>
+                </View>
+                <View style={styles.actions}>
+                  {hasPermission('CATALOG_UPDATE') && (
+                  <Pressable onPress={() => openEditBudgetCatalogModal(item)} style={styles.actionButton}>
+                    <Feather name="edit-2" size={20} color="#3182CE" />
+                  </Pressable>
+                  )}
+                  {hasPermission('CATALOG_DELETE') && (
+                  <Pressable onPress={() => handleDeleteBudgetCatalog(item.id)} style={[styles.actionButton, { marginLeft: 8 }]}>
+                    <Feather name="trash-2" size={20} color="#E53E3E" />
+                  </Pressable>
+                  )}
+                </View>
+              </View>
+            )}
+          />
+        )}
+
+        {hasPermission('CATALOG_MANAGE') && (
+        <Pressable style={styles.fab} onPress={openCreateBudgetCatalogModal}>
+          <Feather name="plus" size={24} color="#FFF" />
+        </Pressable>
+        )}
+
+        <Modal visible={budgetCatalogModalVisible} transparent={true} animationType="fade" onRequestClose={() => setBudgetCatalogModalVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{editingBudgetCatalog ? 'Editar Catálogo de Presupuesto' : 'Nuevo Catálogo de Presupuesto'}</Text>
+                <Pressable onPress={() => setBudgetCatalogModalVisible(false)}><Feather name="x" size={24} color="#4A5568" /></Pressable>
+              </View>
+              <Text style={styles.label}>Nombre</Text>
+              <TextInput style={styles.input} value={budgetCatalogFormData.name} onChangeText={text => setBudgetCatalogFormData({...budgetCatalogFormData, name: text})} />
+              <Text style={styles.label}>Descripción</Text>
+              <TextInput style={styles.input} value={budgetCatalogFormData.description} onChangeText={text => setBudgetCatalogFormData({...budgetCatalogFormData, description: text})} />
+              
+              <Pressable style={styles.saveButton} onPress={handleSaveBudgetCatalog}><Text style={styles.saveButtonText}>Guardar</Text></Pressable>
+            </View>
+          </View>
+        </Modal>
+        <AlertComponent />
+      </View>
+    );
+  }
+
   if (currentView === 'roles') {
     return <RolesManager onBack={() => setCurrentView('menu')} />;
   }
@@ -941,6 +1092,17 @@ export default function AdminScreen() {
             <View style={styles.cardContent}>
                 <Text style={styles.cardTitle}>{i18n.t('admin.documentCategories')}</Text>
                 <Text style={styles.cardDescription}>{i18n.t('admin.manageDocumentCategories')}</Text>
+            </View>
+            <Feather name="chevron-right" size={24} color="#CBD5E0" />
+        </Pressable>
+
+        <Pressable style={styles.card} onPress={() => setCurrentView('budget-catalogs')}>
+            <View style={styles.cardIcon}>
+                <Feather name="dollar-sign" size={24} color="#38A169" />
+            </View>
+            <View style={styles.cardContent}>
+                <Text style={styles.cardTitle}>Catálogos de Presupuesto</Text>
+                <Text style={styles.cardDescription}>Gestionar catálogos para presupuestos</Text>
             </View>
             <Feather name="chevron-right" size={24} color="#CBD5E0" />
         </Pressable>

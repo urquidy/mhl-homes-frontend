@@ -9,7 +9,7 @@ if (API_URL && API_URL.includes('mhlhomes.ddns.net')) {
   SOCKET_URL = 'https://mhlhomes.ddns.net';
 } else {
   // En desarrollo, usamos la IP local o la que venga de las variables de entorno
-  const DEV_API_URL = API_URL || 'http://192.168.100.59:8080';
+  const DEV_API_URL = API_URL || 'http://192.168.100.4:8080';
   SOCKET_URL = DEV_API_URL.replace(':8080', ':9092');
 }
 
