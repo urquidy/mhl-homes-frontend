@@ -8,21 +8,27 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://mhlhomes.ddns.net"
+        "EXPO_PUBLIC_API_URL": "https://mhlhomes.com/v1",
+        "EXPO_PUBLIC_SOCKET_URL": "https://mhlhomes.com",
+        "EXPO_PUBLIC_SOCKET_PATH": "/socket.io"
       }
     },
     "preview": {
       "distribution": "internal",
       "channel": "preview",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://mhlhomes.ddns.net"
+        "EXPO_PUBLIC_API_URL": "https://mhlhomes.com/v1",
+        "EXPO_PUBLIC_SOCKET_URL": "https://mhlhomes.com",
+        "EXPO_PUBLIC_SOCKET_PATH": "/socket.io"
       }
     },
     "production": {
       "distribution": "store",
       "channel": "production",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://mhlhomes.ddns.net"
+        "EXPO_PUBLIC_API_URL": "https://mhlhomes.com/v1",
+        "EXPO_PUBLIC_SOCKET_URL": "https://mhlhomes.com",
+        "EXPO_PUBLIC_SOCKET_PATH": "/socket.io"
       }
     }
   },
